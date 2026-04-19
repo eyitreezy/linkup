@@ -10,6 +10,9 @@ web-build/
 # Private keys (Firebase Admin / FCM service account, etc.) — keep local or in a vault
 secrets/
 
+# Firebase Android config (contains API keys) — download from Firebase Console per machine / CI
+google-services.json
+
 # Android SDK path (machine-specific — copy from local.properties.example)
 android/local.properties
 
