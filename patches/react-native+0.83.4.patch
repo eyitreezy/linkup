@@ -1,0 +1,20 @@
+--- a/node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h
++++ b/node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h
+@@ -25,6 +25,7 @@
+ #include <react/renderer/graphics/Size.h>
+ 
+ #ifdef RN_SERIALIZABLE_STATE
++#include <string>
+ #include <yoga/Yoga.h>
+ #endif
+ 
+@@ -68,7 +69,8 @@
+     case YGUnitPoint:
+       return dimension.value;
+     case YGUnitPercent:
+-      return std::format("{}%", dimension.value);
++      // NDK libc++ (e.g. r26) may not expose std::format; use a portable equivalent.
++      return std::to_string(static_cast<double>(dimension.value)) + "%";
+   }
+ 
+   return nullptr;

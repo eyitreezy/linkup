@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "237994223241",
+    "project_id": "linkup-ae95e",
+    "storage_bucket": "linkup-ae95e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:237994223241:android:012a88cbe81f79c3294858",
+        "android_client_info": {
+          "package_name": "com.linkup.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCZd88dujKItAnnOPYuDeMi2r-OjHGPn8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
