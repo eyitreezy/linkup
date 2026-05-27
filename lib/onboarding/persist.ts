@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { OnboardingDraft } from '@/types/onboarding';
 import { preferencesFromDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
+import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import type { ProfilePreferences } from '@/types/database';
 
 export function stripOnboardingResumeStep(prefs: ProfilePreferences): ProfilePreferences {
@@ -114,6 +115,7 @@ export async function saveOnboardingStep(args: {
       age_max: draft.ageMax,
       radius_km: draft.radiusKm,
       is_profile_public: draft.profilePublic,
+      ...profileLocationFromDraft(draft),
       preferences: mergedPrefs,
       ...(typeof screeningTrust === 'number' ? { ai_trust_score: screeningTrust } : {}),
     })
@@ -130,13 +132,34 @@ export async function finalizeOnboarding(args: {
 }): Promise<{ error: Error | null; uploadedPhotoUrls: string[] }> {
   const { userId, draft, existingPreferences, mode } = args;
 
+  if (mode === 'publish' && !hasValidProfileLocation(draft)) {
+    return {
+      error: new Error('Add your current location before finishing — search or use current location.'),
+      uploadedPhotoUrls: [],
+    };
+  }
+
   if (mode === 'skip') {
-    const cleaned = stripOnboardingResumeStep({ ...(existingPreferences ?? {}) });
+    const saved = await saveOnboardingStep({
+      userId,
+      draft,
+      existingPreferences,
+    });
+    if (saved.error) {
+      return { error: saved.error, uploadedPhotoUrls: saved.uploadedPhotoUrls };
+    }
+    const mergedPrefs = stripOnboardingResumeStep({
+      ...(existingPreferences ?? {}),
+      ...preferencesFromDraft(draft),
+    });
     const { error } = await supabase
       .from('profiles')
-      .update({ onboarding_status: 'skipped', preferences: cleaned })
+      .update({ onboarding_status: 'skipped', preferences: mergedPrefs })
       .eq('user_id', userId);
-    return { error: error ? new Error(error.message) : null, uploadedPhotoUrls: [] };
+    return {
+      error: error ? new Error(error.message) : null,
+      uploadedPhotoUrls: saved.uploadedPhotoUrls,
+    };
   }
 
   let uploadedPhotoUrls: string[] = [];
@@ -193,6 +216,7 @@ export async function finalizeOnboarding(args: {
       age_max: draft.ageMax,
       radius_km: draft.radiusKm,
       is_profile_public: draft.profilePublic,
+      ...profileLocationFromDraft(draft),
       onboarding_status: mode === 'publish' ? 'complete' : 'pending',
       ...(typeof finalizeTrust === 'number' ? { ai_trust_score: finalizeTrust } : {}),
       preferences: preferencesOut,

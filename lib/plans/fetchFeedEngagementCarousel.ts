@@ -5,16 +5,23 @@ import { fetchAgreementsRail, type AgreementRailItem } from '@/lib/plans/fetchAg
 import { supabase } from '@/lib/supabase';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { isOfferExpired } from '@/lib/plans/offerRules';
+import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+
+/** Story-ring badge for swipe strip (chat vs negotiation vs waiting). */
+export type EngagementStripKind = 'chat' | 'negotiation' | 'pending';
 
 export type EngagementCarouselItem = {
   key: string;
   planId: string;
   planTitle: string;
+  otherUserId: string;
   otherAvatarUrl: string | null;
   otherName: string;
   engagementLabel: string;
   statusLabel: string;
   navigateTo: 'agreement' | 'negotiate';
+  /** Visual hint on the circular story avatar */
+  stripKind: EngagementStripKind;
   sortAt: number;
 };
 
@@ -53,11 +60,13 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
       key: `agr-${a.planId}`,
       planId: a.planId,
       planTitle: a.planTitle,
+      otherUserId: a.counterpartUserId,
       otherAvatarUrl: a.counterpartAvatarUrl,
       otherName: a.counterpartName,
       engagementLabel: 'Ongoing plan',
       statusLabel: a.statusLabel,
       navigateTo: 'agreement',
+      stripKind: 'chat',
       sortAt: agrTime + 1,
     });
   }
@@ -73,8 +82,9 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
     const pids = [...new Set(offers.map((o) => o.plan_id))];
     const { data: splans } = await supabase
       .from('plans')
-      .select('id, title, status, creator_id, updated_at')
-      .in('id', pids);
+      .select('id, title, status, creator_id, updated_at, is_mood_plan, is_expired, mood_expires_at, is_suppressed')
+      .in('id', pids)
+      .eq('is_suppressed', false);
     const planById = new Map((splans as DbPlan[] | null)?.map((p) => [p.id, p]) ?? []);
     const creatorIds = [...new Set([...planById.values()].map((p) => p.creator_id))];
     const creators = await profileMapForUsers(creatorIds);
@@ -82,6 +92,7 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
     for (const o of offers) {
       const p = planById.get(o.plan_id);
       if (!p || p.status !== 'negotiating') continue;
+      if (isPlanMoodWindowClosed(p)) continue;
       if (isOfferExpired(o)) continue;
       if (seen.has(o.plan_id)) continue;
       seen.add(o.plan_id);
@@ -90,11 +101,13 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
         key: `sent-${o.id}`,
         planId: p.id,
         planTitle: p.title,
+        otherUserId: p.creator_id,
         otherAvatarUrl: pr?.avatar ?? null,
         otherName: pr?.name ?? 'Host',
         engagementLabel: 'Offer sent',
         statusLabel: 'Pending',
         navigateTo: 'negotiate',
+        stripKind: 'pending',
         sortAt: new Date(o.created_at).getTime(),
       });
     }
@@ -102,7 +115,7 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
 
   const { data: myNegPlans } = await supabase
     .from('plans')
-    .select('id, title, updated_at')
+    .select('id, title, updated_at, is_mood_plan, is_expired, mood_expires_at')
     .eq('creator_id', userId)
     .eq('status', 'negotiating');
   const negIds = (myNegPlans ?? []).map((r) => r.id as string);
@@ -123,19 +136,22 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
       if (seenPlan.has(o.plan_id)) continue;
       seenPlan.add(o.plan_id);
       const pl = (myNegPlans ?? []).find((x) => x.id === o.plan_id) as
-        | { id: string; title: string; updated_at: string }
+        | Pick<DbPlan, 'id' | 'title' | 'updated_at' | 'is_mood_plan' | 'is_expired' | 'mood_expires_at'>
         | undefined;
       if (!pl) continue;
+      if (isPlanMoodWindowClosed(pl)) continue;
       const pr = bidders.get(o.bidder_id);
       out.push({
         key: `recv-${o.id}`,
         planId: pl.id,
         planTitle: pl.title,
+        otherUserId: o.bidder_id,
         otherAvatarUrl: pr?.avatar ?? null,
         otherName: pr?.name ?? 'Guest',
         engagementLabel: 'Offer received',
         statusLabel: 'Pending',
         navigateTo: 'negotiate',
+        stripKind: 'negotiation',
         sortAt: new Date(o.created_at).getTime(),
       });
     }

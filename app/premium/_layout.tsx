@@ -16,8 +16,8 @@ export default function PremiumLayout() {
           : null),
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Premium' }} />
-      <Stack.Screen name="checkout" options={{ title: 'Checkout' }} />
+      <Stack.Screen name="index" options={{ headerShown: false, title: 'Premium' }} />
+      <Stack.Screen name="checkout" options={{ headerShown: false, title: 'Checkout' }} />
       <Stack.Screen name="success" options={{ title: '', headerShown: false }} />
     </Stack>
   );

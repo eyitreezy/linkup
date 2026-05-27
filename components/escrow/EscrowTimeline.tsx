@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   bullet: {
     width: 28,
     height: 28,
-    borderRadius: radius.full,
+    borderRadius: radius.button,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',

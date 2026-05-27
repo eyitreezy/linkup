@@ -16,12 +16,13 @@ export default function CreatePlanStack() {
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.background },
           ...(Platform.OS === 'android'
-          ? { statusBarTranslucent: false, headerTopInsetEnabled: false }
-          : null),
+            ? { statusBarTranslucent: false, headerTopInsetEnabled: false }
+            : null),
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'New plan' }} />
-        <Stack.Screen name="visibility" options={{ title: 'Visibility' }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="commitment" options={{ headerShown: false }} />
+        <Stack.Screen name="details" options={{ headerShown: false }} />
         <Stack.Screen name="success" options={{ title: 'Live', headerBackVisible: false }} />
       </Stack>
     </PlanDraftProvider>

@@ -6,7 +6,7 @@ import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGate
 import { OfferListCard } from '@/components/offers/OfferListCard';
 import { OffersSegmentedControl, type OffersSegment } from '@/components/offers/OffersSegmentedControl';
 import { Screen } from '@/components/Screen';
-import { colors, spacing } from '@/constants/theme';
+import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { acceptPlanOffer } from '@/lib/plans/acceptPlanOffer';
 import {
@@ -18,6 +18,8 @@ import { isOfferExpired } from '@/lib/plans/offerRules';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { Href, router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
@@ -158,8 +160,13 @@ export default function OffersScreen() {
     router.push(`/plan/${planId}/negotiate` as Href);
   }
 
+  const summaryLabel =
+    !loading && (sent.length > 0 || received.length > 0)
+      ? `${sent.length + received.length} total`
+      : null;
+
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']}>
+    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <VerificationHardGateModal
         visible={gateOpen}
         onClose={() => setGateOpen(false)}
@@ -167,93 +174,258 @@ export default function OffersScreen() {
         title="Verification required"
         message="Accepting offers requires a verified identity on LinkUp."
       />
-      <View style={styles.header}>
-        <Text style={styles.title}>Offers</Text>
-        <Text style={styles.sub}>Track what you’ve sent and what hosts send back</Text>
+      <View style={styles.root}>
+        <LinearGradient
+          colors={['#EDE8FF', '#FFF5F8', '#E8FAF4', colors.discoveryGradientBottom]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.heroHeader}>
+          <View style={styles.heroLeft}>
+            <LinearGradient
+              colors={[colors.secondary, '#FF8FA8', colors.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroBadge}
+            >
+              <Ionicons name="pricetag" size={22} color="#fff" />
+            </LinearGradient>
+            <View style={styles.heroText}>
+              <Text style={styles.heroKicker}>Negotiations</Text>
+              <Text style={styles.heroTitle}>Offers</Text>
+              <Text style={styles.heroSub}>Everything you’ve proposed — and what hosts send your way — in one place.</Text>
+            </View>
+          </View>
+          {summaryLabel ? (
+            <View style={styles.countPill}>
+              <Text style={styles.countPillTxt}>{summaryLabel}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <OffersSegmentedControl
+          value={segment}
+          onChange={setSegment}
+          sentCount={sent.length}
+          receivedCount={received.length}
+        />
+
+        <FlatList
+          data={loading ? [] : list}
+          keyExtractor={(r) => r.offer.id}
+          extraData={busyOfferId}
+          style={styles.listFlex}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+          ListEmptyComponent={
+            loading ? (
+              <OffersSkeleton />
+            ) : segment === 'sent' ? (
+              <View style={styles.empty}>
+                <LinearGradient colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.18)']} style={styles.emptyRing}>
+                  <LinearGradient colors={['#fff', '#FFF8FC']} style={styles.emptyRingInner}>
+                    <Ionicons name="paper-plane-outline" size={38} color={colors.secondary} />
+                  </LinearGradient>
+                </LinearGradient>
+                <Text style={styles.emptyTitle}>
+                  No offers <Text style={styles.emptyTitleAccent}>sent</Text> yet
+                </Text>
+                <Text style={styles.emptySub}>
+                  When you negotiate on a plan, your numbers and notes show up here for easy follow-up.
+                </Text>
+                <LinearGradient
+                  colors={[colors.primary, '#8B7CFF', colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.emptyCtaShell}
+                >
+                  <Button
+                    title="Browse plans"
+                    onPress={() => router.push('/' as Href)}
+                    pill
+                    variant="primary"
+                    style={styles.emptyCtaInner}
+                    textStyle={styles.emptyCtaTxt}
+                  />
+                </LinearGradient>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <LinearGradient colors={['rgba(255,101,132,0.22)', 'rgba(108,99,255,0.18)']} style={styles.emptyRing}>
+                  <LinearGradient colors={['#fff', '#F5F0FF']} style={styles.emptyRingInner}>
+                    <Ionicons name="mail-unread-outline" size={38} color={colors.primary} />
+                  </LinearGradient>
+                </LinearGradient>
+                <Text style={styles.emptyTitle}>
+                  Inbox <Text style={styles.emptyTitleAccent}>quiet</Text>
+                </Text>
+                <Text style={styles.emptySub}>
+                  When someone wants in on your plan, their offer appears here — accept, counter, or pass with context.
+                </Text>
+                <LinearGradient
+                  colors={[colors.primary, '#8B7CFF', colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.emptyCtaShell}
+                >
+                  <Button
+                    title="View Discover"
+                    onPress={() => router.push('/' as Href)}
+                    pill
+                    variant="primary"
+                    style={styles.emptyCtaInner}
+                    textStyle={styles.emptyCtaTxt}
+                  />
+                </LinearGradient>
+              </View>
+            )
+          }
+          renderItem={({ item }) => (
+            <OfferListCard
+              row={item}
+              mode={segment}
+              busy={busyOfferId === item.offer.id}
+              onPressOpen={() => openNegotiate(item.plan.id)}
+              onAccept={segment === 'received' ? () => void handleAccept(item) : undefined}
+              onReject={segment === 'received' ? () => void handleReject(item) : undefined}
+              onNegotiate={segment === 'received' ? () => openNegotiate(item.plan.id) : undefined}
+            />
+          )}
+        />
       </View>
-      <OffersSegmentedControl
-        value={segment}
-        onChange={setSegment}
-        sentCount={sent.length}
-        receivedCount={received.length}
-      />
-      <FlatList
-        data={loading ? [] : list}
-        keyExtractor={(r) => r.offer.id}
-        extraData={busyOfferId}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-        ListEmptyComponent={
-          loading ? (
-            <OffersSkeleton />
-          ) : segment === 'sent' ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>You haven’t sent any offers yet</Text>
-              <Text style={styles.emptySub}>When you negotiate on a plan, your offers show up here</Text>
-              <Button title="Browse plans" onPress={() => router.push('/' as Href)} style={styles.emptyCta} />
-            </View>
-          ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No offers yet</Text>
-              <Text style={styles.emptySub}>
-                When someone is interested in your plan, their offer will show here
-              </Text>
-              <Button title="View my plans" onPress={() => router.push('/' as Href)} style={styles.emptyCta} />
-            </View>
-          )
-        }
-        renderItem={({ item }) => (
-          <OfferListCard
-            row={item}
-            mode={segment}
-            busy={busyOfferId === item.offer.id}
-            onPressOpen={() => openNegotiate(item.plan.id)}
-            onAccept={segment === 'received' ? () => void handleAccept(item) : undefined}
-            onReject={segment === 'received' ? () => void handleReject(item) : undefined}
-            onNegotiate={segment === 'received' ? () => openNegotiate(item.plan.id) : undefined}
-          />
-        )}
-      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  screenTransparent: { backgroundColor: 'transparent', flex: 1 },
+  root: { flex: 1 },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
-  title: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
-  sub: { fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20, fontWeight: '500' },
+  heroLeft: { flexDirection: 'row', gap: spacing.md, flex: 1, alignItems: 'flex-start' },
+  heroBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    shadowColor: colors.secondary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  heroText: { flex: 1 },
+  heroKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  heroTitle: { fontSize: 30, fontWeight: '900', color: colors.text, letterSpacing: -0.7 },
+  heroSub: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: 6,
+    lineHeight: 21,
+  },
+  countPill: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 101, 132, 0.25)',
+    marginTop: 8,
+  },
+  countPillTxt: { fontSize: 11, fontWeight: '900', color: colors.secondary },
+  listFlex: { flex: 1 },
   list: { paddingBottom: 120, flexGrow: 1 },
   empty: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, alignItems: 'center' },
-  emptyTitle: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  emptyRing: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    padding: 3,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyRingInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.88)',
+  },
+  emptyTitle: { fontSize: 22, fontWeight: '900', color: colors.text, textAlign: 'center', letterSpacing: -0.3 },
+  emptyTitleAccent: { color: colors.secondary },
   emptySub: {
-    fontSize: 15,
+    fontSize: 16,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,
-    lineHeight: 22,
+    lineHeight: 24,
+    fontWeight: '600',
   },
-  emptyCta: { marginTop: spacing.lg, minWidth: 200 },
+  emptyCtaShell: {
+    marginTop: spacing.xl,
+    borderRadius: radius.button,
+    padding: 2,
+    alignSelf: 'stretch',
+    maxWidth: 320,
+  },
+  emptyCtaInner: { backgroundColor: '#fff', width: '100%', margin: 0 },
+  emptyCtaTxt: { color: colors.primary, fontWeight: '900' },
   skelWrap: { paddingTop: spacing.xs },
   skelCard: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     padding: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
   },
-  skelBadge: { width: 72, height: 22, borderRadius: 11, backgroundColor: colors.border, marginBottom: spacing.sm },
-  skelLineLg: { height: 18, borderRadius: 6, backgroundColor: colors.border, width: '88%', marginBottom: spacing.md },
+  skelBadge: {
+    width: 72,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 101, 132, 0.15)',
+    marginBottom: spacing.sm,
+  },
+  skelLineLg: {
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    width: '88%',
+    marginBottom: spacing.md,
+  },
   skelRow: { flexDirection: 'row', gap: spacing.sm },
-  skelAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.border },
+  skelAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+  },
   skelCol: { flex: 1, gap: 8, justifyContent: 'center' },
-  skelLineMd: { height: 14, borderRadius: 6, backgroundColor: colors.border, width: '70%' },
-  skelLineSm: { height: 12, borderRadius: 6, backgroundColor: colors.border, width: '45%' },
+  skelLineMd: { height: 14, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', width: '70%' },
+  skelLineSm: { height: 12, borderRadius: 6, backgroundColor: 'rgba(255, 101, 132, 0.1)', width: '45%' },
 });

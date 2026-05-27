@@ -7,11 +7,12 @@
  * - Email confirmation: `signUp` uses `emailRedirectTo` so the verify link opens the app (`linkup://auth/callback`).
  *   `completeOAuthReturnUrl` also handles `token_hash` + `type` from the confirmation link.
  */
+import { parseAuthRedirectUrl } from '@/lib/auth/parseAuthRedirectUrl';
 import type { Session } from '@supabase/supabase-js';
+import { getSessionRecoveringStale } from '@/lib/auth/sessionRecovery';
 import { supabase } from '@/lib/supabase';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -67,9 +68,10 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
     if (!data?.url) return { error: new Error('No OAuth URL returned') };
 
     try {
+      const Notifications = await import('expo-notifications');
       Notifications.clearLastNotificationResponse();
     } catch {
-      /* ignore */
+      /* ignore — module may be unavailable; avoid top-level import (Expo Go push warning on login load) */
     }
 
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
@@ -108,8 +110,8 @@ export function urlLooksLikeAuthRedirect(url: string | null | undefined): boolea
 }
 
 async function hasSupabaseSession(): Promise<boolean> {
-  const { data } = await supabase.auth.getSession();
-  return Boolean(data.session?.user);
+  const { session } = await getSessionRecoveringStale();
+  return Boolean(session?.user);
 }
 
 /**
@@ -120,9 +122,7 @@ export async function waitForSupabaseSession(
   delayMs = 220
 ): Promise<Session | null> {
   for (let i = 0; i < maxAttempts; i++) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const { session } = await getSessionRecoveringStale();
     if (session?.user) return session;
     await new Promise((r) => setTimeout(r, delayMs));
   }
@@ -140,20 +140,11 @@ const EMAIL_LINK_TOKEN_TYPES = new Set([
 ]);
 
 /** Email confirmation link: ?token_hash=&type=… (query or hash; type is often `email`, not only `signup`). */
-async function tryVerifyEmailLinkFromUrl(trimmed: string): Promise<{ tried: boolean; error: Error | null }> {
-  const parsed = Linking.parse(trimmed);
-  const q = parsed.queryParams ?? {};
-  let token_hash = typeof q.token_hash === 'string' ? q.token_hash : null;
-  let type = typeof q.type === 'string' ? q.type : null;
-  if (!token_hash || !type) {
-    const hashPart = trimmed.split('#')[1];
-    if (hashPart) {
-      const hp = new URLSearchParams(hashPart);
-      token_hash = hp.get('token_hash');
-      type = hp.get('type');
-    }
-  }
-  if (!token_hash || !type || !EMAIL_LINK_TOKEN_TYPES.has(type)) {
+async function tryVerifyEmailLinkFromParams(
+  token_hash: string,
+  type: string
+): Promise<{ tried: boolean; error: Error | null }> {
+  if (!EMAIL_LINK_TOKEN_TYPES.has(type)) {
     return { tried: false, error: null };
   }
 
@@ -173,11 +164,10 @@ async function completeOAuthReturnUrl(url: string): Promise<{ error: Error | nul
     return { error: null };
   }
 
-  // Provider / Supabase returned an error in the redirect
-  if (trimmed.includes('error=')) {
-    const parsed = Linking.parse(trimmed);
-    const q = parsed.queryParams ?? {};
-    const desc = (q.error_description as string) || (q.error as string) || 'Sign-in was cancelled or failed';
+  const params = parseAuthRedirectUrl(trimmed);
+
+  if (params.error) {
+    const desc = params.error_description || params.error || 'Sign-in was cancelled or failed';
     try {
       return { error: new Error(decodeURIComponent(desc.replace(/\+/g, ' '))) };
     } catch {
@@ -185,41 +175,31 @@ async function completeOAuthReturnUrl(url: string): Promise<{ error: Error | nul
     }
   }
 
-  // Email signup confirmation / magic link: token_hash + type
-  const emailLink = await tryVerifyEmailLinkFromUrl(trimmed);
-  if (emailLink.tried) {
-    return { error: emailLink.error };
-  }
-
-  // PKCE: code in query (?code=) — also handle Linking.parse when query shape differs slightly
-  const parsedForCode = Linking.parse(trimmed);
-  const queryCode =
-    typeof parsedForCode.queryParams?.code === 'string' ? parsedForCode.queryParams.code : undefined;
-  if (trimmed.includes('code=') || queryCode) {
-    const { error } = await supabase.auth.exchangeCodeForSession(trimmed);
+  // Implicit grant tokens in hash/query — no PKCE verifier required (common after email confirm redirect).
+  if (params.access_token && params.refresh_token) {
+    const { error } = await supabase.auth.setSession({
+      access_token: params.access_token,
+      refresh_token: params.refresh_token,
+    });
     return { error: error ?? null };
   }
 
-  const hash = trimmed.split('#')[1];
-  if (hash) {
-    const params = new URLSearchParams(hash);
-    const access_token = params.get('access_token');
-    const refresh_token = params.get('refresh_token');
-    if (access_token && refresh_token) {
-      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-      return { error: error ?? null };
+  if (params.token_hash && params.type) {
+    const emailLink = await tryVerifyEmailLinkFromParams(params.token_hash, params.type);
+    if (emailLink.tried) {
+      return { error: emailLink.error };
     }
   }
 
-  const parsed = Linking.parse(trimmed);
-  const access_token = parsed.queryParams?.access_token as string | undefined;
-  const refresh_token = parsed.queryParams?.refresh_token as string | undefined;
-  if (access_token && refresh_token) {
-    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+  // PKCE: must pass the code string only; do not sign out before this (keeps code_verifier from signUp).
+  if (params.code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+    if (!error) return { error: null };
+    if (__DEV__) console.warn('[auth] exchangeCodeForSession:', error.message);
+    if (await hasSupabaseSession()) return { error: null };
     return { error: error ?? null };
   }
 
-  // Bare callback URL with no tokens — session may appear shortly after WebBrowser handoff
   if (await hasSupabaseSession()) {
     return { error: null };
   }

@@ -6,6 +6,8 @@ export type OpenEscrowCheckoutArgs = {
   amountKobo: number;
   escrowId: string;
   planId: string;
+  /** Pattern B — which leg is being funded */
+  escrowLeg?: 'host' | 'guest';
 };
 
 /** Opens Paystack hosted checkout. Public key only; verification happens on the server/webhook. */
@@ -23,21 +25,24 @@ export async function openEscrowPaystackCheckout(args: OpenEscrowCheckoutArgs): 
     return { ok: false, error: 'Add an email on your account to pay.', reference: '' };
   }
 
-  const reference = `escrow-${args.escrowId}-${Date.now()}`;
+  const reference = `escrow-${args.escrowId}-${args.escrowLeg ?? 'full'}-${Date.now()}`;
   const callbackUrl =
     process.env.EXPO_PUBLIC_PAYSTACK_ESCROW_CALLBACK_URL ?? Linking.createURL(`/escrow/${args.escrowId}`);
+
+  const meta: Record<string, string> = {
+    escrow_id: args.escrowId,
+    plan_id: args.planId,
+    linkup: 'escrow',
+    transaction_type: 'escrow',
+  };
+  if (args.escrowLeg) meta.escrow_leg = args.escrowLeg;
 
   const url = paystackCheckoutUrl({
     email: args.email,
     amountKobo: args.amountKobo,
     reference,
     callbackUrl,
-    metadata: {
-      escrow_id: args.escrowId,
-      plan_id: args.planId,
-      linkup: 'escrow',
-      transaction_type: 'escrow',
-    },
+    metadata: meta,
   });
 
   const can = await Linking.canOpenURL(url);

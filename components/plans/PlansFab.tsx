@@ -19,7 +19,7 @@ export function PlansFab({ onPress, bottomOffset = 88 }: Props) {
         onPress={onPress}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         accessibilityRole="button"
-        accessibilityLabel="Create plan"
+        accessibilityLabel="Suggest a meetup"
       >
         <Ionicons name="add" size={30} color="#fff" />
       </Pressable>

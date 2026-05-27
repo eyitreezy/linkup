@@ -16,7 +16,7 @@ type Props = {
 };
 
 function formatMoney(cents: number | null, currency: string): string {
-  if (cents == null) return 'Open amount';
+  if (cents == null) return 'Flexible';
   return `${(cents / 100).toFixed(0)} ${currency}`;
 }
 
@@ -55,8 +55,8 @@ export function OfferBubble({ offer, currency, isMine, isHost, showHostLabel }: 
     <View style={[styles.wrap, alignRight ? styles.wrapRight : styles.wrapLeft]}>
       <View style={[styles.bubble, alignRight ? styles.bubbleMine : styles.bubbleTheirs, expired && styles.bubbleDim]}>
         <View style={styles.badgeRow}>
-          <Ionicons name="pricetag" size={14} color={colors.primary} />
-          <Text style={styles.badgeTxt}>Offer · Round {offer.round}</Text>
+          <Ionicons name="chatbubbles-outline" size={14} color={colors.primary} />
+          <Text style={styles.badgeTxt}>Idea · round {offer.round}</Text>
           {showHostLabel && isHost ? <Text style={styles.hostTag}>Host</Text> : null}
         </View>
         <Text style={styles.amount}>{formatMoney(offer.amount_cents, currency)}</Text>
@@ -85,14 +85,14 @@ const styles = StyleSheet.create({
   bubble: {
     maxWidth: 300,
     padding: spacing.md,
-    borderRadius: radius.lg,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.25)',
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   bubbleMine: {
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
-    borderColor: 'rgba(108, 99, 255, 0.35)',
+    backgroundColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(108, 99, 255, 0.38)',
   },
   bubbleTheirs: {},
   bubbleDim: { opacity: 0.72 },

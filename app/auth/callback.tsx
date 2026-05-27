@@ -1,141 +1,110 @@
 /**
- * OAuth deep-link target — add this URL to Supabase Auth redirect allow list.
- * Mobile Google flow usually completes in-app via WebBrowser; this handles web / cold-start deep links.
- *
- * After handling the URL we call AuthContext.refreshSession() so React state matches AsyncStorage
- * (avoids routing to / with session still null → login flash).
+ * Email confirmation + OAuth (`linkup://auth/callback?...`).
+ * Reads full URL from Linking — query/hash tokens are not in the route path alone.
  */
 import { colors, radius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  finalizeOAuthFromUrl,
-  urlLooksLikeAuthRedirect,
-  waitForSupabaseSession,
-} from '@/lib/authProviders';
-import { supabase } from '@/lib/supabase';
+import { completePostAuthFromDeepLink } from '@/lib/auth/completePostAuth';
+import { isRecoveryAuthUrl } from '@/lib/auth/passwordReset';
+import { captureAuthLinkIfPresent } from '@/lib/auth/pendingAuthUrl';
+import { urlLooksLikeAuthRedirect } from '@/lib/authProviders';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
-import { Redirect, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Href, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-type Phase = 'working' | 'ready' | 'failed';
+type Phase = 'working' | 'failed';
 
 export default function AuthCallbackScreen() {
   const { refreshSession } = useAuth();
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('working');
+  const ranRef = useRef(false);
+  const [recoveryFlow, setRecoveryFlow] = useState(false);
 
   useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+
     try {
       Notifications.clearLastNotificationResponse();
     } catch {
-      /* native module may be unavailable */
+      /* ignore */
     }
 
     let cancelled = false;
-    let settled = false;
-    const seen = new Set<string>();
 
-    function setFinal(next: Phase) {
-      if (settled || cancelled) return;
-      settled = true;
-      setPhase(next);
-    }
+    async function run() {
+      const initial = (await Linking.getInitialURL())?.trim() ?? '';
+      captureAuthLinkIfPresent(initial);
+      if (isRecoveryAuthUrl(initial)) setRecoveryFlow(true);
 
-    async function processAuthUrl(url: string | null) {
-      try {
-        const trimmed = url?.trim() ?? '';
-        if (trimmed) {
-          if (seen.has(trimmed)) return;
-          seen.add(trimmed);
-          const { error } = await finalizeOAuthFromUrl(trimmed);
-          if (error && __DEV__) console.warn('[auth/callback]', error.message);
-        }
+      let url = initial;
 
-        const expectAuth = trimmed ? urlLooksLikeAuthRedirect(trimmed) : false;
-        await waitForSupabaseSession(expectAuth ? 48 : 12, 200);
-        if (cancelled) return;
-
-        await refreshSession();
-        if (cancelled) return;
-
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          setFinal('ready');
-          return;
-        }
-
-        if (expectAuth) {
-          setFinal('failed');
-          return;
-        }
-
-        setFinal('ready');
-      } catch (e) {
-        if (__DEV__) console.warn('[auth/callback] processAuthUrl', e);
-        const trimmed = url?.trim() ?? '';
-        const expectAuth = trimmed ? urlLooksLikeAuthRedirect(trimmed) : false;
-        setFinal(expectAuth ? 'failed' : 'ready');
-      }
-    }
-
-    /** Prefer a non-empty deep link; avoid finishing with null before the OS delivers the URL. */
-    void (async () => {
-      const initial = await Linking.getInitialURL();
-      if (initial?.trim()) {
-        await processAuthUrl(initial);
-        return;
-      }
-
-      const fromEvent = await new Promise<string | null>((resolve) => {
-        const t = setTimeout(() => resolve(null), 2800);
-        const sub = Linking.addEventListener('url', ({ url }) => {
-          clearTimeout(t);
-          sub.remove();
-          resolve(url);
+      if (!url || !urlLooksLikeAuthRedirect(url)) {
+        url = await new Promise<string>((resolve) => {
+          const t = setTimeout(() => resolve(initial), 6000);
+          const sub = Linking.addEventListener('url', ({ url: u }) => {
+            if (u?.trim()) {
+              captureAuthLinkIfPresent(u);
+              if (isRecoveryAuthUrl(u)) setRecoveryFlow(true);
+              clearTimeout(t);
+              sub.remove();
+              resolve(u.trim());
+            }
+          });
         });
+      }
+
+      if (cancelled) return;
+
+      const result = await completePostAuthFromDeepLink({
+        url: url || initial || null,
+        refreshSession,
+        router,
       });
 
       if (cancelled) return;
-      await processAuthUrl(fromEvent ?? null);
-    })();
+
+      if (result === 'failed') {
+        setPhase('failed');
+      }
+    }
+
+    void run();
 
     return () => {
       cancelled = true;
     };
-  }, [refreshSession]);
-
-  if (phase === 'working') {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.t}>Completing sign-in…</Text>
-      </View>
-    );
-  }
+  }, [refreshSession, router]);
 
   if (phase === 'failed') {
     return (
       <View style={styles.center}>
         <Text style={styles.err}>
-          We could not finish signing you in. The link may have expired, or the app could not read the full URL
-          (try opening the link again).
+          {recoveryFlow
+            ? 'We could not open your reset link. Request a new email from Forgot password, tap the purple Reset button (not plain text), and open the link on this phone with LinkUp installed.'
+            : 'We could not finish signing you in. Open the confirmation link on the same phone where you signed up, or request a new email and try again. You can also sign in with your password if your email is already confirmed.'}
         </Text>
         <Pressable
-          onPress={() => router.replace('/(auth)/login')}
+          onPress={() =>
+            router.replace((recoveryFlow ? '/(auth)/forgot-password' : '/(auth)/login') as Href)
+          }
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
         >
-          <Text style={styles.btnText}>Back to sign in</Text>
+          <Text style={styles.btnText}>{recoveryFlow ? 'Request new reset link' : 'Back to sign in'}</Text>
         </Pressable>
       </View>
     );
   }
 
-  return <Redirect href="/" />;
+  return (
+    <View style={styles.center}>
+      <ActivityIndicator size="large" color={colors.primary} />
+      <Text style={styles.hint}>{recoveryFlow ? 'Opening password reset…' : 'Confirming your email…'}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -147,7 +116,7 @@ const styles = StyleSheet.create({
     gap: 16,
     padding: 24,
   },
-  t: { color: colors.textMuted, marginTop: 8 },
+  hint: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
   err: { color: colors.text, textAlign: 'center', lineHeight: 22, fontSize: 15 },
   btn: {
     marginTop: 8,

@@ -1,5 +1,5 @@
 /**
- * Location helpers — haversine distance for plan suggestions (km).
+ * Haversine distance for plan suggestions (km).
  */
 export function distanceKm(
   lat1: number,

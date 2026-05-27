@@ -4,7 +4,10 @@
 import type { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { captureAuthLinkIfPresent, peekPendingAuthUrl } from '@/lib/auth/pendingAuthUrl';
+import { clearStaleAuthSession, getSessionRecoveringStale } from '@/lib/auth/sessionRecovery';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import * as Linking from 'expo-linking';
 import type { DbProfile, DbUser } from '@/types/database';
 
 type AuthCtx = {
@@ -14,9 +17,11 @@ type AuthCtx = {
   profile: DbProfile | null;
   loading: boolean;
   isAdmin: boolean;
+  /** `public.admins.id` when the signed-in user is an admin — for `reviewed_by` on verification rows. */
+  adminRecordId: string | null;
   refreshProfile: () => Promise<void>;
-  /** Re-read session from Supabase + reload profile — use after OAuth/email deep links to avoid stale React state. */
-  refreshSession: () => Promise<void>;
+  /** Re-read session from Supabase + reload profile — returns session after state is updated. */
+  refreshSession: (options?: { quiet?: boolean }) => Promise<Session | null>;
   signOut: () => Promise<void>;
 };
 
@@ -28,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminRecordId, setAdminRecordId] = useState<string | null>(null);
   /** Used to skip a second full-screen loading pass when `refreshSession` already loaded this user and `SIGNED_IN` fires again. */
   const lastLoadedUserIdRef = useRef<string | null>(null);
 
@@ -40,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(p as DbProfile | null);
       const { data: ad } = await supabase.from('admins').select('id').eq('user_id', uid).maybeSingle();
       setIsAdmin(!!ad);
+      setAdminRecordId((ad?.id as string | undefined) ?? null);
       lastLoadedUserIdRef.current = uid;
     } catch (e) {
       if (__DEV__) {
@@ -51,30 +58,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isSupabaseConfigured]);
 
-  const refreshSession = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
-    const {
-      data: { session: s },
-      error,
-    } = await supabase.auth.getSession();
-    if (error) {
-      if (__DEV__) console.warn('[Auth] refreshSession:', error.message);
-      return;
-    }
+  const refreshSession = useCallback(async (options?: { quiet?: boolean }): Promise<Session | null> => {
+    if (!isSupabaseConfigured) return null;
+    const { session: s } = await getSessionRecoveringStale();
     setSession(s);
     if (s?.user?.id) {
-      setLoading(true);
+      const showLoading = !options?.quiet;
+      if (showLoading) setLoading(true);
       try {
         await loadUserRow(s.user.id);
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
     } else {
       lastLoadedUserIdRef.current = null;
       setDbUser(null);
       setProfile(null);
       setIsAdmin(false);
+      setAdminRecordId(null);
     }
+    return s;
   }, [isSupabaseConfigured, loadUserRow]);
 
   const refreshProfile = async () => {
@@ -82,6 +85,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    const linkSub = Linking.addEventListener('url', ({ url }) => captureAuthLinkIfPresent(url));
+    void Linking.getInitialURL().then((url) => captureAuthLinkIfPresent(url));
+
     if (!isSupabaseConfigured) {
       if (__DEV__) {
         console.warn(
@@ -89,16 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
       }
       setLoading(false);
-      return;
+      return () => linkSub.remove();
     }
-    supabase.auth
-      .getSession()
-      .then(({ data: { session: s }, error }) => {
-        if (error) {
-          if (__DEV__) console.warn('[Auth] getSession:', error.message);
-          setLoading(false);
-          return;
-        }
+    void getSessionRecoveringStale()
+      .then(({ session: s }) => {
         setSession(s);
         if (s?.user?.id) void loadUserRow(s.user.id).finally(() => setLoading(false));
         else setLoading(false);
@@ -110,7 +110,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             e instanceof Error ? e.message : e
           );
         }
-        setLoading(false);
+        if (!peekPendingAuthUrl()) {
+          void clearStaleAuthSession().finally(() => {
+            setSession(null);
+            setLoading(false);
+          });
+        } else {
+          setSession(null);
+          setLoading(false);
+        }
       });
     const {
       data: { subscription },
@@ -132,9 +140,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setDbUser(null);
         setProfile(null);
         setIsAdmin(false);
+        setAdminRecordId(null);
       }
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      linkSub.remove();
+      subscription.unsubscribe();
+    };
   }, [loadUserRow]);
 
   /** Keep `dbUser` (verification_status, premium, etc.) in sync when the row changes in Supabase — not only on auth events. */
@@ -173,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setDbUser(null);
       setProfile(null);
       setIsAdmin(false);
+      setAdminRecordId(null);
       return;
     }
     const { error } = await supabase.auth.signOut();
@@ -190,11 +203,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       loading,
       isAdmin,
+      adminRecordId,
       refreshProfile,
       refreshSession,
       signOut,
     }),
-    [session, dbUser, profile, loading, isAdmin, refreshSession]
+    [session, dbUser, profile, loading, isAdmin, adminRecordId, refreshSession, refreshProfile]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

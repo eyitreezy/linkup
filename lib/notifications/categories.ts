@@ -21,6 +21,9 @@ const PAYMENTS: NotificationEventType[] = [
 const SYSTEM: NotificationEventType[] = [
   'kyc_submitted',
   'kyc_decision',
+  'verification_submitted',
+  'verification_updated',
+  'moderation_flagged',
   'account_restriction',
   'report_submitted',
   'premium_activated',
@@ -32,7 +35,7 @@ export function notificationTab(type: string): NotificationFilterTab {
   if (SYSTEM.includes(type as NotificationEventType)) return 'system';
   if (type.startsWith('offer_') || type.startsWith('plan_')) return 'activity';
   if (type.startsWith('escrow_') || type.startsWith('dispute')) return 'payments';
-  if (type.startsWith('kyc_') || type.startsWith('account_')) return 'system';
+  if (type.startsWith('kyc_') || type.startsWith('account_') || type.startsWith('verification_')) return 'system';
   return 'activity';
 }
 
@@ -41,6 +44,8 @@ export function priorityForType(type: string): 'high' | 'medium' | 'low' {
     type === 'dispute_opened' ||
     type === 'cancel_chargeback' ||
     type === 'account_restriction' ||
+    type === 'moderation_flagged' ||
+    type === 'verification_updated' ||
     type.startsWith('escrow_')
   ) {
     return 'high';

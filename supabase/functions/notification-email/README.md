@@ -2,6 +2,8 @@
 
 Sends **generic** transactional email when `public.notifications` gets a new row. Copy is **only** from `notification.type`, not from `title` / `body` / `data` (so amounts and KYC outcomes stay in-app).
 
+**Full setup guide:** [docs/EMAIL_NOTIFICATIONS_SETUP.md](../../../docs/EMAIL_NOTIFICATIONS_SETUP.md)
+
 ## 1. Resend
 
 1. Create [Resend](https://resend.com) API key and verify a sending domain.

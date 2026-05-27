@@ -8,6 +8,7 @@ import { EscrowStatusBadge } from '@/components/escrow/EscrowStatusBadge';
 import { EscrowStepIndicator } from '@/components/escrow/EscrowStepIndicator';
 import { EscrowSummaryCard } from '@/components/escrow/EscrowSummaryCard';
 import { EscrowTimeline } from '@/components/escrow/EscrowTimeline';
+import { FundingDeadlineUrgencyBanner } from '@/components/escrow/FundingDeadlineUrgencyBanner';
 import { OpenDisputeModal } from '@/components/escrow/OpenDisputeModal';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { colors, spacing } from '@/constants/theme';
@@ -45,6 +46,8 @@ function paymentStatusLabel(status: DbEscrowTransaction['status']): string {
     case 'pending_funding':
       return 'Waiting for payment';
     case 'funded':
+      return 'Held securely in escrow';
+    case 'active':
       return 'Held securely in escrow';
     case 'released':
       return 'Released to host';
@@ -104,7 +107,14 @@ export default function EscrowDetailScreen() {
       .maybeSingle();
     setDispute(dRow ? (dRow as DbEscrowDispute) : null);
 
-    const cpId = user?.id === esc.payer_id ? esc.payee_id : esc.payer_id;
+    const cpId =
+      esc.host_id && esc.guest_id
+        ? user.id === esc.host_id
+          ? esc.guest_id
+          : esc.host_id
+        : user.id === esc.payer_id
+          ? esc.payee_id
+          : esc.payer_id;
     const { data: prof } = await supabase
       .from('profiles')
       .select('display_name, avatar_url, verified_badge')
@@ -138,7 +148,14 @@ export default function EscrowDetailScreen() {
 
   const openChatWithCounterparty = useCallback(async () => {
     if (!user || !escrow) return;
-    const other = escrow.payer_id === user.id ? escrow.payee_id : escrow.payer_id;
+    const other =
+      escrow.host_id && escrow.guest_id
+        ? user.id === escrow.host_id
+          ? escrow.guest_id
+          : escrow.host_id
+        : escrow.payer_id === user.id
+          ? escrow.payee_id
+          : escrow.payer_id;
     try {
       await openDirectChat(supabase, user.id, other);
     } catch (e) {
@@ -170,11 +187,31 @@ export default function EscrowDetailScreen() {
     setFundConfirmOpen(false);
     if (!escrow || !user?.email || !requireVerified()) return;
     await runLocked(async () => {
+      let amountKobo = escrow.amount_cents;
+      let escrowLeg: 'host' | 'guest' | undefined;
+      if (escrow.escrow_pattern === 'B') {
+        if (user.id === escrow.host_id && !escrow.host_funded_at) {
+          escrowLeg = 'host';
+          amountKobo = escrow.host_share_cents ?? 0;
+        } else if (user.id === escrow.guest_id && !escrow.guest_funded_at) {
+          escrowLeg = 'guest';
+          amountKobo = escrow.guest_share_cents ?? 0;
+        } else {
+          Alert.alert('Payment', 'No pending share for you on this escrow.');
+          return;
+        }
+        if (amountKobo <= 0) {
+          Alert.alert('Payment', 'Invalid split amount.');
+          return;
+        }
+      }
+
       const opened = await openEscrowPaystackCheckout({
         email: user.email ?? '',
-        amountKobo: escrow.amount_cents,
+        amountKobo,
         escrowId: escrow.id,
         planId: escrow.plan_id,
+        escrowLeg,
       });
       if (!opened.ok) {
         Alert.alert('Checkout', opened.error ?? 'Could not open payment.');
@@ -198,9 +235,9 @@ export default function EscrowDetailScreen() {
 
   async function onConfirmMeetupComplete() {
     setCompleteConfirmOpen(false);
-    if (!plan) return;
+    if (!plan || !user) return;
     await runLocked(async () => {
-      const { error } = await confirmMeetupComplete(supabase, plan.id);
+      const { error } = await confirmMeetupComplete(supabase, plan.id, user.id);
       if (error) Alert.alert('Plan', error);
       else void load();
     });
@@ -248,6 +285,26 @@ export default function EscrowDetailScreen() {
 
   const isPayer = escrow.payer_id === user.id;
   const isPayee = escrow.payee_id === user.id;
+  const patternB = escrow.escrow_pattern === 'B';
+  const needHostLeg =
+    patternB &&
+    escrow.status === 'pending_funding' &&
+    !escrow.host_funded_at &&
+    escrow.host_id === user.id;
+  const needGuestLeg =
+    patternB &&
+    escrow.status === 'pending_funding' &&
+    !escrow.guest_funded_at &&
+    escrow.guest_id === user.id;
+  const showFundSingle = escrow.status === 'pending_funding' && !patternB && isPayer;
+  const showFund = showFundSingle || needHostLeg || needGuestLeg;
+  const iPaidMySplitLeg =
+    patternB &&
+    ((user.id === escrow.host_id && !!escrow.host_funded_at) ||
+      (user.id === escrow.guest_id && !!escrow.guest_funded_at));
+  const bothSplitLegs = !!(escrow.host_funded_at && escrow.guest_funded_at);
+  const showSplitWaitingOther =
+    patternB && escrow.status === 'pending_funding' && iPaidMySplitLeg && !bothSplitLegs;
   const stepIdx = stepActiveIndex(escrow, plan);
   const whenLabel = formatIsoDateTime(plan?.agreed_scheduled_at, plan?.scheduled_at ?? undefined);
   const locationLabel = plan?.agreed_location ?? plan?.location_label ?? '—';
@@ -256,7 +313,6 @@ export default function EscrowDetailScreen() {
     'Your payment is secure and stays in escrow until you confirm the meetup completed successfully.';
 
   const disputed = escrow.status === 'disputed';
-  const showFund = escrow.status === 'pending_funding' && isPayer;
   const showWaitingFunded =
     escrow.status === 'funded' && plan?.status === 'active' && !disputed;
   const showReleaseBlock =
@@ -328,7 +384,17 @@ export default function EscrowDetailScreen() {
           <EscrowCounterpartyHeader
             title={plan?.title ?? 'Paid plan'}
             counterparty={counterparty}
-            youLabel={isPayer ? 'You are paying' : isPayee ? 'You are hosting' : ''}
+            youLabel={
+              patternB
+                ? needHostLeg || needGuestLeg
+                  ? 'Your share is due'
+                  : 'Split escrow'
+                : isPayer
+                  ? 'You are paying'
+                  : isPayee
+                    ? 'You are hosting'
+                    : ''
+            }
           />
         ) : null}
 
@@ -344,6 +410,13 @@ export default function EscrowDetailScreen() {
         </View>
 
         <EscrowStepIndicator activeIndex={stepIdx} />
+
+        {escrow.status === 'pending_funding' && escrow.funding_deadline && !showDisputedBanner ? (
+          <FundingDeadlineUrgencyBanner
+            deadlineIso={escrow.funding_deadline}
+            isMoodPlan={!!plan?.is_mood_plan}
+          />
+        ) : null}
 
         {showDisputedBanner ? (
           <View style={styles.warnBanner}>
@@ -361,6 +434,31 @@ export default function EscrowDetailScreen() {
           trustNote={trustNote}
         />
 
+        {patternB && escrow.status === 'pending_funding' ? (
+          <View style={styles.splitCard}>
+            <Text style={styles.splitTitle}>Split escrow</Text>
+            <Text style={styles.splitLine}>
+              Host share: ₦{((escrow.host_share_cents ?? 0) / 100).toFixed(0)}
+              {escrow.host_funded_at ? ' · Paid ✓' : ' · Pending'}
+            </Text>
+            <Text style={styles.splitLine}>
+              Guest share: ₦{((escrow.guest_share_cents ?? 0) / 100).toFixed(0)}
+              {escrow.guest_funded_at ? ' · Paid ✓' : ' · Pending'}
+            </Text>
+            {escrow.funding_deadline ? (
+              <Text style={styles.splitHint}>Fund by {formatIsoDateTime(escrow.funding_deadline)}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {showSplitWaitingOther ? (
+          <View style={styles.waitSplitCard}>
+            <Ionicons name="time-outline" size={22} color={colors.primary} />
+            <Text style={styles.waitSplitTitle}>Waiting for the other person</Text>
+            <Text style={styles.waitSplitSub}>Their share is still pending. You&apos;ll both get confirmation when escrow is fully funded.</Text>
+          </View>
+        ) : null}
+
         <EscrowTimeline items={timelineItems} />
 
         {showFund ? (
@@ -370,7 +468,9 @@ export default function EscrowDetailScreen() {
               disabled={busy}
               onPress={() => setFundConfirmOpen(true)}
             >
-              <Text style={styles.primaryBtnTxt}>{busy ? 'Please wait…' : 'Fund escrow'}</Text>
+              <Text style={styles.primaryBtnTxt}>
+                {busy ? 'Please wait…' : needHostLeg || needGuestLeg ? 'Pay your share' : 'Fund escrow'}
+              </Text>
             </Pressable>
             {__DEV__ ? (
               <Pressable style={styles.ghostBtn} onPress={() => void onDemoFunded()} disabled={busy}>
@@ -494,6 +594,31 @@ const styles = StyleSheet.create({
   infoTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
   infoSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: spacing.sm },
   releaseHint: { fontSize: 15, color: colors.text, fontWeight: '600', marginBottom: spacing.md, lineHeight: 22 },
+  splitCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.lg,
+    gap: 6,
+  },
+  splitTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  splitLine: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  splitHint: { fontSize: 13, color: colors.textMuted, marginTop: spacing.xs },
+  waitSplitCard: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(108,99,255,0.08)',
+    padding: spacing.md,
+    borderRadius: 16,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108,99,255,0.25)',
+  },
+  waitSplitTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+  waitSplitSub: { flex: 1, fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   successCard: {
     alignItems: 'center',
     backgroundColor: colors.surface,

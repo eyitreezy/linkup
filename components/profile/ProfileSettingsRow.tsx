@@ -13,12 +13,18 @@ type Props = {
   danger?: boolean;
   /** Unread count badge (e.g. notification inbox). */
   badgeCount?: number;
+  /** Omit bottom divider (last row in a card). */
+  isLast?: boolean;
 };
 
-export function ProfileSettingsRow({ icon, label, subtitle, onPress, danger, badgeCount }: Props) {
+export function ProfileSettingsRow({ icon, label, subtitle, onPress, danger, badgeCount, isLast }: Props) {
   const showBadge = typeof badgeCount === 'number' && badgeCount > 0;
   return (
-    <Pressable onPress={onPress} style={styles.row} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      style={[styles.row, isLast && styles.rowLast]}
+      accessibilityRole="button"
+    >
       <View style={[styles.iconWrap, danger && styles.iconDanger]}>
         <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.primary} />
       </View>
@@ -47,7 +53,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: 'rgba(26, 29, 38, 0.08)',
+  },
+  rowLast: {
+    borderBottomWidth: 0,
   },
   iconWrap: {
     width: 40,

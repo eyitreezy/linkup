@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbEscrowTransaction } from '@/types/database';
+import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
+import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
 
 function mergeEscrowMetadata(
   existing: Record<string, unknown> | null | undefined,
@@ -66,13 +68,22 @@ export async function markEscrowFunded(
 }
 
 /** Host or guest marks the in-person plan as done (before fund release). */
-export async function confirmMeetupComplete(client: SupabaseClient, planId: string): Promise<{ error: string | null }> {
+export async function confirmMeetupComplete(
+  client: SupabaseClient,
+  planId: string,
+  userId?: string
+): Promise<{ error: string | null }> {
   const { error } = await client
     .from('plans')
     .update({ status: 'completed' })
     .eq('id', planId)
     .eq('status', 'active');
-  return { error: error?.message ?? null };
+  if (error) return { error: error.message };
+  if (userId) {
+    const ack = await insertPlanCompletionAck(client, planId, userId);
+    if (ack.error) return { error: ack.error };
+  }
+  return { error: null };
 }
 
 export async function releaseEscrowFunds(
@@ -84,9 +95,19 @@ export async function releaseEscrowFunds(
   if (planStatus !== 'completed') {
     return { error: 'Confirm the meetup is complete before releasing funds.' };
   }
+  const { data: row } = await client
+    .from('escrow_transactions')
+    .select('amount_cents, status')
+    .eq('id', escrowId)
+    .maybeSingle();
+  const fee = platformFeeCentsForAmount(row?.amount_cents ?? 0);
   const { error } = await client
     .from('escrow_transactions')
-    .update({ status: 'released', released_at: new Date().toISOString() })
+    .update({
+      status: 'released',
+      released_at: new Date().toISOString(),
+      platform_fee_cents: fee,
+    })
     .eq('id', escrowId)
     .eq('status', 'funded');
   if (error) return { error: error.message };

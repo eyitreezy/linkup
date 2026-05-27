@@ -7,6 +7,7 @@ import { colors, radius, spacing } from '@/constants/theme';
 import type { OfferDashboardRow, OfferDisplayStatus } from '@/lib/plans/fetchOffersDashboard';
 import { getOfferDisplayStatus } from '@/lib/plans/fetchOffersDashboard';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -27,6 +28,8 @@ function statusColors(s: OfferDisplayStatus): { bg: string; fg: string; border: 
       return { bg: 'rgba(239, 68, 68, 0.1)', fg: colors.danger, border: 'rgba(239, 68, 68, 0.3)' };
     case 'expired':
       return { bg: 'rgba(107, 114, 128, 0.1)', fg: colors.textMuted, border: colors.border };
+    case 'pending':
+      return { bg: 'rgba(108, 99, 255, 0.12)', fg: colors.primary, border: 'rgba(108, 99, 255, 0.3)' };
     default:
       return { bg: 'rgba(107, 114, 128, 0.08)', fg: colors.textMuted, border: colors.border };
   }
@@ -75,6 +78,12 @@ export function OfferListCard({
 
   return (
     <View style={styles.card}>
+      <LinearGradient
+        colors={[colors.secondary, colors.primary, '#34D399']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.topGlow}
+      />
       <Pressable
         onPress={onPressOpen}
         style={({ pressed }) => [styles.tapMain, pressed && styles.tapPressed]}
@@ -141,14 +150,15 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(26, 29, 38, 0.06)',
-    shadowColor: '#1A1D26',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: 'rgba(255, 101, 132, 0.16)',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 3,
     overflow: 'hidden',
   },
+  topGlow: { height: 4, width: '100%' },
   tapMain: { padding: spacing.md },
   tapPressed: { opacity: 0.96 },
   top: {

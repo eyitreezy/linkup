@@ -1,8 +1,10 @@
 /**
  * Bumble-style selectable card for plan visibility (PL2).
  */
+import { APP_CHIP_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -17,32 +19,87 @@ type Props = {
 };
 
 export function VisibilityPickCard({ title, description, icon, selected, onPress }: Props) {
+  const body = (
+    <View style={styles.row}>
+      {selected ? (
+        <LinearGradient
+          colors={[...APP_CHIP_GRADIENT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.iconCircleGrad}
+        >
+          <Ionicons name={icon} size={26} color="#fff" />
+        </LinearGradient>
+      ) : (
+        <View style={styles.iconCircle}>
+          <Ionicons name={icon} size={26} color={colors.textMuted} />
+        </View>
+      )}
+      <View style={styles.textCol}>
+        <Text style={[styles.title, selected && styles.titleOn]}>{title}</Text>
+        <Text style={styles.body}>{description}</Text>
+      </View>
+      <Ionicons
+        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+        size={24}
+        color={selected ? colors.primary : colors.border}
+      />
+    </View>
+  );
+
+  if (selected) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={styles.cardOuter}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+      >
+        <LinearGradient
+          colors={[...APP_CHIP_GRADIENT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.cardGradBorder}
+        >
+          <View style={styles.cardInner}>{body}</View>
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.card, selected && styles.cardSelected]}
+      style={styles.card}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
     >
-      <View style={styles.row}>
-        <View style={[styles.iconCircle, selected && styles.iconCircleOn]}>
-          <Ionicons name={icon} size={26} color={selected ? colors.primary : colors.textMuted} />
-        </View>
-        <View style={styles.textCol}>
-          <Text style={[styles.title, selected && styles.titleOn]}>{title}</Text>
-          <Text style={styles.body}>{description}</Text>
-        </View>
-        <Ionicons
-          name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-          size={24}
-          color={selected ? colors.primary : colors.border}
-        />
-      </View>
+      {body}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  cardOuter: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    shadowColor: '#6C63FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardGradBorder: {
+    padding: 2,
+    borderRadius: radius.xl,
+  },
+  cardInner: {
+    padding: spacing.md,
+    borderRadius: radius.xl - 2,
+    backgroundColor: colors.surface,
+  },
   card: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
@@ -57,10 +114,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  cardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
-  },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   iconCircle: {
     width: 52,
@@ -70,7 +123,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconCircleOn: { backgroundColor: 'rgba(108, 99, 255, 0.12)' },
+  iconCircleGrad: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   textCol: { flex: 1, minWidth: 0 },
   title: { fontSize: 17, fontWeight: '800', color: colors.text },
   titleOn: { color: colors.primary },

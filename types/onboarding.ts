@@ -31,8 +31,14 @@ export type OnboardingDraft = {
   ageMin: number;
   ageMax: number;
   radiusKm: number;
+  /** Display label from location search or “use current location”. */
+  locationLabel: string;
+  locationLatitude: number | null;
+  locationLongitude: number | null;
   profilePublic: boolean;
   safetyTipsAcknowledged: boolean;
+  /** Step 1 — persisted in preferences.adult_confirmed */
+  adultConfirmed: boolean;
   /** Optional step 4 */
   skipContactsImport: boolean;
 };
@@ -55,8 +61,12 @@ export function defaultOnboardingDraft(partial?: Partial<OnboardingDraft>): Onbo
     ageMin: 22,
     ageMax: 35,
     radiusKm: 25,
+    locationLabel: '',
+    locationLatitude: null,
+    locationLongitude: null,
     profilePublic: true,
     safetyTipsAcknowledged: false,
+    adultConfirmed: false,
     skipContactsImport: true,
     ...partial,
   };
@@ -76,6 +86,7 @@ export function preferencesFromDraft(draft: OnboardingDraft): ProfilePreferences
     self_gender: draft.selfGender ?? undefined,
     distance_unit: 'km',
     safety_tips_acknowledged: draft.safetyTipsAcknowledged,
+    adult_confirmed: draft.adultConfirmed || undefined,
   };
   return base;
 }

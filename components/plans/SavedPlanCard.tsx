@@ -1,11 +1,12 @@
 /**
- * Compact saved-plan row — Hinge-style density, Tinder-style clarity.
+ * Compact saved-plan row — dense list layout with a color accent stripe.
  */
 import { Avatar } from '@/components/Avatar';
 import { colors, radius, spacing } from '@/constants/theme';
 import type { SavedPlanListItem } from '@/lib/plans/fetchSavedPlans';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -23,78 +24,111 @@ export function SavedPlanCard({ item, onPressCard, onUnsave }: Props) {
 
   return (
     <View style={styles.card}>
-      <Pressable
-        onPress={onPressCard}
-        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`${plan.title}, hosted by ${name}`}
-      >
-        <View style={styles.body}>
-          <Avatar uri={creator.avatar_url} name={name} size={52} />
-          <View style={styles.textCol}>
-            <Text style={styles.title} numberOfLines={2}>
-              {plan.title}
-            </Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.meta} numberOfLines={1}>
-                {name}
+      <LinearGradient
+        colors={[colors.passAction, colors.primary, '#FACC15', colors.success]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.accentStripe}
+      />
+      <View style={styles.cardBody}>
+        <Pressable
+          onPress={onPressCard}
+          style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`${plan.title}, hosted by ${name}`}
+        >
+          <View style={styles.body}>
+            <Avatar uri={creator.avatar_url} name={name} size={52} />
+            <View style={styles.textCol}>
+              <Text style={styles.title} numberOfLines={2}>
+                {plan.title}
               </Text>
-              {creator.verified_badge ? (
-                <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={styles.verified} />
-              ) : null}
+              <View style={styles.metaRow}>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {name}
+                </Text>
+                {creator.verified_badge ? (
+                  <Ionicons name="checkmark-circle" size={16} color={colors.primary} style={styles.verified} />
+                ) : null}
+              </View>
+              <Text style={styles.detail} numberOfLines={1}>
+                {loc}
+              </Text>
+              <Text style={styles.detail} numberOfLines={1}>
+                {when}
+              </Text>
+              {price ? (
+                <Text style={styles.price} numberOfLines={1}>
+                  {price}
+                </Text>
+              ) : (
+                <Text style={styles.priceMuted}>Open price</Text>
+              )}
             </View>
-            <Text style={styles.detail} numberOfLines={1}>
-              {loc}
-            </Text>
-            <Text style={styles.detail} numberOfLines={1}>
-              {when}
-            </Text>
-            {price ? (
-              <Text style={styles.price} numberOfLines={1}>
-                {price}
-              </Text>
-            ) : (
-              <Text style={styles.priceMuted}>Open price</Text>
-            )}
           </View>
-        </View>
-      </Pressable>
-      <Pressable
-        onPress={onUnsave}
-        hitSlop={12}
-        style={({ pressed }) => [styles.bookmarkBtn, pressed && styles.bookmarkPressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Remove from saved"
-      >
-        <Ionicons name="bookmark" size={22} color={colors.primary} />
-      </Pressable>
+        </Pressable>
+        <Pressable
+          onPress={onUnsave}
+          hitSlop={12}
+          style={({ pressed }) => [styles.bookmarkBtn, pressed && styles.bookmarkPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Remove from saved"
+        >
+          <LinearGradient
+            colors={['rgba(108, 99, 255, 0.14)', 'rgba(255, 101, 132, 0.12)']}
+            style={styles.bookmarkBg}
+          >
+            <Ionicons name="bookmark" size={22} color={colors.primary} />
+          </LinearGradient>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    position: 'relative',
-    backgroundColor: colors.surface,
+    flexDirection: 'row',
     borderRadius: radius.lg,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(26, 29, 38, 0.06)',
     shadowColor: '#1A1D26',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
     overflow: 'hidden',
   },
-  cardMain: { padding: spacing.md, paddingRight: 48 },
+  accentStripe: {
+    width: 5,
+    borderTopLeftRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
+  },
+  cardBody: {
+    flex: 1,
+    minWidth: 0,
+    position: 'relative',
+    backgroundColor: colors.surface,
+    borderTopRightRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: 0,
+    borderColor: 'rgba(108, 99, 255, 0.14)',
+  },
+  cardMain: { padding: spacing.md, paddingRight: 52 },
   cardPressed: { opacity: 0.96 },
   bookmarkBtn: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
-    padding: 6,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
+  bookmarkBg: {
+    padding: 8,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
   },
   bookmarkPressed: { opacity: 0.65 },
   body: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },

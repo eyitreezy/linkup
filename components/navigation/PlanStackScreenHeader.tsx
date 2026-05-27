@@ -4,22 +4,29 @@
  */
 import { PlanStackHeaderBack } from '@/components/navigation/PlanStackHeaderBack';
 import { colors, spacing } from '@/constants/theme';
-import { StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 const BACK_SLOT = 44;
 
-type Props = { title: string };
+type Props = {
+  title: string;
+  barStyle?: StyleProp<ViewStyle>;
+  titleStyle?: StyleProp<TextStyle>;
+  /** Trailing action (e.g. report). */
+  right?: ReactNode;
+};
 
-export function PlanStackScreenHeader({ title }: Props) {
+export function PlanStackScreenHeader({ title, barStyle, titleStyle, right }: Props) {
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, barStyle]}>
       <View style={styles.backSlot}>
         <PlanStackHeaderBack />
       </View>
-      <Text style={styles.title} numberOfLines={1}>
+      <Text style={[styles.title, titleStyle]} numberOfLines={1}>
         {title}
       </Text>
-      <View style={styles.backSlot} />
+      <View style={[styles.backSlot, styles.backSlotRight]}>{right}</View>
     </View>
   );
 }
@@ -39,6 +46,9 @@ const styles = StyleSheet.create({
     width: BACK_SLOT,
     alignItems: 'flex-start',
     justifyContent: 'center',
+  },
+  backSlotRight: {
+    alignItems: 'flex-end',
   },
   title: {
     flex: 1,

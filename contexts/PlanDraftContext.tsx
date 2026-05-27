@@ -1,20 +1,15 @@
 /**
- * In-memory draft for PL1 → PL2 create-plan wizard.
+ * In-memory draft for create-plan wizard + auto-save to AsyncStorage.
  */
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import type { PlanDraft, PlanVisibility } from '@/types/planDraft';
+import {
+  clearPlanDraftStorage,
+  loadPlanDraftFromStorage,
+  savePlanDraftToStorage,
+} from '@/lib/plans/planDraftStorage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-export type PlanVisibility = 'public' | 'radius' | 'friends';
-
-export type PlanDraft = {
-  title: string;
-  description: string;
-  locationLabel: string;
-  latitude: number | null;
-  longitude: number | null;
-  scheduledAt: Date | null;
-  startingPrice: string;
-  visibility: PlanVisibility;
-};
+export type { PlanDraft, PlanVisibility } from '@/types/planDraft';
 
 function defaultScheduled(): Date {
   const d = new Date();
@@ -32,19 +27,74 @@ const emptyDraft = (): PlanDraft => ({
   scheduledAt: defaultScheduled(),
   startingPrice: '',
   visibility: 'public',
+  meetTypeId: null,
+  isPaid: true,
+  escrowPattern: 'A',
+  hostContributionBps: 5000,
+  isMoodPlan: false,
+  moodExpiresAt: null,
+  budgetTier: null,
+  durationMinutes: null,
+  moodType: null,
+  moodWindow: 'now',
+  moodCustomStart: null,
+  moodCustomEnd: null,
+  moodListingHours: 3,
+  spotlightBoost: false,
 });
 
 type Ctx = {
   draft: PlanDraft;
   setDraft: React.Dispatch<React.SetStateAction<PlanDraft>>;
-  reset: () => void;
+  /** Clears draft + AsyncStorage; clears pending auto-save; invalidates in-flight hydration. */
+  reset: () => Promise<void>;
 };
 
 const PlanDraftContext = createContext<Ctx | null>(null);
 
 export function PlanDraftProvider({ children }: { children: React.ReactNode }) {
-  const [draft, setDraft] = useState<PlanDraft>(emptyDraft);
-  const reset = useCallback(() => setDraft(emptyDraft()), []);
+  const [draft, setDraft] = useState<PlanDraft>(() => emptyDraft());
+  const [storageReady, setStorageReady] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Increment to ignore AsyncStorage hydration that finishes after `reset()` or unmount. */
+  const hydrateGeneration = useRef(0);
+
+  useEffect(() => {
+    const myGeneration = ++hydrateGeneration.current;
+    let cancelled = false;
+    void (async () => {
+      const saved = await loadPlanDraftFromStorage();
+      if (cancelled || myGeneration !== hydrateGeneration.current) return;
+      if (saved) setDraft(saved);
+      setStorageReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      void savePlanDraftToStorage(draft);
+    }, 450);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [draft, storageReady]);
+
+  const reset = useCallback(async () => {
+    hydrateGeneration.current += 1;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    await clearPlanDraftStorage();
+    setDraft(emptyDraft());
+    setStorageReady(true);
+  }, []);
+
   const value = useMemo(() => ({ draft, setDraft, reset }), [draft, reset]);
   return <PlanDraftContext.Provider value={value}>{children}</PlanDraftContext.Provider>;
 }

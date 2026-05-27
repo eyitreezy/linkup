@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.button,
     backgroundColor: 'rgba(108, 99, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   chevron: { opacity: 0.45 },
   cancelPill: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.button,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,

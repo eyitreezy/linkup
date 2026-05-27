@@ -1,6 +1,8 @@
-import { Text, View } from 'react-native';
 import { kycStyles } from '@/components/kyc/kycTheme';
+import { colors } from '@/constants/theme';
 import { KYC_TOTAL_STEPS } from '@/types/kyc';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Text, View } from 'react-native';
 
 type Props = { step: number };
 
@@ -12,7 +14,12 @@ export function KycProgressBar({ step }: Props) {
         Step {step} of {KYC_TOTAL_STEPS}
       </Text>
       <View style={kycStyles.progressTrack}>
-        <View style={[kycStyles.progressFill, { width: `${pct}%` }]} />
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[kycStyles.progressFill, { width: `${pct}%` }]}
+        />
       </View>
     </View>
   );

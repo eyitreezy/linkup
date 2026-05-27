@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
   pill: {
     width: 28,
     height: 28,
-    borderRadius: radius.full,
+    borderRadius: radius.button,
     backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',

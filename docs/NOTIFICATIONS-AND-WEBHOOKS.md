@@ -60,6 +60,12 @@ For trigger-only rows, either:
 
 The push function skips `escrow_funded` and `premium_activated` if you use both paths (avoids duplicates).
 
+## Email from triggers (optional)
+
+Deploy `notification-email`, set `RESEND_API_KEY`, `RESEND_FROM`, `NOTIFICATION_EMAIL_WEBHOOK_SECRET`, and add a **Database Webhook** on `public.notifications` INSERT → that function (header `x-linkup-webhook-secret`). Respects `profiles.preferences.notifications.email === false`.
+
+Full checklist: **[EMAIL_NOTIFICATIONS_SETUP.md](./EMAIL_NOTIFICATIONS_SETUP.md)**.
+
 ## Client
 
 - Tokens: `profiles.preferences.expo_push_token` (see `lib/notifications/registerPushNotifications.ts`).

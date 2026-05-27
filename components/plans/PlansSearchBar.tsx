@@ -11,11 +11,14 @@ const DEBOUNCE_MS = 400;
 type Props = {
   onDebouncedQueryChange: (query: string) => void;
   placeholder?: string;
+  /** Glass-style field on gradient feeds (Discover list). */
+  variant?: 'default' | 'premium';
 };
 
 export function PlansSearchBar({
   onDebouncedQueryChange,
   placeholder = 'Search plans, categories, or keywords',
+  variant = 'default',
 }: Props) {
   const [text, setText] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,10 +51,13 @@ export function PlansSearchBar({
     Animated.spring(focusAnim, { toValue: 0, useNativeDriver: false, friction: 7 }).start();
   }
 
+  const outerStyle = variant === 'premium' ? styles.outerPremium : styles.outer;
+  const innerStyle = variant === 'premium' ? styles.innerPremium : styles.inner;
+
   return (
-    <View style={styles.outer}>
+    <View style={outerStyle}>
       <Animated.View style={[styles.ring, { borderWidth: ringWidth, borderColor: ringColor }]}>
-        <View style={styles.inner}>
+        <View style={innerStyle}>
           <Ionicons name="search" size={20} color={colors.textMuted} style={styles.icon} />
           <TextInput
             value={text}
@@ -89,6 +95,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     backgroundColor: colors.background,
   },
+  outerPremium: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    backgroundColor: 'transparent',
+  },
   ring: {
     borderRadius: radius.button,
   },
@@ -105,6 +116,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
+  },
+  innerPremium: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.14)',
+    shadowColor: '#2a1f55',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 4,
   },
   icon: { marginRight: spacing.sm },
   input: {

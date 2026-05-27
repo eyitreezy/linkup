@@ -3,13 +3,22 @@
  * interest pills, Hinge-style prompt + answer blocks.
  */
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { radius } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
 import type { MeetingIntent, OnboardingDraft } from '@/types/onboarding';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 
-type Props = { draft: OnboardingDraft };
+type Props = {
+  draft: OnboardingDraft;
+  /** Full scroll width (e.g. edit profile). Default: centered phone-width card. */
+  fullWidth?: boolean;
+};
+
+/** Same horizontal gradient as selected chips in TagSelector. */
+const INTEREST_PILL_GRADIENT = [colors.primary, '#8B7CE8', colors.secondary] as const;
 
 const intentLabel = (m: MeetingIntent | null): string | null => {
   if (!m) return null;
@@ -18,16 +27,18 @@ const intentLabel = (m: MeetingIntent | null): string | null => {
   return 'Activities';
 };
 
-export function ProfileCardPreview({ draft }: Props) {
+export function ProfileCardPreview({ draft, fullWidth = false }: Props) {
   const { width: winW } = useWindowDimensions();
   const uri = draft.localPhotoUris[0] ?? draft.remotePhotoUrls[0];
   const age = ageFromBirthDate(draft.birthDate);
   const photos = [...draft.remotePhotoUrls, ...draft.localPhotoUris];
   const intent = intentLabel(draft.meetingIntent);
 
+  const cardSizeStyle = fullWidth ? styles.cardFull : { maxWidth: Math.min(winW - onboarding.spacing.lg * 2, 420) };
+
   return (
-    <View style={styles.outer}>
-      <View style={[styles.card, { maxWidth: Math.min(winW - onboarding.spacing.lg * 2, 420) }]}>
+    <View style={[styles.outer, fullWidth && styles.outerFull]}>
+      <View style={[styles.card, cardSizeStyle]}>
         {/* Tinder-style: full-bleed photo, name on gradient */}
         <View style={styles.hero}>
           {uri ? (
@@ -52,6 +63,14 @@ export function ProfileCardPreview({ draft }: Props) {
         </View>
 
         <View style={styles.body}>
+          {hasValidProfileLocation(draft) ? (
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={16} color={colors.primary} />
+              <Text style={styles.locationTxt} numberOfLines={2}>
+                {draft.locationLabel.trim()}
+              </Text>
+            </View>
+          ) : null}
           {/* Bumble-style hierarchy: section labels */}
           {draft.bio.trim().length > 0 ? (
             <View style={styles.section}>
@@ -65,9 +84,15 @@ export function ProfileCardPreview({ draft }: Props) {
               <Text style={styles.sectionLabel}>Interests</Text>
               <View style={styles.tags}>
                 {draft.interests.map((t) => (
-                  <View key={t} style={styles.tagWrap}>
-                    <Text style={styles.tag}>{t}</Text>
-                  </View>
+                  <LinearGradient
+                    key={t}
+                    colors={[...INTEREST_PILL_GRADIENT]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.tagGradient}
+                  >
+                    <Text style={styles.tagTextOn}>{t}</Text>
+                  </LinearGradient>
                 ))}
               </View>
             </View>
@@ -102,6 +127,7 @@ export function ProfileCardPreview({ draft }: Props) {
 
 const styles = StyleSheet.create({
   outer: { alignItems: 'center', width: '100%' },
+  outerFull: { alignItems: 'stretch' },
   card: {
     width: '100%',
     borderRadius: onboarding.radius2xl + 6,
@@ -110,6 +136,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(15, 23, 42, 0.08)',
     ...onboarding.shadow,
+  },
+  cardFull: {
+    maxWidth: '100%',
   },
   hero: {
     width: '100%',
@@ -147,18 +176,37 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
   },
   body: {
-    paddingHorizontal: onboarding.spacing.md + 2,
-    paddingTop: onboarding.spacing.md + 2,
-    paddingBottom: onboarding.spacing.lg,
+    paddingHorizontal: onboarding.spacing.lg,
+    paddingTop: onboarding.spacing.lg,
+    paddingBottom: onboarding.spacing.xl,
+    gap: onboarding.spacing.lg,
   },
-  section: { marginBottom: onboarding.spacing.md },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.14)',
+  },
+  locationTxt: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: onboarding.text,
+    lineHeight: 19,
+  },
+  section: { marginBottom: 0, gap: 0 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
     color: onboarding.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 8,
+    marginBottom: onboarding.spacing.sm,
   },
   bio: {
     fontSize: 16,
@@ -167,23 +215,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tagWrap: {
-    paddingHorizontal: 12,
+  tagGradient: {
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.button,
-    backgroundColor: onboarding.accentSoft,
-    borderWidth: 1,
-    borderColor: 'rgba(22, 163, 74, 0.25)',
   },
-  tag: {
+  tagTextOn: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#15803D',
+    fontWeight: '800',
+    color: '#fff',
   },
   promptCard: {
-    marginBottom: onboarding.spacing.md,
+    marginBottom: 0,
     padding: onboarding.spacing.md,
-    borderRadius: onboarding.radius2xl,
+    borderRadius: radius.button,
     backgroundColor: '#F4F6F9',
     borderWidth: 1,
     borderColor: 'rgba(15, 23, 42, 0.06)',
@@ -192,7 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: onboarding.muted,
-    marginBottom: 8,
+    marginBottom: onboarding.spacing.sm,
     lineHeight: 18,
   },
   promptA: {
@@ -205,8 +250,8 @@ const styles = StyleSheet.create({
   thumb: {
     width: 80,
     height: 80,
-    borderRadius: 14,
-    marginRight: 10,
+    borderRadius: radius.lg,
+    marginRight: onboarding.spacing.sm,
     backgroundColor: '#eee',
   },
 });

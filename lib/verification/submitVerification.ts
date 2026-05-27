@@ -1,5 +1,4 @@
 import { prepareVideoForUpload } from '@/lib/verification/compressVideo';
-import { runKycAiPlaceholder } from '@/lib/verification/aiPlaceholder';
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
 import { supabase } from '@/lib/supabase';
 import type { DbVerificationRequest } from '@/types/database';
@@ -65,11 +64,6 @@ export async function submitVerificationBundle(args: {
   const upVid = await uploadLivenessVideo(userId, videoLocalUri);
   if (upVid.error) return { error: upVid.error };
 
-  const ai = await runKycAiPlaceholder({
-    idStoragePath: upId.path,
-    videoStoragePath: upVid.path,
-  });
-
   const { error: insErr } = await supabase.from('verification_requests').insert({
     user_id: userId,
     status: 'pending',
@@ -79,9 +73,9 @@ export async function submitVerificationBundle(args: {
     country_code: countryCode,
     consent_at: consentAtIso,
     ai_analysis: {
-      trust_score: ai.trust_score,
-      flags: ai.flags,
-      pipeline: ai.note,
+      pipeline: 'vendor_pending',
+      submitted_at: new Date().toISOString(),
+      note: 'Awaiting automated and manual identity checks. You will be notified when the review completes.',
     },
   });
 

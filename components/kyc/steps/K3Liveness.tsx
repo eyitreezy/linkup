@@ -1,18 +1,20 @@
 import { Button } from '@/components/Button';
-import { kycColors, kycStyles } from '@/components/kyc/kycTheme';
-import { radius, spacing } from '@/constants/theme';
+import { KycLeadBlock } from '@/components/kyc/KycLeadBlock';
+import { KycSectionHead } from '@/components/kyc/KycSectionHead';
+import { KycStepFooter } from '@/components/kyc/KycStepFooter';
+import { kycColors, kycInboxStyles, kycStyles } from '@/components/kyc/kycTheme';
+import { colors, radius, spacing } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MAX_DURATION_SEC = 5;
 
@@ -24,7 +26,6 @@ type Props = {
 };
 
 export function K3Liveness({ videoUri, onVideoChange, onBack, onNext }: Props) {
-  const insets = useSafeAreaInsets();
   const camRef = useRef<CameraView>(null);
   const [camPerm, requestCam] = useCameraPermissions();
   const [micPerm, requestMic] = useMicrophonePermissions();
@@ -69,43 +70,70 @@ export function K3Liveness({ videoUri, onVideoChange, onBack, onNext }: Props) {
     <View style={kycStyles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={kycInboxStyles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[kycStyles.title, { marginTop: spacing.sm }]}>Quick video</Text>
-        <Text style={kycStyles.subtitle}>
-          Record a short clip (under {MAX_DURATION_SEC} seconds) so we know you&apos;re really you. Follow the on-screen
-          prompts — we keep the file small to save data.
-        </Text>
+        <KycLeadBlock
+          kicker="Liveness"
+          title="Quick video"
+          subtitle={`Record a short clip (under ${MAX_DURATION_SEC} seconds) so we know you're really you. We keep the file small to save data.`}
+        />
 
-        <View style={styles.promptCard}>
-          <Text style={styles.promptTitle}>{prompt === 'blink' ? 'Blink slowly' : 'Turn your head slightly'}</Text>
-          <Text style={styles.promptHint}>Then stay still — recording stops automatically.</Text>
+        <KycSectionHead title="On-screen prompts" />
+        <View style={kycInboxStyles.frostedCard}>
+          <LinearGradient
+            colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.06)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.promptInner}
+          >
+            <Ionicons
+              name={prompt === 'blink' ? 'eye-outline' : 'swap-horizontal-outline'}
+              size={28}
+              color={colors.primary}
+            />
+            <View style={styles.promptTextCol}>
+              <Text style={styles.promptTitle}>{prompt === 'blink' ? 'Blink slowly' : 'Turn your head slightly'}</Text>
+              <Text style={styles.promptHint}>Then stay still — recording stops automatically.</Text>
+            </View>
+          </LinearGradient>
         </View>
 
-        <View style={styles.videoBox}>
-          {videoUri ? (
-            <Text style={styles.done}>
-              Video captured {'\u2713'}
-              {'\n'}You can re-record if needed.
-            </Text>
-          ) : camPerm?.granted && micPerm?.granted ? (
-            <CameraView
-              ref={camRef}
-              style={StyleSheet.absoluteFill}
-              facing="front"
-              mode="video"
-              videoQuality="480p"
-              mirror
-              onCameraReady={() => setReady(true)}
-            />
-          ) : (
-            <View style={styles.perm}>
-              <Text style={styles.permT}>Camera + microphone for a quick selfie clip.</Text>
-              <Button title="Allow access" onPress={() => void ensurePerms()} />
-            </View>
-          )}
+        <KycSectionHead title="Selfie clip" />
+        <View style={[kycInboxStyles.frostedCard, styles.videoCard]}>
+          <View style={styles.videoBox}>
+            {videoUri ? (
+              <View style={styles.doneWrap}>
+                <LinearGradient colors={[colors.primary, '#8B7CE8']} style={styles.doneIcon}>
+                  <Ionicons name="checkmark-circle" size={36} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.doneTitle}>Video captured</Text>
+                <Text style={styles.doneHint}>You can re-record if needed.</Text>
+              </View>
+            ) : camPerm?.granted && micPerm?.granted ? (
+              <CameraView
+                ref={camRef}
+                style={StyleSheet.absoluteFill}
+                facing="front"
+                mode="video"
+                videoQuality="480p"
+                mirror
+                onCameraReady={() => setReady(true)}
+              />
+            ) : (
+              <View style={styles.perm}>
+                <LinearGradient
+                  colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.1)']}
+                  style={styles.permIcon}
+                >
+                  <Ionicons name="videocam-outline" size={32} color={colors.primary} />
+                </LinearGradient>
+                <Text style={styles.permT}>Camera + microphone for a quick selfie clip.</Text>
+                <Button title="Allow access" onPress={() => void ensurePerms()} />
+              </View>
+            )}
+          </View>
         </View>
 
         {recording ? (
@@ -129,123 +157,68 @@ export function K3Liveness({ videoUri, onVideoChange, onBack, onNext }: Props) {
         </View>
       </ScrollView>
 
-      <View
-        style={[
-          styles.footer,
-          {
-            paddingBottom: Math.max(insets.bottom, spacing.md),
-            ...Platform.select({
-              ios: {
-                shadowColor: '#0f172a',
-                shadowOffset: { width: 0, height: -6 },
-                shadowOpacity: 0.08,
-                shadowRadius: 16,
-              },
-              android: { elevation: 18 },
-            }),
-          },
-        ]}
-      >
-        <View style={styles.footerRow}>
-          <Pressable
-            onPress={onBack}
-            style={({ pressed }) => [styles.footerBtnGhost, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={styles.footerBtnGhostText}>Back</Text>
-          </Pressable>
-          <Pressable
-            onPress={onNext}
-            disabled={!canNext}
-            style={({ pressed }) => [
-              styles.footerBtnPrimary,
-              !canNext && styles.footerBtnPrimaryDisabled,
-              pressed && canNext && { opacity: 0.92 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Continue"
-          >
-            <Text style={[styles.footerBtnPrimaryText, !canNext && styles.footerBtnPrimaryTextDisabled]}>
-              Continue
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+      <KycStepFooter onBack={onBack} onContinue={onNext} continueDisabled={!canNext} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  promptCard: {
-    backgroundColor: kycColors.surface,
-    borderRadius: 16,
+  promptInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
-    marginBottom: spacing.md,
+    margin: -spacing.xs,
   },
-  promptTitle: { fontSize: 18, fontWeight: '800', color: kycColors.text },
-  promptHint: { fontSize: 14, color: kycColors.muted, marginTop: 4 },
+  promptTextCol: { flex: 1 },
+  promptTitle: { fontSize: 18, fontWeight: '900', color: kycColors.text },
+  promptHint: { fontSize: 14, color: kycColors.muted, marginTop: 4, fontWeight: '600', lineHeight: 20 },
+  videoCard: { padding: spacing.sm },
   videoBox: {
     height: 260,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     overflow: 'hidden',
-    backgroundColor: '#222',
-    marginBottom: spacing.md,
+    backgroundColor: '#1A1D26',
+    margin: -spacing.xs,
   },
   perm: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.md },
-  permT: { color: '#fff', textAlign: 'center', marginBottom: spacing.md },
-  done: {
-    flex: 1,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    color: '#fff',
-    fontSize: 16,
-    padding: spacing.lg,
-    fontWeight: '600',
+  permIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
+  permT: { color: '#fff', textAlign: 'center', marginBottom: spacing.md, fontWeight: '600', lineHeight: 22 },
+  doneWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+    backgroundColor: '#1A1D26',
+  },
+  doneIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  doneTitle: { color: '#fff', fontSize: 17, fontWeight: '900' },
+  doneHint: { color: 'rgba(255,255,255,0.72)', fontSize: 14, marginTop: 6, fontWeight: '600' },
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.md,
     flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
   },
-  recTxt: { flex: 1, color: kycColors.text, fontSize: 14 },
-  actions: { marginBottom: spacing.sm },
-  togglePrompt: { marginBottom: spacing.sm },
-  footer: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(15, 23, 42, 0.08)',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  footerRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  footerBtnGhost: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: kycColors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  footerBtnGhostText: { fontSize: 16, fontWeight: '700', color: kycColors.primary },
-  footerBtnPrimary: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: kycColors.primary,
-  },
-  footerBtnPrimaryDisabled: { backgroundColor: '#E5E7EB' },
-  footerBtnPrimaryText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  footerBtnPrimaryTextDisabled: { color: '#9CA3AF' },
+  recTxt: { flex: 1, color: kycColors.text, fontSize: 14, fontWeight: '600' },
+  actions: { marginBottom: spacing.sm, paddingHorizontal: spacing.md },
+  togglePrompt: { marginBottom: spacing.sm, paddingHorizontal: spacing.md },
 });

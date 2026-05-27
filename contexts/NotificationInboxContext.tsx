@@ -3,10 +3,6 @@
  */
 import { useAuth } from '@/contexts/AuthContext';
 import { navigateFromNotification } from '@/lib/notifications/navigateFromNotification';
-import {
-  persistExpoPushToken,
-  registerForPushNotificationsAsync,
-} from '@/lib/notifications/registerPushNotifications';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { DbNotification, NotificationPayload } from '@/types/database';
 import * as Notifications from 'expo-notifications';
@@ -25,10 +21,6 @@ type Ctx = {
 };
 
 const NotificationInboxCtx = createContext<Ctx | undefined>(undefined);
-
-function profileOnboardingDone(p: { onboarding_status?: string } | null | undefined): boolean {
-  return !!p && p.onboarding_status !== 'pending';
-}
 
 export function NotificationInboxProvider({ children }: { children: React.ReactNode }) {
   const { user, profile, loading: authLoading } = useAuth();
@@ -84,20 +76,6 @@ export function NotificationInboxProvider({ children }: { children: React.ReactN
     };
   }, [user?.id, refresh]);
 
-  useEffect(() => {
-    if (!user?.id || !isSupabaseConfigured) return;
-    const pushOn = profile?.preferences?.notifications?.push !== false;
-    if (!pushOn) return;
-    let cancelled = false;
-    (async () => {
-      const token = await registerForPushNotificationsAsync();
-      if (!cancelled && token) await persistExpoPushToken(user.id, token);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id, profile?.preferences?.notifications?.push]);
-
   /** Drop stale “last opened from notification” state once auth is resolved and the user is signed out — avoids routing to /notifications after a fresh sign-in. */
   useEffect(() => {
     if (authLoading) return;
@@ -110,7 +88,7 @@ export function NotificationInboxProvider({ children }: { children: React.ReactN
   }, [authLoading, user?.id]);
 
   useEffect(() => {
-    if (!user?.id || !profileOnboardingDone(profile)) return;
+    if (!user?.id) return;
 
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const raw = response.notification.request.content.data;

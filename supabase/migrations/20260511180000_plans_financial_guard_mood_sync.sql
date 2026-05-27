@@ -1,0 +1,65 @@
+/**
+ * Align mood-related columns on INSERT/UPDATE when is_mood_plan is false (client/API drift),
+ * and keep auto_expiry_at in sync with mood_expires_at for mood plans.
+ */
+CREATE OR REPLACE FUNCTION public.trg_plans_financial_guard()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  mt public.meet_types%ROWTYPE;
+  supports_mood_flag BOOLEAN;
+BEGIN
+  IF NEW.meet_type_id IS NOT NULL THEN
+    SELECT * INTO mt FROM public.meet_types WHERE id = NEW.meet_type_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'meet_type_id does not reference a valid meet type';
+    END IF;
+    IF NOT mt.allows_escrow AND NEW.is_paid THEN
+      RAISE EXCEPTION 'This meet type does not allow paid escrow plans';
+    END IF;
+  END IF;
+
+  IF NEW.is_paid IS NOT TRUE THEN
+    NEW.escrow_pattern := NULL;
+    NEW.host_contribution_bps := NULL;
+  ELSE
+    IF NEW.escrow_pattern IS NULL THEN
+      RAISE EXCEPTION 'escrow_pattern is required when is_paid is true';
+    END IF;
+    IF NEW.meet_type_id IS NOT NULL THEN
+      SELECT * INTO mt FROM public.meet_types WHERE id = NEW.meet_type_id;
+      IF NOT (NEW.escrow_pattern = ANY (mt.allowed_patterns)) THEN
+        RAISE EXCEPTION 'escrow_pattern % is not allowed for this meet type', NEW.escrow_pattern;
+      END IF;
+    END IF;
+    IF NEW.escrow_pattern = 'B' AND NEW.host_contribution_bps IS NULL THEN
+      NEW.host_contribution_bps := 5000;
+    END IF;
+  END IF;
+
+  IF NEW.is_mood_plan THEN
+    IF NEW.meet_type_id IS NULL THEN
+      RAISE EXCEPTION 'meet_type_id is required for mood plans';
+    END IF;
+    SELECT supports_mood INTO supports_mood_flag FROM public.meet_types WHERE id = NEW.meet_type_id;
+    IF NOT COALESCE(supports_mood_flag, false) THEN
+      RAISE EXCEPTION 'This meet type does not support mood plans';
+    END IF;
+    IF NEW.mood_expires_at IS NULL THEN
+      RAISE EXCEPTION 'mood_expires_at is required for mood plans';
+    END IF;
+    -- Single source of truth for listing TTL (app also sends auto_expiry_at).
+    NEW.auto_expiry_at := NEW.mood_expires_at;
+  ELSE
+    NEW.mood_expires_at := NULL;
+    NEW.auto_expiry_at := NULL;
+    NEW.mood_type := NULL;
+    NEW.mood_start_time := NULL;
+    NEW.mood_end_time := NULL;
+    NEW.urgency_level := NULL;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;

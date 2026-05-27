@@ -125,6 +125,19 @@ Deno.serve(async (req) => {
     return new Response('Update failed', { status: 500 });
   }
 
+  const { error: subErr } = await supabase.from('subscriptions').upsert(
+    {
+      user_id: userId,
+      plan: 'premium',
+      status: 'active',
+      expires_at: premiumUntil.toISOString(),
+    },
+    { onConflict: 'user_id' }
+  );
+  if (subErr) {
+    console.error('subscriptions mirror failed (users row still updated)', subErr.message);
+  }
+
   const { data: prof } = await supabase.from('profiles').select('preferences').eq('user_id', userId).maybeSingle();
   const prefs = (prof?.preferences ?? {}) as Record<string, unknown>;
   const nextPrefs = { ...prefs, paystack_last_premium_reference: reference };

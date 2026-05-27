@@ -1,33 +1,39 @@
 /**
  * PL6a — Agreement & confirmation after offer accept (trust + structured summary + CTAs).
  */
+import { CancellationSummaryCard } from '@/components/plans/CancellationSummaryCard';
 import { PlanAgreementCTAButton } from '@/components/plans/agreement/PlanAgreementCTAButton';
 import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgreementStatusBadge';
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
+import { PreAgreementFullscreenModal } from '@/components/plans/agreement/PreAgreementFullscreenModal';
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
 import { PlanSummaryCard } from '@/components/plans/agreement/PlanSummaryCard';
+import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
+import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
-import { cancelAgreedPlan, confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
+import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { goToDiscoveryFeed } from '@/lib/navigation/goToDiscoveryFeed';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function agreedPriceLabel(plan: DbPlan, offer: DbPlanOffer | null): string {
   const cents = plan.agreed_price_cents ?? offer?.amount_cents ?? plan.starting_price_cents;
@@ -40,6 +46,43 @@ function formatOfferExpiry(iso: string | null | undefined): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function InboxGradientBg() {
+  return (
+    <LinearGradient
+      colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+      locations={[0, 0.32, 0.62, 1]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={StyleSheet.absoluteFillObject}
+    />
+  );
+}
+
+function AgreementTopNav({ topInset }: { topInset: number }) {
+  return (
+    <View style={[styles.topNav, { paddingTop: Math.max(topInset, spacing.xs) }]}>
+      <Pressable
+        onPress={() => router.back()}
+        style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Ionicons name="arrow-back" size={22} color={colors.text} />
+      </Pressable>
+      <Pressable
+        onPress={() => goToDiscoveryFeed()}
+        style={({ pressed }) => [styles.feedTopBtn, pressed && styles.pressed]}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Go to discovery feed"
+      >
+        <Text style={styles.feedTopLabel}>Feed</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 export default function PlanAgreementScreen() {
@@ -55,6 +98,25 @@ export default function PlanAgreementScreen() {
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  const [confirmationUserIds, setConfirmationUserIds] = useState<string[]>([]);
+  const [legalGateOpen, setLegalGateOpen] = useState(false);
+  const [pendingLegal, setPendingLegal] = useState<'free' | 'pay' | 'ack' | null>(null);
+  const [legalBusy, setLegalBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    variant: AppFeedbackVariant;
+    title: string;
+    message: string;
+  } | null>(null);
+
+  function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
+    setFeedback({ variant, title, message });
+  }
+
+  const userConfirmed = useMemo(
+    () => !!(user?.id && confirmationUserIds.includes(user.id)),
+    [confirmationUserIds, user?.id]
+  );
+  const bothConfirmed = useMemo(() => new Set(confirmationUserIds).size >= 2, [confirmationUserIds]);
 
   const load = useCallback(async () => {
     if (!id || !isSupabaseConfigured) {
@@ -69,6 +131,7 @@ export default function PlanAgreementScreen() {
         setOffer(null);
         setHostParty(null);
         setGuestParty(null);
+        setConfirmationUserIds([]);
         return;
       }
       const pl = p as DbPlan;
@@ -81,7 +144,7 @@ export default function PlanAgreementScreen() {
 
       const bidderId = off?.bidder_id ?? pl.creator_id;
 
-      const [{ data: hp }, { data: bp }] = await Promise.all([
+      const [{ data: hp }, { data: bp }, { data: confRows }] = await Promise.all([
         supabase
           .from('profiles')
           .select('user_id, display_name, avatar_url, verified_badge')
@@ -92,7 +155,10 @@ export default function PlanAgreementScreen() {
           .select('user_id, display_name, avatar_url, verified_badge')
           .eq('user_id', bidderId)
           .maybeSingle(),
+        supabase.from('agreement_confirmations').select('user_id').eq('plan_id', pl.id),
       ]);
+
+      setConfirmationUserIds((confRows ?? []).map((r) => r.user_id as string));
 
       // Apply plan + offer + parties in one commit so we never render “accepted id set, offer null”.
       setPlan(pl);
@@ -126,61 +192,76 @@ export default function PlanAgreementScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
-          <ActivityIndicator color={colors.primary} size="large" />
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <InboxGradientBg />
+          <View style={[styles.center, { paddingTop: insets.top }]}>
+            <ActivityIndicator color={colors.primary} size="large" />
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (!loadDone) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
-          <ActivityIndicator color={colors.primary} size="large" />
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <InboxGradientBg />
+          <View style={[styles.center, { paddingTop: insets.top }]}>
+            <ActivityIndicator color={colors.primary} size="large" />
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (!plan) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.lg }}>
-          <Text style={styles.muted}>This plan could not be loaded.</Text>
-          <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
-            <Text style={styles.linkTxt}>Back to plan</Text>
-          </Pressable>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <InboxGradientBg />
+          <AgreementTopNav topInset={insets.top} />
+          <View style={styles.fallbackPad}>
+            <Text style={styles.muted}>This plan could not be loaded.</Text>
+            <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
+              <Text style={styles.linkTxt}>Back to plan</Text>
+            </Pressable>
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (!plan.accepted_offer_id || !offer) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.lg }}>
-          <Text style={styles.muted}>No accepted offer for this plan.</Text>
-          <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
-            <Text style={styles.linkTxt}>Back to plan</Text>
-          </Pressable>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <InboxGradientBg />
+          <AgreementTopNav topInset={insets.top} />
+          <View style={styles.fallbackPad}>
+            <Text style={styles.muted}>No accepted offer for this plan.</Text>
+            <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
+              <Text style={styles.linkTxt}>Back to plan</Text>
+            </Pressable>
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (plan.status === 'cancelled') {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.lg }}>
-          <Text style={styles.title}>Plan cancelled</Text>
-          <Text style={styles.muted}>This agreement is no longer active.</Text>
-          <Pressable onPress={() => router.replace('/(tabs)' as Href)} style={styles.linkBtn}>
-            <Text style={styles.linkTxt}>Back to feed</Text>
-          </Pressable>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <InboxGradientBg />
+          <AgreementTopNav topInset={insets.top} />
+          <View style={styles.fallbackPad}>
+            <Text style={styles.title}>Plan cancelled</Text>
+            <Text style={styles.muted}>This agreement is no longer active.</Text>
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -194,11 +275,15 @@ export default function PlanAgreementScreen() {
 
   if (!participant) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.lg }}>
-          <Text style={styles.muted}>You don&apos;t have access to this agreement.</Text>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <InboxGradientBg />
+          <AgreementTopNav topInset={insets.top} />
+          <View style={styles.fallbackPad}>
+            <Text style={styles.muted}>You don&apos;t have access to this agreement.</Text>
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -218,26 +303,21 @@ export default function PlanAgreementScreen() {
 
   async function runConfirmFree() {
     if (busy) return;
+    if (requiresVerificationGate(dbUser?.verification_status)) {
+      setGateOpen(true);
+      return;
+    }
     setBusy(true);
     const { error } = await confirmFreePlan(supabase, planRow.id);
     setBusy(false);
-    if (error) Alert.alert('Could not confirm', error);
+    if (error) showFeedback('error', 'Could not confirm', error);
     else {
       await load();
       router.replace(`/plan/${planRow.id}` as Href);
     }
   }
 
-  async function onConfirmFree() {
-    if (busy) return;
-    if (requiresVerificationGate(dbUser?.verification_status)) {
-      setGateOpen(true);
-      return;
-    }
-    await runConfirmFree();
-  }
-
-  async function onProceedPayment() {
+  async function runProceedPayment() {
     if (busy) return;
     if (requiresVerificationGate(dbUser?.verification_status)) {
       setGateOpen(true);
@@ -247,20 +327,68 @@ export default function PlanAgreementScreen() {
     const res = await proceedToSecurePayment(supabase, planRow, offerRow);
     setBusy(false);
     if (res.error) {
-      Alert.alert('Payment setup failed', res.error);
+      showFeedback('error', 'Payment setup failed', res.error);
       return;
     }
     if (res.escrowId) router.replace(`/escrow/${res.escrowId}` as Href);
+  }
+
+  function openLegalGate(action: 'free' | 'pay' | 'ack') {
+    if (requiresVerificationGate(dbUser?.verification_status)) {
+      setGateOpen(true);
+      return;
+    }
+    setPendingLegal(action);
+    setLegalGateOpen(true);
+  }
+
+  async function onLegalGateConfirm() {
+    if (!user) return;
+    const action = pendingLegal;
+    setLegalBusy(true);
+    const { error } = await supabase.rpc('record_agreement_confirmation', { p_plan_id: planRow.id });
+    if (error) {
+      setLegalBusy(false);
+      showFeedback('error', 'Could not record confirmation', error.message);
+      return;
+    }
+    const { data: refreshed } = await supabase.from('agreement_confirmations').select('user_id').eq('plan_id', planRow.id);
+    const ids = (refreshed ?? []).map((r) => r.user_id as string);
+    setConfirmationUserIds(ids);
+    const complete = new Set(ids).size >= 2;
+    setLegalGateOpen(false);
+    setLegalBusy(false);
+    setPendingLegal(null);
+    if (complete) {
+      if (action === 'free') await runConfirmFree();
+      else if (action === 'pay' && isBidder) await runProceedPayment();
+      else await load();
+    } else {
+      await load();
+    }
   }
 
   async function onCancelConfirmed() {
     setCancelOpen(false);
     if (busy || !user) return;
     setBusy(true);
-    const { error } = await cancelAgreedPlan(supabase, planRow, offerRow, user.id);
-    setBusy(false);
-    if (error) Alert.alert('Could not cancel', error);
-    else router.replace('/(tabs)' as Href);
+    try {
+      if (planRow.creator_id === user.id) {
+        await supabase
+          .from('plan_offers')
+          .update({ status: 'superseded' })
+          .eq('plan_id', planRow.id)
+          .in('status', ['pending', 'countered']);
+      }
+      const { error: rpcErr } = await supabase.rpc('submit_plan_cancellation', {
+        p_plan_id: planRow.id,
+        p_no_show: false,
+      });
+      if (rpcErr) showFeedback('error', 'Could not cancel', rpcErr.message);
+      else goToDiscoveryFeed();
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onMessageCounterpart() {
@@ -269,7 +397,7 @@ export default function PlanAgreementScreen() {
     try {
       await openDirectChat(supabase, user.id, otherId);
     } catch (e) {
-      Alert.alert('Chat', e instanceof Error ? e.message : 'Could not open chat');
+      showFeedback('error', 'Chat', e instanceof Error ? e.message : 'Could not open chat');
     }
   }
 
@@ -289,7 +417,7 @@ export default function PlanAgreementScreen() {
   } else if (awaitingPay) {
     if (isBidder) {
       primaryLabel = 'Continue to secure payment';
-      onPrimary = () => void onProceedPayment();
+      onPrimary = () => void runProceedPayment();
       primaryDisabled = busy;
     } else {
       primaryLabel = 'Waiting for secure payment';
@@ -297,160 +425,532 @@ export default function PlanAgreementScreen() {
       primaryDisabled = true;
     }
   } else if (needsConfirm) {
-    if (!paymentRequired) {
+    const otherName = isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host';
+    if (!userConfirmed) {
+      if (!paymentRequired) {
+        primaryLabel = 'Review & confirm plan';
+        onPrimary = () => openLegalGate('free');
+      } else if (isBidder) {
+        primaryLabel = 'Review terms & pay';
+        onPrimary = () => openLegalGate('pay');
+      } else {
+        primaryLabel = 'Review & confirm terms';
+        onPrimary = () => openLegalGate('ack');
+      }
+      primaryDisabled = busy || legalBusy;
+    } else if (!bothConfirmed) {
+      primaryLabel = `Waiting for ${otherName}`;
+      onPrimary = () => {};
+      primaryDisabled = true;
+    } else if (!paymentRequired) {
       primaryLabel = 'Confirm plan';
-      onPrimary = () => void onConfirmFree();
+      onPrimary = () => void runConfirmFree();
       primaryDisabled = busy;
     } else if (isBidder) {
       primaryLabel = 'Proceed to secure payment';
-      onPrimary = () => void onProceedPayment();
+      onPrimary = () => void runProceedPayment();
       primaryDisabled = busy;
     } else {
-      primaryLabel = 'Awaiting guest confirmation';
+      primaryLabel = 'Waiting for guest payment';
       onPrimary = () => {};
       primaryDisabled = true;
     }
   }
 
   const showCancelPlan = needsConfirm || awaitingPay;
+  const counterpartDisplay = isHost ? guestParty?.name ?? 'Guest' : hostParty?.name ?? 'Host';
+  const inlineMessageAndView = showMessageCta && primaryLabel === 'View plan';
+  const escrowCents = paymentRequired
+    ? (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? null)
+    : null;
 
   const gateTitle = 'Verification required to continue';
   const gateMessage =
     'Confirming plans and sending secure payments requires a verified identity on LinkUp.';
 
+  const leadSub =
+    'Review the meetup summary, cancellation rules, and CTAs — same polished flow as your inbox.';
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-      <VerificationHardGateModal
-        visible={gateOpen}
-        onClose={() => setGateOpen(false)}
-        verificationStatus={dbUser?.verification_status}
-        title={gateTitle}
-        message={gateMessage}
-      />
-      <PlanConfirmationModal
-        visible={cancelOpen}
-        title="Cancel this plan?"
-        message="Are you sure you want to cancel? The other person will be notified and this agreement will end."
-        confirmLabel="Cancel plan"
-        cancelLabel="Keep plan"
-        onCancel={() => setCancelOpen(false)}
-        onConfirm={() => void onCancelConfirmed()}
-      />
-
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-          <Ionicons name="chevron-back" size={28} color={colors.text} />
-        </Pressable>
-        <Text style={styles.topTitle}>Confirm plan</Text>
-        <View style={{ width: 28 }} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {hostParty && guestParty ? <PlanAgreementUserHeader host={hostParty} guest={guestParty} /> : null}
-
-        <PlanAgreementStatusBadge
-          primary="Offer accepted"
-          secondary={
-            needsConfirm
-              ? 'Awaiting confirmation — review details carefully'
-              : awaitingPay
-                ? 'Awaiting secure payment'
-                : "You're all set"
-          }
+    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+      <View style={styles.flex}>
+        <InboxGradientBg />
+        <VerificationHardGateModal
+          visible={gateOpen}
+          onClose={() => setGateOpen(false)}
+          verificationStatus={dbUser?.verification_status}
+          title={gateTitle}
+          message={gateMessage}
         />
-
-        <PlanSummaryCard
+        <AppFeedbackModal
+          visible={feedback != null}
+          onClose={() => setFeedback(null)}
+          variant={feedback?.variant ?? 'error'}
+          title={feedback?.title ?? ''}
+          message={feedback?.message ?? ''}
+        />
+        <PlanConfirmationModal
+          visible={cancelOpen}
+          title="Cancel this plan?"
+          message="Are you sure you want to cancel? The other person will be notified and this agreement will end."
+          confirmLabel="Cancel plan"
+          cancelLabel="Keep plan"
+          onCancel={() => setCancelOpen(false)}
+          onConfirm={() => void onCancelConfirmed()}
+        />
+        <PreAgreementFullscreenModal
+          visible={legalGateOpen}
           planTitle={planRow.title}
-          location={locationLabel}
           whenLabel={whenLabel}
+          locationLabel={locationLabel ?? null}
           priceLabel={priceLabel}
-          notes={notes}
+          escrowAmountCents={escrowCents != null && escrowCents > 0 ? escrowCents : null}
+          currencyLabel={planRow.currency ?? 'NGN'}
+          busy={legalBusy}
+          onConfirm={() => void onLegalGateConfirm()}
         />
 
-        <View style={styles.trustCard}>
-          <Text style={styles.trustTitle}>Both parties agreed to these terms</Text>
-          <Text style={styles.trustLine}>
-            Accepted{' '}
-            {new Date(offerRow.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-          </Text>
-          {formatOfferExpiry(offerRow.expires_at) ? (
-            <Text style={styles.trustLineMuted}>Offer window · until {formatOfferExpiry(offerRow.expires_at)}</Text>
+        <AgreementTopNav topInset={insets.top} />
+
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.leadBlock}>
+            <LinearGradient
+              colors={[colors.primary, colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.leadAccent}
+            />
+            <View style={styles.leadTextCol}>
+              <Text style={styles.leadKicker}>Agreement</Text>
+              <Text style={styles.leadTitle}>Confirm plan</Text>
+              <Text style={styles.leadSub}>{leadSub}</Text>
+            </View>
+          </View>
+
+          {hostParty && guestParty ? (
+            <View style={styles.userHeaderCard}>
+              <PlanAgreementUserHeader host={hostParty} guest={guestParty} />
+            </View>
           ) : null}
-        </View>
 
-        {showMessageCta ? (
-          <Pressable
-            onPress={() => void onMessageCounterpart()}
-            style={({ pressed }) => [styles.messageCta, pressed && styles.messageCtaPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Open chat with the other person"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.primary} />
-            <Text style={styles.messageCtaText}>
-              Message {isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host'}
+          <PlanAgreementStatusBadge
+            primary="Offer accepted"
+            secondary={
+              needsConfirm
+                ? bothConfirmed
+                  ? 'Both confirmed — finalize in one step'
+                  : userConfirmed
+                    ? `Waiting for ${isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host'} to confirm`
+                    : 'Review details — both people must confirm the summary'
+                : awaitingPay
+                  ? 'Awaiting secure payment'
+                  : "You're all set"
+            }
+          />
+
+          <PlanSummaryCard
+            planTitle={planRow.title}
+            location={locationLabel}
+            whenLabel={whenLabel}
+            priceLabel={priceLabel}
+            notes={notes}
+          />
+
+          <CancellationSummaryCard />
+
+          <View style={styles.trustCard}>
+            <View style={styles.trustSectionRow}>
+              <View style={styles.sectionDot} />
+              <Text style={styles.trustSectionLabel}>Accepted terms</Text>
+            </View>
+            <LinearGradient
+              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionRule}
+            />
+            <Text style={styles.trustTitle}>Both parties agreed to these details</Text>
+            <Text style={styles.trustLine}>
+              Accepted{' '}
+              {new Date(offerRow.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
             </Text>
-          </Pressable>
-        ) : null}
+            {formatOfferExpiry(offerRow.expires_at) ? (
+              <Text style={styles.trustLineMuted}>Offer window · until {formatOfferExpiry(offerRow.expires_at)}</Text>
+            ) : null}
+          </View>
 
-        <PlanAgreementCTAButton
-          primaryLabel={primaryLabel}
-          onPrimary={onPrimary}
-          primaryDisabled={primaryDisabled}
-          primaryLoading={busy}
-          secondaryLabel={showCancelPlan ? 'Cancel plan' : 'Back to feed'}
-          onSecondary={showCancelPlan ? () => setCancelOpen(true) : () => router.replace('/(tabs)' as Href)}
-          secondaryDisabled={busy}
-        />
-      </ScrollView>
-    </SafeAreaView>
+          {inlineMessageAndView ? (
+            <View style={styles.dualActionRow}>
+              <Pressable
+                onPress={() => void onMessageCounterpart()}
+                style={({ pressed }) => [styles.dualMessageOuter, pressed && { opacity: 0.92 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Message ${counterpartDisplay}`}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.dualMessageRing}
+                >
+                  <View style={styles.dualMessageInner}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
+                    <Text style={styles.dualMessageText} numberOfLines={1}>
+                      Message {counterpartDisplay}
+                    </Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                onPress={onPrimary}
+                disabled={primaryDisabled}
+                style={({ pressed }) => [
+                  styles.dualViewOuter,
+                  primaryDisabled && { opacity: 0.55 },
+                  pressed && !primaryDisabled && { opacity: 0.94, transform: [{ scale: 0.985 }] },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="View plan details"
+              >
+                <LinearGradient
+                  colors={
+                    primaryDisabled
+                      ? [colors.border, colors.border]
+                      : [colors.primary, colors.secondary]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.dualViewGrad}
+                >
+                  <Text
+                    style={[styles.dualViewText, primaryDisabled && styles.dualViewTextMuted]}
+                    numberOfLines={1}
+                    {...Platform.select({ android: { includeFontPadding: false } })}
+                  >
+                    View plan
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          ) : showMessageCta ? (
+            <Pressable
+              onPress={() => void onMessageCounterpart()}
+              style={({ pressed }) => [styles.messageCtaOuter, pressed && { opacity: 0.92 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Open chat with the other person"
+            >
+              <LinearGradient
+                colors={[colors.primary, colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.messageCtaRing}
+              >
+                <View style={styles.messageCtaInner}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+                  <Text style={styles.messageCtaText} numberOfLines={1}>
+                    Message {counterpartDisplay}
+                  </Text>
+                </View>
+              </LinearGradient>
+            </Pressable>
+          ) : null}
+
+          {showCancelPlan || !inlineMessageAndView ? (
+            <PlanAgreementCTAButton
+              omitPrimary={inlineMessageAndView}
+              primaryLabel={primaryLabel}
+              onPrimary={onPrimary}
+              primaryDisabled={primaryDisabled}
+              primaryLoading={busy}
+              secondaryLabel={showCancelPlan ? 'Cancel plan' : undefined}
+              onSecondary={showCancelPlan ? () => setCancelOpen(true) : undefined}
+              secondaryDisabled={busy}
+            />
+          ) : null}
+        </ScrollView>
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  topBar: {
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
+  flex: { flex: 1 },
+  topNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  topTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  muted: { fontSize: 15, color: colors.textMuted, padding: spacing.lg, lineHeight: 22 },
-  linkBtn: { padding: spacing.md },
-  linkTxt: { color: colors.primary, fontWeight: '700', fontSize: 16 },
-  trustCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingTop: spacing.xs,
     marginBottom: spacing.sm,
   },
-  trustTitle: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  trustLine: { fontSize: 14, color: colors.text, lineHeight: 20 },
-  trustLineMuted: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
-  messageCta: {
+  iconPill: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  feedTopBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.2)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  feedTopLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 0.2,
+  },
+  pressed: { opacity: 0.92 },
+  leadBlock: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  leadAccent: {
+    width: 5,
+    marginTop: 8,
+    borderRadius: 3,
+    height: 52,
+  },
+  leadTextCol: { flex: 1, minWidth: 0 },
+  leadKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  leadTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  leadSub: {
+    fontSize: 15,
+    color: colors.textMuted,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  userHeaderCard: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  scroll: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl * 2 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  fallbackPad: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
+  muted: {
+    fontSize: 15,
+    color: colors.textMuted,
+    paddingVertical: spacing.sm,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  linkBtn: { paddingVertical: spacing.md },
+  linkTxt: { color: colors.primary, fontWeight: '800', fontSize: 16 },
+  sectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  trustSectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  trustSectionLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  sectionRule: {
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.9,
+    marginBottom: spacing.sm,
+  },
+  trustCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+    marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  trustTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
+  trustLine: { fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  trustLineMuted: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  messageCtaOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C63FF',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  messageCtaRing: {
+    padding: 2,
+    borderRadius: radius.button,
+  },
+  messageCtaInner: {
+    borderRadius: radius.button - 4,
+    backgroundColor: colors.surface,
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: colors.surface,
+  },
+  messageCtaText: { fontSize: 16, fontWeight: '800', color: colors.primary, flexShrink: 1 },
+  dualActionRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  dualMessageOuter: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
     borderRadius: radius.button,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C63FF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.14,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  dualMessageRing: {
+    flex: 1,
+    width: '100%',
+    minHeight: 52,
+    padding: 2,
+    borderRadius: radius.button,
+    justifyContent: 'center',
+  },
+  dualMessageInner: {
+    borderRadius: radius.button - 4,
+    backgroundColor: colors.surface,
+    minHeight: 48,
+    paddingVertical: 13,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dualMessageText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
+    flexShrink: 1,
+  },
+  dualViewOuter: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C63FF',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  dualViewGrad: {
+    flex: 1,
+    width: '100%',
     minHeight: 52,
     paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  messageCtaPressed: { opacity: 0.9 },
-  messageCtaText: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  dualViewText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  dualViewTextMuted: { color: 'rgba(255,255,255,0.72)' },
 });

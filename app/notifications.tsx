@@ -1,5 +1,5 @@
 /**
- * Notification center — Today / Earlier sections (Hinge clarity + Tinder minimal cards + activity cues).
+ * Notification center — gradient shell, inbox hero, and filter chips aligned with create/plan-management polish.
  */
 import { NotificationListSkeleton } from '@/components/notifications/NotificationListSkeleton';
 import { NotificationSwipeRow } from '@/components/notifications/NotificationSwipeRow';
@@ -11,9 +11,10 @@ import { navigateFromNotification } from '@/lib/notifications/navigateFromNotifi
 import { isSupabaseConfigured } from '@/lib/supabase';
 import type { DbNotification } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Href, router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 
 type Section = { title: string; data: DbNotification[] };
 
@@ -66,132 +67,332 @@ export default function NotificationsScreen() {
   const hasUnread = notifications.some((n) => !n.is_read);
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']}>
-      <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <View style={styles.titleBlock}>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          <Text style={styles.headerSub}>Offers, escrow, and updates in one place</Text>
-        </View>
-        <Pressable onPress={() => void markAllRead()} hitSlop={12} disabled={!hasUnread}>
-          <Text style={[styles.markAll, !hasUnread && styles.markAllDisabled]}>Read all</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.tabs}>
-        {(['all', 'activity', 'payments', 'system'] as const).map((t) => {
-          const on = filter === t;
-          return (
-            <Pressable
-              key={t}
-              onPress={() => setFilter(t)}
-              style={[styles.tab, on && styles.tabOn]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
-            >
-              <Text style={[styles.tabTxt, on && styles.tabTxtOn]}>{FILTER_LABELS[t]}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {!isSupabaseConfigured ? (
-        <Text style={styles.empty}>Configure Supabase to load notifications.</Text>
-      ) : loading && notifications.length === 0 ? (
-        <NotificationListSkeleton />
-      ) : sections.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
-          <Text style={styles.empty}>You&apos;re all caught up.</Text>
-          <Text style={styles.emptySub}>We&apos;ll nudge you for offers, escrow, and verification — never spam.</Text>
-        </View>
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(i) => i.id}
-          stickySectionHeadersEnabled={false}
-          refreshing={loading}
-          onRefresh={() => void refresh()}
-          contentContainerStyle={styles.list}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.sectionRule} />
-            </View>
-          )}
-          renderItem={({ item, index, section }) => (
-            <View style={index === section.data.length - 1 ? styles.lastInSection : undefined}>
-              <NotificationSwipeRow
-                item={item}
-                index={index}
-                onPress={() => void onOpen(item.id, item.data, item.type)}
-                onMarkRead={() => void markRead(item.id)}
-                onDelete={() => void remove(item.id)}
-              />
-            </View>
-          )}
+    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+      <View style={styles.flex}>
+        <LinearGradient
+          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          locations={[0, 0.32, 0.62, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
         />
-      )}
+
+        <View style={styles.topNav}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <View style={styles.topNavRight}>
+            <Pressable
+              onPress={() => void markAllRead()}
+              hitSlop={8}
+              disabled={!hasUnread}
+              style={({ pressed }) => [pressed && hasUnread && styles.pressed]}
+            >
+              <Text style={[styles.markAll, !hasUnread && styles.markAllDisabled]}>Read all</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/settings/notifications' as Href)}
+              style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Notification settings"
+            >
+              <Ionicons name="settings-outline" size={21} color={colors.primary} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.leadBlock}>
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.leadAccent}
+          />
+          <View style={styles.leadTextCol}>
+            <Text style={styles.leadKicker}>Inbox</Text>
+            <Text style={styles.leadTitle}>Notifications</Text>
+            <Text style={styles.leadSub}>Offers, escrow, and updates — sorted by what matters first.</Text>
+          </View>
+        </View>
+
+        <View style={styles.tabs}>
+          {(['all', 'activity', 'payments', 'system'] as const).map((t) => {
+            const on = filter === t;
+            return (
+              <Pressable
+                key={t}
+                onPress={() => setFilter(t)}
+                style={styles.tabOuter}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+              >
+                {on ? (
+                  <LinearGradient
+                    colors={[colors.primary, '#8B7CE8', colors.secondary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.tabGrad}
+                  >
+                    <Text style={styles.tabTxtOn}>{FILTER_LABELS[t]}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.tabIdle}>
+                    <Text style={styles.tabTxt}>{FILTER_LABELS[t]}</Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {!isSupabaseConfigured ? (
+          <View style={styles.centerPad}>
+            <Text style={styles.hint}>Configure Supabase to load notifications.</Text>
+          </View>
+        ) : loading && notifications.length === 0 ? (
+          <NotificationListSkeleton />
+        ) : sections.length === 0 ? (
+          <View style={styles.emptyCardOuter}>
+            <LinearGradient
+              colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.emptyCardBorder}
+            >
+              <View style={styles.emptyCardInner}>
+                <LinearGradient colors={[colors.primary, '#8B7CE8']} style={styles.emptyIconGrad}>
+                  <Ionicons name="notifications-outline" size={28} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
+                <Text style={styles.emptySub}>
+                  We&apos;ll ping you for offers, escrow, and verification — never noise.
+                </Text>
+              </View>
+            </LinearGradient>
+          </View>
+        ) : (
+          <SectionList
+            sections={sections}
+            keyExtractor={(i) => i.id}
+            stickySectionHeadersEnabled={false}
+            refreshing={loading}
+            onRefresh={() => void refresh()}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            renderSectionHeader={({ section }) => (
+              <View style={styles.sectionHead}>
+                <View style={styles.sectionHeadRow}>
+                  <View style={styles.sectionAccentDot} />
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                </View>
+                <LinearGradient
+                  colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sectionRule}
+                />
+              </View>
+            )}
+            renderItem={({ item, index, section }) => (
+              <View style={index === section.data.length - 1 ? styles.lastInSection : undefined}>
+                <NotificationSwipeRow
+                  item={item}
+                  index={index}
+                  onPress={() => void onOpen(item.id, item.data, item.type)}
+                  onMarkRead={() => void markRead(item.id)}
+                  onDelete={() => void remove(item.id)}
+                />
+              </View>
+            )}
+          />
+        )}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  topBar: {
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
+  flex: { flex: 1 },
+  topNav: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  topNavRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
-  titleBlock: { flex: 1, minWidth: 0 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.3 },
-  headerSub: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 },
-  markAll: { fontSize: 15, fontWeight: '700', color: colors.primary },
+  iconPill: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  pressed: { opacity: 0.92 },
+  markAll: { fontSize: 15, fontWeight: '800', color: colors.primary },
   markAllDisabled: { opacity: 0.35 },
-  tabs: {
+  leadBlock: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    alignItems: 'flex-start',
+    gap: spacing.md,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+  leadAccent: {
+    width: 5,
+    marginTop: 8,
+    borderRadius: 3,
+    height: 52,
   },
-  tabOn: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+  leadTextCol: { flex: 1, minWidth: 0 },
+  leadKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
   },
-  tabTxt: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  tabTxtOn: { color: colors.primary },
+  leadTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  leadSub: {
+    fontSize: 15,
+    color: colors.textMuted,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  tabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  tabOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
+  tabGrad: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+  },
+  tabIdle: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+  },
+  tabTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
+  tabTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff' },
   list: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl * 2,
   },
-  sectionHead: { marginBottom: spacing.sm, marginTop: spacing.md },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  sectionRule: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
+  sectionHead: {
+    marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  sectionHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  sectionAccentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  sectionRule: {
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.9,
+  },
   lastInSection: { marginBottom: spacing.md },
-  emptyWrap: { alignItems: 'center', padding: spacing.xl, marginTop: spacing.xl },
-  empty: { marginTop: spacing.md, fontSize: 16, fontWeight: '700', color: colors.text, textAlign: 'center' },
-  emptySub: { marginTop: spacing.sm, fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  centerPad: { padding: spacing.xl },
+  hint: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  emptyCardOuter: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+  },
+  emptyCardBorder: {
+    borderRadius: radius.xl,
+    padding: 2,
+  },
+  emptyCardInner: {
+    borderRadius: radius.xl - 1,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  emptyIconGrad: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+  emptySub: {
+    marginTop: spacing.sm,
+    fontSize: 15,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '600',
+  },
 });

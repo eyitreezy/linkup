@@ -16,12 +16,13 @@ export default function SettingsLayout() {
           : null),
       }}
     >
-      <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="edit-profile" options={{ title: 'Edit profile', headerShown: false }} />
       <Stack.Screen name="verification" options={{ title: 'Verification' }} />
-      <Stack.Screen name="notifications" options={{ title: 'Notifications & visibility' }} />
-      <Stack.Screen name="privacy" options={{ title: 'Privacy & safety' }} />
-      <Stack.Screen name="travel" options={{ title: 'Travel mode' }} />
-      <Stack.Screen name="delete-account" options={{ title: 'Delete account' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications & visibility', headerShown: false }} />
+      <Stack.Screen name="privacy" options={{ title: 'Privacy & safety', headerShown: false }} />
+      <Stack.Screen name="travel" options={{ title: 'Travel mode', headerShown: false }} />
+      <Stack.Screen name="plan-management" options={{ title: 'Plan management' }} />
+      <Stack.Screen name="delete-account" options={{ title: 'Delete account', headerShown: false }} />
     </Stack>
   );
 }

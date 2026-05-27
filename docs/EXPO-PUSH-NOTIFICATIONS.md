@@ -88,7 +88,11 @@ On device, the user must **allow notifications** in the OS prompt.
 
 ---
 
-## 8. Verification checklist
+## 8. Full production checklist (webhook + test push)
+
+See **[PUSH_VERIFY_AND_SETUP.md](./PUSH_VERIFY_AND_SETUP.md)** for Database Webhook setup, `google-services.json`, and the `test-expo-push` function.
+
+## 9. Verification checklist
 
 | Step | Action |
 |------|--------|
@@ -111,7 +115,7 @@ On device, the user must **allow notifications** in the OS prompt.
 
 ---
 
-## 10. EAS Build vs local `expo run`
+## 11. EAS Build vs local `expo run`
 
 - **EAS Build** is the usual path for **TestFlight / Play Store** and managed push credentials.
 - **Local `expo run:*`** can work after `npx expo prebuild` if you configure the same bundle ID / package and install the right native push setup; many teams still use EAS for signing and APNs/FCM uploads.

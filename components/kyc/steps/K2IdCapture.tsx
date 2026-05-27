@@ -1,11 +1,15 @@
 import { Button } from '@/components/Button';
-import { kycColors, kycShadow, kycStyles } from '@/components/kyc/kycTheme';
-import { radius, spacing } from '@/constants/theme';
+import { KycLeadBlock } from '@/components/kyc/KycLeadBlock';
+import { KycSectionHead } from '@/components/kyc/KycSectionHead';
+import { KycStepFooter } from '@/components/kyc/KycStepFooter';
+import { kycColors, kycInboxStyles, kycStyles } from '@/components/kyc/kycTheme';
+import { colors, radius, spacing } from '@/constants/theme';
 import { countryCodeToFlagEmoji } from '@/lib/kyc/countryFlagEmoji';
 import { idCaptureInstruction, idCaptureTitle } from '@/lib/kyc/documentTypeCopy';
 import { KYC_COUNTRY_OPTIONS, type KycDocumentType } from '@/types/kyc';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -102,26 +106,27 @@ export function K2IdCapture({
     setCountryQuery('');
   }
 
+  function closeCountryModal() {
+    setCountryModalOpen(false);
+    setCountryQuery('');
+  }
+
   return (
     <View style={kycStyles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: spacing.xl },
-        ]}
+        contentContainerStyle={kycInboxStyles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionEyebrow}>Identity</Text>
-        <Text style={kycStyles.title}>{idCaptureTitle(documentType)}</Text>
-        <Text style={styles.instructionCallout}>{idCaptureInstruction(documentType)}</Text>
-        <Text style={styles.subtitleRefined}>
-          Position your document in the frame — avoid glare. We use this only to verify you; it is never shown on your
-          profile.
-        </Text>
-
-        <Text style={styles.label}>Country / region</Text>
+        <KycLeadBlock
+          kicker="Identity"
+          title={idCaptureTitle(documentType)}
+          subtitle={idCaptureInstruction(documentType)}
+        />
+        <KycSectionHead title="Issuing country" />
         <Pressable
           style={({ pressed }) => [styles.countryTrigger, pressed && styles.countryTriggerPressed]}
           onPress={() => setCountryModalOpen(true)}
@@ -142,7 +147,13 @@ export function K2IdCapture({
           <Ionicons name="chevron-down" size={22} color={kycColors.muted} />
         </Pressable>
 
-        <View style={styles.previewCard}>
+        <KycSectionHead title="Document photo" />
+        <Text style={styles.captureHint}>
+          Position your document in the frame — avoid glare. We use this only to verify you; it is never shown on your
+          profile.
+        </Text>
+
+        <View style={kycInboxStyles.frostedCard}>
           <View style={styles.previewBox}>
             {idUri ? (
               <Image source={{ uri: idUri }} style={styles.previewImg} resizeMode="cover" />
@@ -161,9 +172,12 @@ export function K2IdCapture({
               </View>
             ) : (
               <View style={styles.permBox}>
-                <View style={styles.permIconWrap}>
+                <LinearGradient
+                  colors={['rgba(108,99,255,0.16)', 'rgba(255,101,132,0.08)']}
+                  style={styles.permIconWrap}
+                >
                   <Ionicons name="scan-outline" size={36} color={kycColors.primary} />
-                </View>
+                </LinearGradient>
                 <Text style={styles.permText}>Camera access helps you scan your ID in one tap.</Text>
                 <Button title="Allow camera" onPress={() => void requestCam()} />
               </View>
@@ -184,72 +198,25 @@ export function K2IdCapture({
         {capturing ? <ActivityIndicator color={kycColors.primary} style={{ marginTop: spacing.sm }} /> : null}
       </ScrollView>
 
-      <View
-        style={[
-          styles.footer,
-          {
-            paddingBottom: Math.max(insets.bottom, spacing.md),
-            ...Platform.select({
-              ios: {
-                shadowColor: '#0f172a',
-                shadowOffset: { width: 0, height: -6 },
-                shadowOpacity: 0.08,
-                shadowRadius: 16,
-              },
-              android: { elevation: 18 },
-            }),
-          },
-        ]}
-      >
-        <View style={styles.footerRow}>
-          <Pressable
-            onPress={onBack}
-            style={({ pressed }) => [styles.footerBtnGhost, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Text style={styles.footerBtnGhostText}>Back</Text>
-          </Pressable>
-          <Pressable
-            onPress={onNext}
-            disabled={!canNext}
-            style={({ pressed }) => [
-              styles.footerBtnPrimary,
-              !canNext && styles.footerBtnPrimaryDisabled,
-              pressed && canNext && { opacity: 0.92 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Continue"
-          >
-            <Text style={[styles.footerBtnPrimaryText, !canNext && styles.footerBtnPrimaryTextDisabled]}>
-              Continue
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+      <KycStepFooter onBack={onBack} onContinue={onNext} continueDisabled={!canNext} />
 
-      <Modal
-        visible={countryModalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => {
-          setCountryModalOpen(false);
-          setCountryQuery('');
-        }}
-      >
+      <Modal visible={countryModalOpen} animationType="slide" transparent onRequestClose={closeCountryModal}>
         <View style={styles.modalRoot}>
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={() => {
-              setCountryModalOpen(false);
-              setCountryQuery('');
-            }}
-            accessibilityLabel="Close country list"
-          />
+          <Pressable style={styles.modalBackdrop} onPress={closeCountryModal} accessibilityLabel="Close country list" />
           <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             <View style={styles.modalGrabber} />
-            <Text style={styles.modalTitle}>Country / region</Text>
-            <Text style={styles.modalHint}>Choose where your ID was issued</Text>
+            <View style={styles.modalHeader}>
+              <LinearGradient
+                colors={[colors.primary, colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.modalAccent}
+              />
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalTitle}>Country / region</Text>
+                <Text style={styles.modalHint}>Choose where your ID was issued</Text>
+              </View>
+            </View>
 
             <View style={styles.searchWrap}>
               <Ionicons name="search" size={20} color={kycColors.muted} style={styles.searchIcon} />
@@ -280,7 +247,11 @@ export function K2IdCapture({
                 const selected = item.code === countryCode;
                 return (
                   <Pressable
-                    style={({ pressed }) => [styles.countryRow, pressed && { backgroundColor: '#f4f5f8' }]}
+                    style={({ pressed }) => [
+                      styles.countryRow,
+                      selected && styles.countryRowOn,
+                      pressed && { opacity: 0.92 },
+                    ]}
                     onPress={() => selectCountry(item.code)}
                   >
                     <Text style={styles.countryRowFlag}>{countryCodeToFlagEmoji(item.code)}</Text>
@@ -307,66 +278,47 @@ export function K2IdCapture({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: spacing.lg, paddingTop: 0 },
-  sectionEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: kycColors.primary,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: spacing.xs,
-  },
-  instructionCallout: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: kycColors.text,
-    lineHeight: 24,
-    marginBottom: spacing.sm,
-  },
-  subtitleRefined: {
-    fontSize: 16,
+  captureHint: {
+    fontSize: 14,
     color: kycColors.muted,
-    lineHeight: 24,
-    marginBottom: spacing.lg,
-    letterSpacing: 0.15,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: kycColors.text,
+    lineHeight: 20,
     marginBottom: spacing.sm,
-    letterSpacing: 0.2,
+    paddingHorizontal: spacing.md,
+    fontWeight: '600',
   },
   countryTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(26, 29, 38, 0.12)',
-    borderRadius: radius.lg,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderRadius: radius.xl,
     paddingVertical: 16,
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    backgroundColor: kycColors.surface,
-    ...kycShadow,
+    backgroundColor: colors.surface,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
   },
   countryTriggerPressed: { opacity: 0.96 },
   countryTriggerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 12 },
   countryTriggerFlag: { fontSize: 28, lineHeight: 32 },
-  countryTriggerLabel: { flex: 1, fontSize: 16, fontWeight: '600', color: kycColors.text },
-  countryTriggerPlaceholder: { color: kycColors.muted, fontWeight: '500' },
-  previewCard: {
-    borderRadius: radius.xl,
-    marginBottom: spacing.lg,
-    backgroundColor: kycColors.surface,
-    padding: spacing.sm,
-    ...kycShadow,
-  },
+  countryTriggerLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: kycColors.text },
+  countryTriggerPlaceholder: { color: kycColors.muted, fontWeight: '600' },
   previewBox: {
     height: 256,
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: '#E8EAEF',
+    margin: -spacing.xs,
   },
   camWrap: { flex: 1 },
   overlayFrame: {
@@ -386,8 +338,7 @@ const styles = StyleSheet.create({
   permIconWrap: {
     width: 72,
     height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -399,78 +350,49 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     maxWidth: 280,
+    fontWeight: '600',
   },
-  btnRow: { gap: spacing.sm, marginBottom: spacing.md },
-  footer: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(15, 23, 42, 0.08)',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  footerRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  footerBtnGhost: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: kycColors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  footerBtnGhostText: { fontSize: 16, fontWeight: '700', color: kycColors.primary },
-  footerBtnPrimary: {
-    flex: 1,
-    minHeight: 52,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: kycColors.primary,
-  },
-  footerBtnPrimaryDisabled: { backgroundColor: '#E5E7EB' },
-  footerBtnPrimaryText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  footerBtnPrimaryTextDisabled: { color: '#9CA3AF' },
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  },
+  btnRow: { gap: spacing.sm, marginBottom: spacing.md, paddingHorizontal: spacing.md },
+  modalRoot: { flex: 1, justifyContent: 'flex-end' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(26, 29, 38, 0.45)' },
   modalSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '78%',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(108, 99, 255, 0.14)',
   },
   modalGrabber: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#D1D5DB',
+    backgroundColor: 'rgba(108, 99, 255, 0.25)',
     marginBottom: spacing.md,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: kycColors.text,
-    marginBottom: 4,
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
-  modalHint: { fontSize: 14, color: kycColors.muted, marginBottom: spacing.md },
+  modalAccent: { width: 5, height: 44, borderRadius: 3 },
+  modalHeaderText: { flex: 1 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: kycColors.text, letterSpacing: -0.3 },
+  modalHint: { fontSize: 14, color: kycColors.muted, marginTop: 4, fontWeight: '600' },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(108, 99, 255, 0.06)',
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(26, 29, 38, 0.06)',
+    borderColor: 'rgba(108, 99, 255, 0.14)',
   },
   searchIcon: { marginRight: spacing.sm },
   searchInput: {
@@ -478,21 +400,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: kycColors.text,
     paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    fontWeight: '600',
   },
   countryList: { maxHeight: 380 },
   countryListContent: { paddingBottom: spacing.sm },
-  countrySep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(26, 29, 38, 0.08)' },
+  countrySep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(108, 99, 255, 0.1)' },
   countryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     gap: 12,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
   },
+  countryRowOn: { backgroundColor: 'rgba(108, 99, 255, 0.08)' },
   countryRowFlag: { fontSize: 26, width: 40, textAlign: 'center' },
-  countryRowLabel: { flex: 1, fontSize: 16, fontWeight: '600', color: kycColors.text },
+  countryRowLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: kycColors.text },
   countryRowCode: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: kycColors.muted,
     fontVariant: ['tabular-nums'],
     marginRight: 4,
@@ -502,5 +428,6 @@ const styles = StyleSheet.create({
     color: kycColors.muted,
     paddingVertical: spacing.xl,
     fontSize: 15,
+    fontWeight: '600',
   },
 });

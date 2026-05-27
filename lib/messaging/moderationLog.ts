@@ -1,7 +1,7 @@
 /**
- * Placeholder moderation audit trail — replace with Supabase insert / Edge Function in production.
+ * Moderation audit records are written by the `moderation-check` Edge Function into `moderation_logs`.
+ * Chat and other surfaces call `persistModerationAfterSend` after content is saved.
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type ModerationLogPayload = {
   conversationId: string | undefined;
@@ -11,9 +11,7 @@ export type ModerationLogPayload = {
   reason?: string;
 };
 
-export function logModerationResult(payload: ModerationLogPayload, _supabase?: SupabaseClient): void {
-  if (__DEV__) {
-    // eslint-disable-next-line no-console
-    console.log('[moderation]', payload.status, payload.reason ?? '', payload.textSnippet.slice(0, 80));
-  }
+/** @deprecated No-op locally; use `persistModerationAfterSend` from `@/lib/trust/persistModeration`. */
+export function logModerationResult(_payload: ModerationLogPayload): void {
+  // Server-side logging only — avoids placeholder console noise in production.
 }

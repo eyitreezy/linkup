@@ -1,8 +1,9 @@
 import { authSoftLabelStyle } from '@/components/Input';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { radius } from '@/constants/theme';
+import { colors, radius } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'react-native';
 import { MotiView } from 'moti';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -15,6 +16,9 @@ type Props = {
   onRemoveRemote: (index: number) => void;
   maxPhotos?: number;
 };
+
+/** Same as active chips / CTA gradients. */
+const ADD_TILE_GRADIENT = [colors.primary, '#8B7CE8', colors.secondary] as const;
 
 export function PhotoUploader({
   localUris,
@@ -45,9 +49,24 @@ export function PhotoUploader({
       <Text style={[authSoftLabelStyle, styles.labelSpacing]}>Photos</Text>
       <Text style={styles.hint}>Add at least one — tap to pick from your library.</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        <Pressable style={styles.addTile} onPress={pick} disabled={allCount >= maxPhotos}>
-          <Ionicons name="add" size={36} color={onboarding.accent} />
-          <Text style={styles.addLabel}>Add</Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.addTileOuter,
+            allCount >= maxPhotos && styles.addTileDisabled,
+            pressed && allCount < maxPhotos && styles.addTilePressed,
+          ]}
+          onPress={pick}
+          disabled={allCount >= maxPhotos}
+        >
+          <LinearGradient
+            colors={[...ADD_TILE_GRADIENT]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.addTile}
+          >
+            <Ionicons name="add" size={36} color="#FFFFFF" />
+            <Text style={styles.addLabel}>Add</Text>
+          </LinearGradient>
         </Pressable>
         {remoteUrls.map((uri, i) => (
           <MotiView key={`r-${uri}-${i}`} from={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
@@ -78,18 +97,19 @@ const styles = StyleSheet.create({
   labelSpacing: { marginBottom: 4 },
   hint: { fontSize: 12, color: onboarding.muted, marginBottom: onboarding.spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  addTileOuter: {
+    borderRadius: onboarding.radius2xl,
+    overflow: 'hidden',
+  },
+  addTilePressed: { opacity: 0.92, transform: [{ scale: 0.98 }] },
+  addTileDisabled: { opacity: 0.4 },
   addTile: {
     width: 108,
     height: 132,
-    borderRadius: onboarding.radius2xl,
-    borderWidth: 2,
-    borderColor: onboarding.accent,
-    borderStyle: 'dashed',
-    backgroundColor: onboarding.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addLabel: { fontSize: 12, fontWeight: '700', color: onboarding.accent, marginTop: 4 },
+  addLabel: { fontSize: 12, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: 0.2 },
   thumbWrap: { position: 'relative' },
   thumb: {
     width: 108,

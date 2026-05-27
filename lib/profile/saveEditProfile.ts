@@ -4,6 +4,7 @@
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
 import { uploadNewLocalPhotos } from '@/lib/onboarding/persist';
 import { runInitialProfileScreening } from '@/lib/onboarding/profileScreening';
+import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { supabase } from '@/lib/supabase';
 import type { ProfilePreferences } from '@/types/database';
 import { preferencesFromDraft, type OnboardingDraft } from '@/types/onboarding';
@@ -36,6 +37,12 @@ export async function saveEditProfile(args: {
   }
   if (filled.length < 1 || filled.length > 2) {
     return { error: new Error('Add one or two prompt answers.'), uploadedPhotoUrls: [] };
+  }
+  if (!hasValidProfileLocation(draft)) {
+    return {
+      error: new Error('Add your location — pick from search or use current location.'),
+      uploadedPhotoUrls: [],
+    };
   }
 
   const mergedPrefs: ProfilePreferences = {
@@ -87,6 +94,7 @@ export async function saveEditProfile(args: {
       age_max: draft.ageMax,
       radius_km: draft.radiusKm,
       is_profile_public: draft.profilePublic,
+      ...profileLocationFromDraft(draft),
       preferences: mergedPrefs,
       ...(typeof screeningTrust === 'number' ? { ai_trust_score: screeningTrust } : {}),
     })

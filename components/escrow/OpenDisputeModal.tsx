@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
-    borderRadius: radius.full,
+    borderRadius: radius.button,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,

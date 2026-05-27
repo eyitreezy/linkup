@@ -254,14 +254,14 @@ const styles = StyleSheet.create({
   typePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.full,
+    borderRadius: radius.button,
     backgroundColor: 'rgba(108, 99, 255, 0.12)',
   },
   typePillTxt: { fontSize: 11, fontWeight: '800', color: colors.primary },
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.full,
+    borderRadius: radius.button,
     backgroundColor: 'rgba(255, 101, 132, 0.12)',
   },
   statusPillTxt: { fontSize: 11, fontWeight: '800', color: colors.secondary },

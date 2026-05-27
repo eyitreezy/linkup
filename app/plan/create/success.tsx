@@ -4,11 +4,18 @@
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
+import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { Href, router, useLocalSearchParams } from 'expo-router';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function CreatePlanSuccessScreen() {
   const { planId } = useLocalSearchParams<{ planId: string }>();
+  const { reset } = usePlanDraft();
+
+  useEffect(() => {
+    void reset();
+  }, [reset]);
 
   return (
     <Screen scroll>

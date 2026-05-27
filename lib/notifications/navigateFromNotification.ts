@@ -31,12 +31,20 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     return;
   }
   const t = data && typeof data === 'object' && 'type' in data ? String((data as { type?: string }).type) : '';
-  if (t.startsWith('kyc_')) {
-    router.push('/kyc' as Href);
+  if (t === 'verification_submitted' || t === 'verification_updated') {
+    router.push('/settings/verification' as Href);
     return;
   }
-  if (t === 'dispute_opened' || t === 'report_submitted') {
+  if (t.startsWith('kyc_')) {
+    router.push('/settings/verification' as Href);
+    return;
+  }
+  if (t === 'dispute_opened') {
     router.push('/support' as Href);
+    return;
+  }
+  if (t === 'report_submitted' || t === 'moderation_flagged') {
+    router.push('/admin' as Href);
     return;
   }
   /** Only open the inbox when we know this tap maps to a notification row (has a type). Empty payloads must not navigate (avoids stray pushes during auth / OAuth). */

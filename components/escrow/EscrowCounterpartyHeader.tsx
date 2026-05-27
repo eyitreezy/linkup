@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.lg },
   title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.md, lineHeight: 28 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  avatar: { width: 56, height: 56, borderRadius: radius.full, backgroundColor: colors.border },
+  avatar: { width: 56, height: 56, borderRadius: radius.button, backgroundColor: colors.border },
   avatarPh: { alignItems: 'center', justifyContent: 'center' },
   meta: { flex: 1 },
   cpLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase' },

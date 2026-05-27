@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 const LABELS: Record<EscrowStatus, { label: string; bg: string; fg: string }> = {
   pending_funding: { label: 'Pending funding', bg: '#EEF2FF', fg: '#4338CA' },
   funded: { label: 'Funded', bg: '#ECFDF5', fg: '#047857' },
+  active: { label: 'Active (held)', bg: '#ECFDF5', fg: '#047857' },
   released: { label: 'Released', bg: '#ECFDF5', fg: '#047857' },
   disputed: { label: 'Disputed', bg: '#FEF2F2', fg: colors.danger },
   refunded: { label: 'Refunded', bg: '#F3F4F6', fg: colors.textMuted },
@@ -27,7 +28,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: radius.full,
+    borderRadius: radius.button,
   },
   txt: { fontSize: 13, fontWeight: '800' },
 });

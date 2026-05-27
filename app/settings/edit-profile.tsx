@@ -1,5 +1,6 @@
 /**
  * Edit profile — same fields as post-onboarding (photos, bio, prompts, preferences).
+ * Shell matches notification inbox + create-plan (gradient, cards, chips).
  */
 import {
   authSoftLabelStyle,
@@ -11,32 +12,97 @@ import { ProfileCardPreview } from '@/components/onboarding/ProfileCardPreview';
 import { PromptSelector } from '@/components/onboarding/PromptSelector';
 import { TagSelector } from '@/components/onboarding/TagSelector';
 import { Screen } from '@/components/Screen';
+import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { INTEREST_TAGS, LANGUAGE_OPTIONS } from '@/lib/onboarding/constants';
 import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
+import { ProfileLocationSection } from '@/components/profile/ProfileLocationSection';
+import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { saveEditProfile } from '@/lib/profile/saveEditProfile';
+import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import type { MeetingIntent, OnboardingDraft } from '@/types/onboarding';
 import { defaultOnboardingDraft } from '@/types/onboarding';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
-import { useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Alert,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
 
+function EditSectionHeader({ title, icon }: { title: string; icon?: keyof typeof Ionicons.glyphMap }) {
+  return (
+    <View style={styles.sectionHead}>
+      <View style={styles.sectionHeadRow}>
+        <View style={styles.sectionAccentDot} />
+        {icon ? <Ionicons name={icon} size={16} color={colors.primary} /> : null}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      <LinearGradient
+        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.sectionRule}
+      />
+    </View>
+  );
+}
+
+function FormCard({ children }: { children: ReactNode }) {
+  return (
+    <LinearGradient
+      colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.formCardOuter}
+    >
+      <View style={styles.formCardInner}>{children}</View>
+    </LinearGradient>
+  );
+}
+
+function GradientChip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.chipPress} accessibilityRole="button">
+      {selected ? (
+        <LinearGradient
+          colors={[colors.primary, '#8B7CE8', colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.chipGrad}
+        >
+          <Text style={styles.chipTxtOn}>{label}</Text>
+        </LinearGradient>
+      ) : (
+        <View style={styles.chipIdle}>
+          <Text style={styles.chipTxt}>{label}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultOnboardingDraft());
   const [showDate, setShowDate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    variant: AppFeedbackVariant;
+    title: string;
+    message: string;
+  } | null>(null);
 
   const canSave = useMemo(() => {
     const photos = draft.localPhotoUris.length + draft.remotePhotoUrls.length;
@@ -51,17 +117,20 @@ export default function EditProfileScreen() {
       draft.languages.length >= 1 &&
       draft.meetingIntent != null &&
       filled.length >= 1 &&
-      filled.length <= 2
+      filled.length <= 2 &&
+      hasValidProfileLocation(draft)
     );
   }, [draft]);
 
   async function save() {
     if (!user?.id || !isSupabaseConfigured) return;
     if (!canSave) {
-      Alert.alert(
-        'Check your profile',
-        'Need: display name, 18+ birthday, at least one photo, bio (≤150 chars), interests, languages, intent, and 1–2 prompts.'
-      );
+      setFeedback({
+        variant: 'warning',
+        title: 'Check your profile',
+        message:
+          'Need: display name, 18+ birthday, at least one photo, your location, bio (≤150 chars), interests, languages, intent, and 1–2 prompts.',
+      });
       return;
     }
     setSaving(true);
@@ -71,10 +140,31 @@ export default function EditProfileScreen() {
       existingPreferences: profile?.preferences ?? null,
     });
     setSaving(false);
-    if (error) Alert.alert('Could not save', error.message);
-    else {
+    if (error) {
+      setFeedback({
+        variant: 'error',
+        title: 'Could not save',
+        message: error.message,
+      });
+      return;
+    }
+    {
+      const promptBits = draft.promptAnswers
+        .filter((p) => p.answer.trim())
+        .map((p) => `${p.prompt}: ${p.answer.trim()}`)
+        .join('\n');
+      const textSample = [draft.displayName.trim(), draft.bio.trim(), promptBits].filter(Boolean).join('\n');
+      void persistModerationAfterSend({
+        contentType: 'profile',
+        contentId: user.id,
+        textSample: textSample.length ? textSample : null,
+      });
       await refreshProfile();
-      Alert.alert('Saved', 'Profile updated.');
+      setFeedback({
+        variant: 'success',
+        title: 'Saved',
+        message: 'Your profile is updated and visible across LinkUp.',
+      });
     }
   }
 
@@ -84,258 +174,517 @@ export default function EditProfileScreen() {
   }, [profile?.user_id, profile?.updated_at]);
 
   return (
-    <Screen scroll>
-      <Text style={styles.lead}>
-        Update the same details you set during onboarding — photos, story, and discovery preferences stay in sync everywhere.
-      </Text>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <AppFeedbackModal
+        visible={feedback != null}
+        onClose={() => setFeedback(null)}
+        variant={feedback?.variant ?? 'success'}
+        kicker="Edit profile"
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+        primaryLabel={feedback?.variant === 'success' ? 'Done' : 'Got it'}
+      />
+      <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <LinearGradient
+            colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+            locations={[0, 0.32, 0.62, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
+          />
 
-      <Text style={styles.section}>Basics</Text>
-      <Input label="Display name" value={draft.displayName} onChangeText={(t) => setDraft((d) => ({ ...d, displayName: t }))} />
-      <Text style={authSoftLabelStyle}>Birthday</Text>
-      <Pressable style={onboardingTouchableFieldStyle(styles.dateBtn)} onPress={() => setShowDate(true)}>
-        <Text style={styles.dateTxt}>
-          {draft.birthDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-        </Text>
-      </Pressable>
-      {showDate ? (
-        <DateTimePicker
-          value={draft.birthDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          maximumDate={new Date()}
-          minimumDate={new Date(1940, 0, 1)}
-          onChange={(ev, date) => {
-            if (Platform.OS === 'android') setShowDate(false);
-            if (Platform.OS === 'android' && ev.type === 'dismissed') return;
-            if (date) setDraft((d) => ({ ...d, birthDate: date }));
-          }}
-        />
-      ) : null}
-
-      <PhotoUploader
-        localUris={draft.localPhotoUris}
-        remoteUrls={draft.remotePhotoUrls}
-        onChangeLocal={(uris) => setDraft((d) => ({ ...d, localPhotoUris: uris }))}
-        onRemoveLocal={(i) =>
-          setDraft((d) => ({ ...d, localPhotoUris: d.localPhotoUris.filter((_, j) => j !== i) }))
-        }
-        onRemoveRemote={(i) =>
-          setDraft((d) => ({ ...d, remotePhotoUrls: d.remotePhotoUrls.filter((_, j) => j !== i) }))
-        }
-      />
-
-      <Text style={styles.section}>Personality</Text>
-      <Input
-        label={`Bio (${draft.bio.length}/150)`}
-        multiline
-        numberOfLines={4}
-        maxLength={150}
-        value={draft.bio}
-        onChangeText={(t) => setDraft((d) => ({ ...d, bio: t }))}
-      />
-      <TagSelector
-        label="Interests"
-        options={INTEREST_TAGS}
-        selected={draft.interests}
-        onToggle={(tag) =>
-          setDraft((d) => ({
-            ...d,
-            interests: d.interests.includes(tag)
-              ? d.interests.filter((x) => x !== tag)
-              : [...d.interests, tag].slice(0, 8),
-          }))
-        }
-      />
-      <TagSelector
-        label="Languages"
-        options={LANGUAGE_OPTIONS}
-        selected={draft.languages}
-        max={5}
-        onToggle={(tag) =>
-          setDraft((d) => ({
-            ...d,
-            languages: d.languages.includes(tag)
-              ? d.languages.filter((x) => x !== tag)
-              : [...d.languages, tag].slice(0, 5),
-          }))
-        }
-      />
-      <Text style={[authSoftLabelStyle, styles.fieldSpace]}>Intent</Text>
-      <View style={styles.chipRow}>
-        {(['friendship', 'dating', 'activity', 'networking'] as MeetingIntent[]).map((k) => (
-          <Pressable
-            key={k}
-            onPress={() => setDraft((d) => ({ ...d, meetingIntent: k }))}
-            style={[styles.chip, draft.meetingIntent === k && styles.chipOn]}
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.chipTxt, draft.meetingIntent === k && styles.chipTxtOn]}>
-              {k === 'friendship'
-                ? 'Friendship'
-                : k === 'dating'
-                  ? 'Dating'
-                  : k === 'activity'
-                    ? 'Activity'
-                    : 'Networking'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <PromptSelector answers={draft.promptAnswers} onChange={(next) => setDraft((d) => ({ ...d, promptAnswers: next }))} />
+            <View style={styles.topNav}>
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [styles.iconPill, pressed && styles.iconPillPressed]}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
+                <Ionicons name="arrow-back" size={22} color={colors.text} />
+              </Pressable>
+            </View>
 
-      <Text style={styles.section}>Preferences</Text>
-      <Text style={[authSoftLabelStyle, styles.fieldSpace]}>I am</Text>
-      <View style={styles.chipRow}>
-        {['Woman', 'Man', 'Non-binary', 'Prefer not to say'].map((g) => (
-          <Pressable
-            key={g}
-            onPress={() => setDraft((d) => ({ ...d, selfGender: g }))}
-            style={[styles.chip, draft.selfGender === g && styles.chipOn]}
-          >
-            <Text style={[styles.chipTxt, draft.selfGender === g && styles.chipTxtOn]}>{g}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={[authSoftLabelStyle, styles.fieldSpace]}>Show me</Text>
-      <View style={styles.chipRow}>
-        {(['everyone', 'women', 'men'] as const).map((k) => (
-          <Pressable
-            key={k}
-            onPress={() => setDraft((d) => ({ ...d, showMe: k }))}
-            style={[styles.chip, draft.showMe === k && styles.chipOn]}
-          >
-            <Text style={[styles.chipTxt, draft.showMe === k && styles.chipTxtOn]}>
-              {k === 'everyone' ? 'Everyone' : k === 'women' ? 'Women' : 'Men'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={styles.sliderLabel}>
-        Age range: {draft.ageMin} – {draft.ageMax}
-      </Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={18}
-        maximumValue={75}
-        step={1}
-        value={draft.ageMin}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.border}
-        thumbTintColor={colors.primary}
-        onValueChange={(v) =>
-          setDraft((d) => ({
-            ...d,
-            ageMin: Math.min(Math.round(v), d.ageMax - 1),
-          }))
-        }
-      />
-      <Slider
-        style={styles.slider}
-        minimumValue={19}
-        maximumValue={80}
-        step={1}
-        value={draft.ageMax}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.border}
-        thumbTintColor={colors.primary}
-        onValueChange={(v) =>
-          setDraft((d) => ({
-            ...d,
-            ageMax: Math.max(Math.round(v), d.ageMin + 1),
-          }))
-        }
-      />
-      <Text style={styles.sliderLabel}>Distance: {Math.round(draft.radiusKm)} km</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={1}
-        maximumValue={100}
-        step={1}
-        value={draft.radiusKm}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.border}
-        thumbTintColor={colors.primary}
-        onValueChange={(v) => setDraft((d) => ({ ...d, radiusKm: v }))}
-      />
-      <View style={styles.rowBetween}>
-        <Text style={styles.switchLabel}>Profile visible</Text>
-        <Switch
-          value={draft.profilePublic}
-          onValueChange={(v) => setDraft((d) => ({ ...d, profilePublic: v }))}
-          trackColor={{ true: colors.primary }}
-        />
-      </View>
+            <View style={styles.leadBlock}>
+              <LinearGradient
+                colors={[colors.primary, colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.leadAccent}
+              />
+              <View style={styles.leadTextCol}>
+                <Text style={styles.leadKicker}>Profile</Text>
+                <Text style={styles.leadTitle}>Edit profile</Text>
+                <Text style={styles.leadSub}>
+                  Same fields as onboarding: photos, story, prompts, and discovery preferences stay in sync everywhere.
+                </Text>
+              </View>
+            </View>
 
-      <Text style={styles.section}>Preview</Text>
-      <ProfileCardPreview draft={draft} />
+            <EditSectionHeader title="Basics" icon="person-outline" />
+            <FormCard>
+              <Input
+                label="Display name"
+                variant="onboardingFlat"
+                value={draft.displayName}
+                onChangeText={(t) => setDraft((d) => ({ ...d, displayName: t }))}
+                placeholder="How you appear on LinkUp"
+              />
+              <Text style={[authSoftLabelStyle, styles.labelAfterInput]}>Birthday</Text>
+              <Pressable style={onboardingTouchableFieldStyle(styles.dateRowInner)} onPress={() => setShowDate(true)}>
+                <Text style={styles.dateTxt}>
+                  {draft.birthDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              </Pressable>
+              {showDate ? (
+                <DateTimePicker
+                  value={draft.birthDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1940, 0, 1)}
+                  onChange={(ev, date) => {
+                    if (Platform.OS === 'android') setShowDate(false);
+                    if (Platform.OS === 'android' && ev.type === 'dismissed') return;
+                    if (date) setDraft((d) => ({ ...d, birthDate: date }));
+                  }}
+                />
+              ) : null}
+              <Text style={styles.photoRequirementHint}>At least one photo · 18+</Text>
+              <PhotoUploader
+                localUris={draft.localPhotoUris}
+                remoteUrls={draft.remotePhotoUrls}
+                onChangeLocal={(uris) => setDraft((d) => ({ ...d, localPhotoUris: uris }))}
+                onRemoveLocal={(i) =>
+                  setDraft((d) => ({ ...d, localPhotoUris: d.localPhotoUris.filter((_, j) => j !== i) }))
+                }
+                onRemoveRemote={(i) =>
+                  setDraft((d) => ({ ...d, remotePhotoUrls: d.remotePhotoUrls.filter((_, j) => j !== i) }))
+                }
+              />
+            </FormCard>
 
-      <Pressable
-        style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
-        onPress={() => void save()}
-        disabled={saving || !canSave}
-        accessibilityRole="button"
-        accessibilityLabel="Save profile"
-      >
-        <Text style={styles.saveBtnTxt}>{saving ? 'Saving…' : 'Save profile'}</Text>
-      </Pressable>
-    </Screen>
+            <EditSectionHeader title="Story & tags" icon="chatbox-ellipses-outline" />
+            <FormCard>
+              <Input
+                label={`Bio (${draft.bio.length}/150)`}
+                variant="onboardingFlat"
+                multiline
+                numberOfLines={4}
+                maxLength={150}
+                value={draft.bio}
+                onChangeText={(t) => setDraft((d) => ({ ...d, bio: t }))}
+                placeholder="A short line that shows your vibe"
+              />
+              <View style={styles.tagSectionAfterBio}>
+                <TagSelector
+                  label="Interests"
+                  options={INTEREST_TAGS}
+                  selected={draft.interests}
+                  onToggle={(tag) =>
+                    setDraft((d) => ({
+                      ...d,
+                      interests: d.interests.includes(tag)
+                        ? d.interests.filter((x) => x !== tag)
+                        : [...d.interests, tag].slice(0, 8),
+                    }))
+                  }
+                />
+              </View>
+              <View style={styles.tagSectionAfterTags}>
+                <TagSelector
+                  label="Languages"
+                  options={LANGUAGE_OPTIONS}
+                  selected={draft.languages}
+                  max={5}
+                  onToggle={(tag) =>
+                    setDraft((d) => ({
+                      ...d,
+                      languages: d.languages.includes(tag)
+                        ? d.languages.filter((x) => x !== tag)
+                        : [...d.languages, tag].slice(0, 5),
+                    }))
+                  }
+                />
+              </View>
+              <Text style={[authSoftLabelStyle, styles.labelAfterTags]}>Intent</Text>
+              <View style={styles.chipRow}>
+                {(['friendship', 'dating', 'activity', 'networking'] as MeetingIntent[]).map((k) => (
+                  <GradientChip
+                    key={k}
+                    label={
+                      k === 'friendship'
+                        ? 'Friendship'
+                        : k === 'dating'
+                          ? 'Dating'
+                          : k === 'activity'
+                            ? 'Activity'
+                            : 'Networking'
+                    }
+                    selected={draft.meetingIntent === k}
+                    onPress={() => setDraft((d) => ({ ...d, meetingIntent: k }))}
+                  />
+                ))}
+              </View>
+              <PromptSelector
+                answers={draft.promptAnswers}
+                onChange={(next) => setDraft((d) => ({ ...d, promptAnswers: next }))}
+                inputVariant="onboardingFlat"
+              />
+            </FormCard>
+
+            <EditSectionHeader title="Discovery preferences" icon="options-outline" />
+            <FormCard>
+              <ProfileLocationSection
+                locationLabel={draft.locationLabel}
+                locationLatitude={draft.locationLatitude}
+                onApply={(patch) =>
+                  setDraft((d) => ({
+                    ...d,
+                    locationLabel: patch.locationLabel,
+                    locationLatitude: patch.locationLatitude,
+                    locationLongitude: patch.locationLongitude,
+                  }))
+                }
+                showRequiredHint={!hasValidProfileLocation(draft)}
+              />
+              <Text style={[authSoftLabelStyle, styles.labelFirstInCard]}>I am</Text>
+              <View style={styles.chipRow}>
+                {['Woman', 'Man', 'Non-binary', 'Prefer not to say'].map((g) => (
+                  <GradientChip
+                    key={g}
+                    label={g}
+                    selected={draft.selfGender === g}
+                    onPress={() => setDraft((d) => ({ ...d, selfGender: g }))}
+                  />
+                ))}
+              </View>
+              <Text style={[authSoftLabelStyle, styles.labelAfterChipRow]}>Show me</Text>
+              <View style={styles.chipRow}>
+                {(['everyone', 'women', 'men'] as const).map((k) => (
+                  <GradientChip
+                    key={k}
+                    label={k === 'everyone' ? 'Everyone' : k === 'women' ? 'Women' : 'Men'}
+                    selected={draft.showMe === k}
+                    onPress={() => setDraft((d) => ({ ...d, showMe: k }))}
+                  />
+                ))}
+              </View>
+              <Text style={[authSoftLabelStyle, styles.controlLabelSection]}>
+                Age range: {draft.ageMin} – {draft.ageMax}
+              </Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={18}
+                maximumValue={75}
+                step={1}
+                value={draft.ageMin}
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.border}
+                thumbTintColor={colors.primary}
+                onValueChange={(v) =>
+                  setDraft((d) => ({
+                    ...d,
+                    ageMin: Math.min(Math.round(v), d.ageMax - 1),
+                  }))
+                }
+              />
+              <Slider
+                style={styles.sliderAgeMax}
+                minimumValue={19}
+                maximumValue={80}
+                step={1}
+                value={draft.ageMax}
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.border}
+                thumbTintColor={colors.primary}
+                onValueChange={(v) =>
+                  setDraft((d) => ({
+                    ...d,
+                    ageMax: Math.max(Math.round(v), d.ageMin + 1),
+                  }))
+                }
+              />
+              <Text style={[authSoftLabelStyle, styles.controlLabelSection]}>Distance: {Math.round(draft.radiusKm)} km</Text>
+              <Slider
+                style={styles.slider}
+                minimumValue={1}
+                maximumValue={100}
+                step={1}
+                value={draft.radiusKm}
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.border}
+                thumbTintColor={colors.primary}
+                onValueChange={(v) => setDraft((d) => ({ ...d, radiusKm: v }))}
+              />
+              <View style={styles.rowBetween}>
+                <View style={styles.switchCopy}>
+                  <Text style={styles.switchLabel}>Profile visible</Text>
+                  <Text style={styles.switchHint}>Hide from discovery if you need a break</Text>
+                </View>
+                <Switch
+                  value={draft.profilePublic}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, profilePublic: v }))}
+                  trackColor={{ false: 'rgba(26, 29, 38, 0.14)', true: colors.primary }}
+                  ios_backgroundColor="rgba(26, 29, 38, 0.14)"
+                />
+              </View>
+            </FormCard>
+
+            <EditSectionHeader title="Preview" icon="eye-outline" />
+            <View style={styles.previewSection}>
+              <ProfileCardPreview draft={draft} fullWidth />
+            </View>
+
+            <Pressable
+              onPress={() => void save()}
+              disabled={saving || !canSave}
+              accessibilityRole="button"
+              accessibilityLabel="Save profile"
+              style={({ pressed }) => [
+                styles.saveOuter,
+                (!canSave || saving) && styles.saveOuterDisabled,
+                pressed && canSave && !saving && styles.savePressed,
+              ]}
+            >
+              <LinearGradient
+                colors={[colors.primary, '#8B7CE8', colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.saveGrad}
+              >
+                <Ionicons name="checkmark-circle-outline" size={22} color="#FFFFFF" />
+                <Text style={styles.saveTxt}>{saving ? 'Saving…' : 'Save profile'}</Text>
+              </LinearGradient>
+            </Pressable>
+            {!canSave ? (
+              <Text style={styles.saveHint}>Complete required fields above to enable save.</Text>
+            ) : null}
+          </ScrollView>
+        </View>
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  lead: {
-    fontSize: 14,
-    color: colors.textMuted,
-    lineHeight: 20,
+  flex: { flex: 1 },
+  screenRoot: { backgroundColor: 'transparent' },
+  scroll: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xl * 2,
+    paddingTop: spacing.xs,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  iconPill: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  iconPillPressed: { opacity: 0.92 },
+  leadBlock: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
     marginBottom: spacing.lg,
   },
-  section: {
-    fontSize: 18,
-    fontWeight: '800',
+  leadAccent: {
+    width: 5,
+    marginTop: 8,
+    borderRadius: 3,
+    height: 56,
+  },
+  leadTextCol: { flex: 1, minWidth: 0 },
+  leadKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  leadTitle: {
+    fontSize: 26,
+    fontWeight: '900',
     color: colors.text,
-    marginTop: spacing.lg,
+    letterSpacing: -0.45,
+    marginBottom: 6,
+  },
+  leadSub: {
+    fontSize: 15,
+    color: colors.textMuted,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  sectionHead: {
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  sectionHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  sectionAccentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    flex: 1,
+  },
+  sectionRule: {
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.9,
+  },
+  formCardOuter: {
+    borderRadius: radius.xl,
+    padding: 2,
     marginBottom: spacing.md,
   },
-  dateBtn: {
+  formCardInner: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: radius.xl - 1,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    paddingVertical: 14,
+    borderColor: 'rgba(255,255,255,0.92)',
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  previewSection: {
+    width: '100%',
     marginBottom: spacing.md,
-    backgroundColor: colors.surface,
   },
-  dateTxt: { fontSize: 16, color: colors.text, fontWeight: '600' },
-  fieldSpace: { marginTop: spacing.md, marginBottom: spacing.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  chip: {
-    paddingHorizontal: 14,
+  /** Tighter rhythm after `Input` (wrap already adds margin below). */
+  labelAfterInput: { marginTop: spacing.sm },
+  labelAfterTags: { marginTop: spacing.lg },
+  labelFirstInCard: { marginTop: 0 },
+  labelAfterChipRow: { marginTop: spacing.md },
+  controlLabelSection: { marginTop: spacing.md },
+  photoRequirementHint: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.2,
+    lineHeight: 18,
+  },
+  tagSectionAfterBio: { marginTop: spacing.md },
+  tagSectionAfterTags: { marginTop: spacing.lg },
+  dateRowInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateTxt: { fontSize: 16, color: colors.text, fontWeight: '600', flex: 1 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.md },
+  chipPress: { borderRadius: radius.button, overflow: 'hidden' },
+  chipGrad: {
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderRadius: radius.button,
   },
-  chipOn: { borderColor: colors.primary, backgroundColor: '#EEF2FF' },
-  chipTxt: { fontSize: 14, fontWeight: '700', color: colors.text },
-  chipTxtOn: { color: colors.primary },
-  sliderLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  slider: { width: '100%', height: 44, marginBottom: spacing.sm },
+  chipIdle: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+  },
+  chipTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
+  chipTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', textAlign: 'center' },
+  slider: { width: '100%', height: 40, marginBottom: spacing.sm },
+  sliderAgeMax: { width: '100%', height: 40, marginBottom: spacing.md },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginVertical: spacing.md,
-    paddingVertical: spacing.sm,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(26,29,38,0.08)',
+    gap: spacing.md,
   },
-  switchLabel: { fontSize: 16, fontWeight: '600', color: colors.text },
-  saveBtn: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.xl * 2,
-    backgroundColor: colors.primary,
+  switchCopy: { flex: 1, minWidth: 0 },
+  switchLabel: { fontSize: 16, fontWeight: '800', color: colors.text },
+  switchHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+  saveOuter: {
+    marginTop: spacing.lg,
     borderRadius: radius.button,
-    paddingVertical: 16,
-    alignItems: 'center',
+    overflow: 'hidden',
+    ...(Platform.OS === 'ios'
+      ? {
+          shadowColor: '#6C63FF',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.22,
+          shadowRadius: 14,
+        }
+      : { elevation: 5 }),
   },
-  saveBtnDisabled: { opacity: 0.45 },
-  saveBtnTxt: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  saveOuterDisabled: { opacity: 0.42 },
+  savePressed: { opacity: 0.94, transform: [{ scale: 0.98 }] },
+  saveGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 17,
+    paddingHorizontal: spacing.lg,
+  },
+  saveTxt: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', letterSpacing: -0.2 },
+  saveHint: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    lineHeight: 18,
+  },
 });

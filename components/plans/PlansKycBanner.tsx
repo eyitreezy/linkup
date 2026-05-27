@@ -44,10 +44,11 @@ export function PlansKycBanner({ visible }: Props) {
       <View style={styles.inner}>
         <View style={styles.iconRow}>
           <Ionicons name="shield-checkmark-outline" size={22} color={colors.primary} />
-          <Text style={styles.title}>Unlock more with verification</Text>
+          <Text style={styles.title}>Help others feel safe meeting you</Text>
         </View>
         <Text style={styles.body}>
-          • Create plans{'\n'}• Negotiate meetups{'\n'}• Use secure escrow
+          Verification unlocks suggesting hangouts, chatting details, and optional secure holds — so real meetups feel
+          human, not risky.
         </Text>
         <View style={styles.actions}>
           <Pressable onPress={verify} style={styles.primary} accessibilityRole="button" accessibilityLabel="Verify now">

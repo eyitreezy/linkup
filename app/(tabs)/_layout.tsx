@@ -9,10 +9,13 @@ import { Redirect, Tabs, type Href } from 'expo-router';
 
 export default function TabsLayout() {
   const { session, profile, loading } = useAuth();
-  if (!loading && !session) {
+  if (loading && !session) {
+    return null;
+  }
+  if (!session) {
     return <Redirect href={'/(auth)/login' as Href} />;
   }
-  if (!loading && session && profile?.onboarding_status === 'pending') {
+  if (profile?.onboarding_status === 'pending') {
     return <Redirect href={'/onboarding' as Href} />;
   }
 
@@ -32,8 +35,8 @@ export default function TabsLayout() {
         name="index"
         options={{
           headerShown: false,
-          tabBarLabel: 'Plans',
-          tabBarIcon: ({ color, size }) => <Ionicons name="map" color={color} size={size} />,
+          tabBarLabel: 'Discover',
+          tabBarIcon: ({ color, size }) => <Ionicons name="heart" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -58,6 +61,14 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarLabel: 'Offers',
           tabBarIcon: ({ color, size }) => <Ionicons name="pricetag" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Wallet',
+          tabBarIcon: ({ color, size }) => <Ionicons name="wallet" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

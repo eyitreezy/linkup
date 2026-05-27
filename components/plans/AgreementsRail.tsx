@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   },
   avatarRing: {
     padding: 3,
-    borderRadius: 999,
+    borderRadius: radius.button,
     backgroundColor: colors.surface,
     marginBottom: spacing.sm,
     ...ringShadow,

@@ -1,33 +1,100 @@
 /**
- * Location field for plan create — white field + suggestions after3+ chars (geocode), current-location row.
+ * Location field for plan create — white field + suggestions after 3+ chars (geocode), current-location row.
  */
-import { authSoftLabelStyle, ONBOARDING_FIELD_MIN_HEIGHT } from '@/components/Input';
+import { ONBOARDING_FIELD_MIN_HEIGHT } from '@/components/Input';
+import { LocationSearchField } from '@/components/location/LocationSearchField';
 import { colors, radius, spacing } from '@/constants/theme';
+import { formatGeocodedAddress } from '@/lib/location/locationGeocode';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
-type Suggestion = { label: string; latitude: number; longitude: number };
+function androidLocOptions(): { mayShowUserSettingsDialog?: true } {
+  return Platform.OS === 'android' ? { mayShowUserSettingsDialog: true } : {};
+}
 
-function formatAddress(a: Location.LocationGeocodedAddress | null | undefined): string {
-  if (!a) return '';
-  const street =
-    a.streetNumber && a.street ? `${a.streetNumber} ${a.street}` : a.street || a.name || '';
-  const parts = [street, a.district, a.city, a.region, a.country].filter(
-    (x): x is string => Boolean(x && String(x).trim())
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(label)), ms);
+    promise
+      .then((v) => {
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch((err: unknown) => {
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      });
+  });
+}
+
+async function resolvePlanCoordinates(): Promise<Location.LocationObject> {
+  const extra = androidLocOptions();
+
+  try {
+    const recent = await Location.getLastKnownPositionAsync({
+      maxAge: 45 * 60 * 1000,
+    });
+    if (recent) return recent;
+  } catch {
+    /* keep trying */
+  }
+
+  try {
+    return await withTimeout(
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Low,
+        ...extra,
+      }),
+      22_000,
+      'timeout-low'
+    );
+  } catch {
+    /* next */
+  }
+
+  try {
+    return await withTimeout(
+      Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Lowest,
+        ...extra,
+      }),
+      18_000,
+      'timeout-lowest'
+    );
+  } catch {
+    /* next */
+  }
+
+  try {
+    const stale = await Location.getLastKnownPositionAsync();
+    if (stale) return stale;
+  } catch {
+    /* next */
+  }
+
+  return await withTimeout(
+    Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      ...extra,
+    }),
+    50_000,
+    'timeout-balanced'
   );
-  const uniq = [...new Set(parts)];
-  return uniq.slice(0, 3).join(', ');
+}
+
+function formatCoords(latitude: number, longitude: number): string {
+  return `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°`;
 }
 
 type Props = {
@@ -36,155 +103,95 @@ type Props = {
 };
 
 export function PlanLocationSection({ locationLabel, onApply }: Props) {
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestLoading, setSuggestLoading] = useState(false);
   const [locating, setLocating] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const geocodeGen = useRef(0);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
 
-  const clearDebounce = useCallback(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-  }, []);
+  const applyText = useCallback(
+    (t: string) => onApply({ locationLabel: t, latitude: null, longitude: null }),
+    [onApply]
+  );
 
-  useEffect(() => () => clearDebounce(), [clearDebounce]);
-
-  const runGeocode = useCallback(async (query: string) => {
-    const trimmed = query.trim();
-    if (trimmed.length <= 2) {
-      setSuggestions([]);
-      setSuggestLoading(false);
-      return;
-    }
-    const gen = ++geocodeGen.current;
-    setSuggestLoading(true);
-    try {
-      const results = await Location.geocodeAsync(trimmed);
-      if (gen !== geocodeGen.current) return;
-      const top = results.slice(0, 8);
-      const labeled: Suggestion[] = [];
-      for (const r of top) {
-        let label = '';
-        try {
-          const [addr] = await Location.reverseGeocodeAsync({
-            latitude: r.latitude,
-            longitude: r.longitude,
-          });
-          label = formatAddress(addr);
-        } catch {
-          label = '';
-        }
-        if (!label) {
-          label = `${r.latitude.toFixed(2)}°, ${r.longitude.toFixed(2)}°`;
-        }
-        labeled.push({ label, latitude: r.latitude, longitude: r.longitude });
-      }
-      if (gen !== geocodeGen.current) return;
-      setSuggestions(labeled);
-    } catch {
-      if (gen !== geocodeGen.current) return;
-      setSuggestions([]);
-    } finally {
-      if (gen === geocodeGen.current) setSuggestLoading(false);
-    }
-  }, []);
-
-  const onChangeText = useCallback(
-    (t: string) => {
-      onApply({ locationLabel: t, latitude: null, longitude: null });
-      clearDebounce();
-      if (t.trim().length <= 2) {
-        setSuggestions([]);
-        setSuggestLoading(false);
+  const applySuggestion = useCallback(
+    (s: { label: string; latitude: number; longitude: number }) => {
+      if (!Number.isFinite(s.latitude) || !Number.isFinite(s.longitude) || (s.latitude === 0 && s.longitude === 0)) {
+        Alert.alert(
+          'Location',
+          'Could not resolve map coordinates for that place. Pick another suggestion or use current location.'
+        );
         return;
       }
-      debounceRef.current = setTimeout(() => {
-        void runGeocode(t);
-      }, 420);
-    },
-    [onApply, clearDebounce, runGeocode]
-  );
-
-  const pickSuggestion = useCallback(
-    (s: Suggestion) => {
-      Keyboard.dismiss();
-      setSuggestions([]);
-      setSuggestLoading(false);
-      clearDebounce();
       onApply({ locationLabel: s.label, latitude: s.latitude, longitude: s.longitude });
     },
-    [onApply, clearDebounce]
+    [onApply]
   );
 
-  const useCurrentLocation = useCallback(async () => {
+  const fillCurrentLocation = useCallback(async () => {
     Keyboard.dismiss();
-    setSuggestions([]);
-    clearDebounce();
     setLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const servicesOn = await Location.hasServicesEnabledAsync();
-      if (!servicesOn) return;
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const [place] = await Location.reverseGeocodeAsync({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-      });
-      const label = formatAddress(place) || [place?.name, place?.city].filter(Boolean).join(', ') || 'Near you';
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+      }
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location permission',
+          'Allow LinkUp to read your location while you use the app so we can fill your meetup spot.'
+        );
+        return;
+      }
+
+      const pos = await resolvePlanCoordinates();
+
+      let label = '';
+      try {
+        const places = await Location.reverseGeocodeAsync({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+        const place = places[0];
+        label =
+          formatGeocodedAddress(place) ||
+          [place?.name, place?.city, place?.region].filter(Boolean).join(', ') ||
+          '';
+      } catch {
+        label = '';
+      }
+
+      if (!label.trim()) {
+        label = formatCoords(pos.coords.latitude, pos.coords.longitude);
+      }
+
       onApply({
         locationLabel: label,
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
       });
     } catch {
-      /* ignore */
+      Alert.alert(
+        'Location',
+        'Could not get a position. On an emulator, set a mock location in Extended controls > Location. On a phone, turn on Location and use Wi-Fi or a signal, then try again. You can also type an area.'
+      );
     } finally {
       setLocating(false);
     }
-  }, [onApply, clearDebounce]);
+  }, [onApply]);
 
   return (
-    <View style={[styles.wrap, suggestions.length > 0 && styles.wrapElevated]}>
-      <Text style={authSoftLabelStyle}>Location</Text>
-      <View style={styles.fieldShell}>
-        <TextInput
-          placeholderTextColor={colors.textMuted}
-          placeholder="Neighborhood, venue, or area"
-          value={locationLabel}
-          onChangeText={onChangeText}
-          style={styles.input}
-          autoCorrect={false}
-          autoCapitalize="words"
-        />
-        {suggestLoading ? (
-          <View style={styles.inlineLoader}>
-            <ActivityIndicator size="small" color={colors.primary} />
-          </View>
-        ) : null}
-      </View>
-
-      {suggestions.length > 0 ? (
-        <View style={styles.dropdown}>
-          {suggestions.map((s, i) => (
-            <Pressable
-              key={`${s.latitude}-${s.longitude}-${i}`}
-              onPress={() => pickSuggestion(s)}
-              style={({ pressed }) => [styles.suggestRow, pressed && styles.suggestRowPressed]}
-            >
-              <Ionicons name="location-outline" size={18} color={colors.primary} style={styles.suggestIcon} />
-              <Text style={styles.suggestText} numberOfLines={2}>
-                {s.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
+    <View style={styles.wrap}>
+      <LocationSearchField
+        label="Location"
+        placeholder="Neighborhood, venue, or area"
+        value={locationLabel}
+        onChangeText={(t) => onApply({ locationLabel: t, latitude: null, longitude: null })}
+        onSelectSuggestion={(s) =>
+          onApply({ locationLabel: s.label, latitude: s.latitude, longitude: s.longitude })
+        }
+      />
 
       <Pressable
-        onPress={() => void useCurrentLocation()}
+        onPress={() => void fillCurrentLocation()}
         disabled={locating}
         style={({ pressed }) => [
           styles.currentLocRow,
@@ -209,52 +216,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     zIndex: 1,
   },
-  wrapElevated: {
-    zIndex: 50,
-    elevation: Platform.OS === 'android' ? 8 : 0,
+  wrapSuggestionsOpen: {
+    zIndex: 1000,
+    elevation: Platform.OS === 'android' ? 16 : 0,
   },
-  fieldShell: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: '#D8DCE6',
-    borderRadius: radius.lg,
-    minHeight: ONBOARDING_FIELD_MIN_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    minHeight: ONBOARDING_FIELD_MIN_HEIGHT,
-    ...(Platform.OS === 'android' ? { paddingVertical: 12 } : null),
-  },
-  inlineLoader: { paddingRight: spacing.sm },
-  dropdown: {
-    marginTop: spacing.xs,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: '#D8DCE6',
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    maxHeight: 220,
-  },
-  suggestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  suggestRowPressed: { backgroundColor: 'rgba(108, 99, 255, 0.06)' },
-  suggestIcon: { marginRight: spacing.sm },
-  suggestText: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 20 },
   currentLocRow: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: '#D8DCE6',

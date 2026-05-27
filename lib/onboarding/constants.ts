@@ -4,6 +4,22 @@
 
 /** Number of onboarding steps (Basics → … → Preview). */
 export const ONBOARDING_TOTAL_STEPS = 5;
+
+export const ONBOARDING_STEP_LABELS = [
+  'Basics',
+  'Personality',
+  'Preferences',
+  'Safety',
+  'Preview',
+] as const;
+
+export const ONBOARDING_STEP_SUBTITLES = [
+  'A name, a birthday, and one photo — quick.',
+  'Short bio, tags, and a prompt or two.',
+  'Where you are and who you’d like to meet.',
+  'A few quick tips — stay in control.',
+  'See how your profile will look before you publish.',
+] as const;
 export const HINGE_PROMPTS = [
   { id: 'green_flag', text: 'My biggest green flag is…' },
   { id: 'perfect_day', text: 'A perfect day looks like…' },

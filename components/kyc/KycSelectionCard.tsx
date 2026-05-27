@@ -1,11 +1,12 @@
 /**
- * Large selectable card for KYC document type (Tinder-style tap target + Bumble structure).
+ * Large selectable card for KYC document type — inbox frosted card + gradient ring when selected.
  */
-import { kycColors, kycShadow } from '@/components/kyc/kycTheme';
-import { radius, spacing } from '@/constants/theme';
+import { kycColors } from '@/components/kyc/kycTheme';
+import { colors, radius, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export type KycIonName = ComponentProps<typeof Ionicons>['name'];
 
@@ -19,23 +20,26 @@ export type KycSelectionCardProps = {
 };
 
 export function KycSelectionCard({ icon, title, helper, selected, onPress, testID }: KycSelectionCardProps) {
-  return (
+  const inner = (
     <Pressable
       testID={testID}
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      style={({ pressed }) => [
-        styles.card,
-        selected && styles.cardSelected,
-        pressed && styles.cardPressed,
-      ]}
+      style={({ pressed }) => [styles.cardInner, pressed && styles.cardPressed]}
     >
-      <View style={[styles.iconWrap, selected && styles.iconWrapOn]}>
-        <Ionicons name={icon} size={28} color={selected ? kycColors.primary : kycColors.muted} />
-      </View>
+      <LinearGradient
+        colors={
+          selected
+            ? ['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']
+            : ['rgba(108,99,255,0.06)', 'rgba(255,101,132,0.03)']
+        }
+        style={styles.iconWrap}
+      >
+        <Ionicons name={icon} size={28} color={selected ? colors.primary : kycColors.muted} />
+      </LinearGradient>
       <View style={styles.textCol}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, selected && styles.titleOn]}>{title}</Text>
         <Text style={styles.helper}>{helper}</Text>
       </View>
       <View style={[styles.radio, selected && styles.radioOn]}>
@@ -43,45 +47,72 @@ export function KycSelectionCard({ icon, title, helper, selected, onPress, testI
       </View>
     </Pressable>
   );
+
+  if (selected) {
+    return (
+      <LinearGradient
+        colors={[colors.primary, colors.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.ring}
+      >
+        {inner}
+      </LinearGradient>
+    );
+  }
+
+  return <View style={styles.cardOuter}>{inner}</View>;
 }
 
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: '#2a1f55',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+  },
+  android: { elevation: 3 },
+});
+
 const styles = StyleSheet.create({
-  card: {
+  ring: {
+    borderRadius: radius.xl + 2,
+    padding: 2,
+    marginBottom: spacing.md,
+    ...cardShadow,
+  },
+  cardOuter: {
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: colors.surface,
+    ...cardShadow,
+  },
+  cardInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: kycColors.surface,
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 2,
-    borderColor: 'rgba(26, 29, 38, 0.08)',
     gap: spacing.md,
-    ...kycShadow,
   },
-  cardSelected: {
-    borderColor: kycColors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  cardPressed: { opacity: 0.92 },
+  cardPressed: { opacity: 0.94 },
   iconWrap: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    backgroundColor: '#F0F1F5',
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapOn: { backgroundColor: 'rgba(108, 99, 255, 0.14)' },
   textCol: { flex: 1, minWidth: 0 },
   title: { fontSize: 17, fontWeight: '800', color: kycColors.text, marginBottom: 4 },
-  helper: { fontSize: 14, color: kycColors.muted, lineHeight: 20 },
+  titleOn: { color: colors.primary },
+  helper: { fontSize: 14, color: kycColors.muted, lineHeight: 20, fontWeight: '600' },
   radio: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.button,
     borderWidth: 2,
     borderColor: '#D1D5DB',
     alignItems: 'center',

@@ -24,7 +24,11 @@ export async function sendExpoPushIfAllowed(
   body: string,
   data: Record<string, unknown>
 ): Promise<void> {
-  const { data: row, error } = await supabase.from('profiles').select('preferences').eq('user_id', userId).maybeSingle();
+  const { data: row, error } = await supabase
+    .from('profiles')
+    .select('preferences, expo_push_token')
+    .eq('user_id', userId)
+    .maybeSingle();
   if (error) {
     console.warn('[expo-push] profile load', userId, error.message);
     return;
@@ -36,7 +40,8 @@ export async function sendExpoPushIfAllowed(
   if (prefs.notifications?.push === false) {
     return;
   }
-  const token = prefs.expo_push_token;
+  const token =
+    (typeof row?.expo_push_token === 'string' ? row.expo_push_token : null) ?? prefs.expo_push_token;
   if (!token || !token.startsWith('ExponentPushToken')) {
     return;
   }

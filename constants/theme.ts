@@ -12,12 +12,19 @@ export const colors = {
   success: '#10B981',
   warning: '#F59E0B',
   danger: '#EF4444',
+  /** Tinder-style pass / dismiss control */
+  passAction: '#FF5A5F',
   /** Login / signup gradient (dating-app style) */
   authGradientTop: '#2D1B4E',
   authGradientMid: '#6C63FF',
   authGradientBottom: '#FF6584',
   authCard: '#FFFFFF',
   authInputBg: '#F8F9FC',
+  /** Discovery / dating-mode surfaces */
+  discoveryGradientTop: '#F5F6FA',
+  discoveryGradientMid: '#EDE8FF',
+  discoveryGradientBottom: '#FFF5F8',
+  overlayDark: 'rgba(26, 29, 38, 0.55)',
 } as const;
 
 export const spacing = {

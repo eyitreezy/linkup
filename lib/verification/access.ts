@@ -5,7 +5,20 @@ export function isUserVerified(verificationStatus: UserVerification | null | und
   return verificationStatus === 'verified';
 }
 
-/** Show hard gate for restricted flows when the user is not verified. */
-export function requiresVerificationGate(verificationStatus: UserVerification | null | undefined): boolean {
+export type VerificationGateOpts = {
+  isAdmin?: boolean;
+  /** Denormalized verified host flag — kept in sync with users.verification_status. */
+  verifiedBadge?: boolean | null;
+};
+
+/**
+ * When `opts` is passed, align with `public.user_may_create_plan` (admin, badge, verified).
+ */
+export function requiresVerificationGate(
+  verificationStatus: UserVerification | null | undefined,
+  opts?: VerificationGateOpts
+): boolean {
+  if (opts?.isAdmin) return false;
+  if (opts?.verifiedBadge) return false;
   return !isUserVerified(verificationStatus);
 }

@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     width: 88,
-    borderRadius: radius.lg,
+    borderRadius: radius.button,
     marginLeft: spacing.sm,
   },
   actionTxt: { color: '#fff', fontWeight: '700', fontSize: 12, marginTop: 4 },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: radius.button,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',

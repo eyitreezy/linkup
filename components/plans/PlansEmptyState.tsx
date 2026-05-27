@@ -17,15 +17,15 @@ export function PlansEmptyState({ onCreatePress }: Props) {
           {'\u{1F4C5}'}
         </Text>
       </View>
-      <Text style={styles.title}>No plans yet around you</Text>
-      <Text style={styles.sub}>Be the first to create something exciting</Text>
+      <Text style={styles.title}>No meetup ideas here yet</Text>
+      <Text style={styles.sub}>Be the first to suggest something fun nearby — people are waiting to connect IRL.</Text>
       <View style={styles.examples}>
-        <Text style={styles.exLabel}>Ideas</Text>
-        <Text style={styles.ex}>• Dinner in Lekki tonight</Text>
-        <Text style={styles.ex}>• Gym partner this weekend</Text>
-        <Text style={styles.ex}>• Coffee & walk near you</Text>
+        <Text style={styles.exLabel}>Warm openers</Text>
+        <Text style={styles.ex}>• Dinner in Lekki tonight 🍽️</Text>
+        <Text style={styles.ex}>• Gym buddy this weekend 💪</Text>
+        <Text style={styles.ex}>• Coffee & a walk near you ☕</Text>
       </View>
-      <Button title="Create plan" onPress={onCreatePress} pill style={styles.cta} />
+      <Button title="Suggest a meetup" onPress={onCreatePress} pill style={styles.cta} />
     </View>
   );
 }

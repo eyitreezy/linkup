@@ -1,7 +1,8 @@
 /**
  * M2 — Chat thread: bubbles, media, realtime, trust caps, optimistic send.
  */
-import { ChatBubble, ChatBubbleStatus } from '@/components/messages/ChatBubble';
+import { ChatAppearanceSheet } from '@/components/messages/ChatAppearanceSheet';
+import { ChatBubble, ChatBubbleStatus, type ChatBubbleMeta } from '@/components/messages/ChatBubble';
 import type { ChatBubbleMedia } from '@/components/messages/ChatBubble';
 import {
   MessageActionsSheet,
@@ -10,12 +11,15 @@ import {
 import { MessageInput } from '@/components/messages/MessageInput';
 import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
-import { colors, spacing } from '@/constants/theme';
+import { colors, radius, spacing } from '@/constants/theme';
+import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
+import { LinearGradient } from 'expo-linear-gradient';
 import { usePresenceActions } from '@/contexts/PresenceContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
+import { fetchUserPresence, subscribeUserPresenceRealtime } from '@/lib/presence/subscribeUserPresenceRealtime';
 import { TYPING_STALE_MS } from '@/lib/presence/presenceConstants';
-import { typingVisibleToViewer } from '@/lib/presence/visibilityPrefs';
+import { getVisibilityPrefs, typingVisibleToViewer } from '@/lib/presence/visibilityPrefs';
 import { moderateMessageText } from '@/lib/ai';
 import {
   CHAT_MESSAGE_COLUMNS,
@@ -27,8 +31,27 @@ import {
   type ChatMessageRow,
   type ChatMediaRow,
 } from '@/lib/messaging/chatQueries';
+import { fetchActiveMeetupWithPeer, type LinkedMeetup } from '@/lib/messaging/fetchActiveMeetupWithPeer';
+import {
+  detectOffPlatformContact,
+  pairContactShareUnlocked,
+} from '@/lib/messaging/contactSharePolicy';
+import {
+  DEFAULT_CHAT_APPEARANCE,
+  fontSizeFromScale,
+  fontWeightFromEmphasis,
+  loadChatAppearance,
+  presetForState,
+  resolveBubbleTheme,
+  saveChatAppearance,
+  type ChatAppearanceState,
+} from '@/lib/messaging/chatAppearance';
 import { setConversationLastRead } from '@/lib/messaging/inboxCache';
-import { logModerationResult } from '@/lib/messaging/moderationLog';
+import { subscribeThreadMessagesRealtime } from '@/lib/messaging/subscribeThreadMessagesRealtime';
+import { ChatSafetyEntrySheet } from '@/components/trust/ChatSafetyEntrySheet';
+import { ContactShareBlockedModal } from '@/components/trust/ContactShareBlockedModal';
+import { ReportSheet } from '@/components/trust/ReportSheet';
+import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
 import {
   isMessagingFullyVerified,
   startOfUtcDayIso,
@@ -41,22 +64,26 @@ import * as Clipboard from 'expo-clipboard';
 import { File as ExpoFile } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, router } from 'expo-router';
+import * as Location from 'expo-location';
+import { useLocalSearchParams, router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Animated from 'react-native-reanimated';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { DbUserPresence, ProfilePreferences } from '@/types/database';
 
 const MAX_VIDEO_BYTES = 14 * 1024 * 1024;
@@ -70,12 +97,22 @@ function withinMsSince(iso: string, ms: number): boolean {
   return Date.now() - new Date(iso).getTime() <= ms;
 }
 
+function shortTimeLabel(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
 type UiMessage = ChatMessageRow & { tempKey?: string; sendFailed?: boolean };
 
 type EditModalState = { messageId: string; draft: string } | null;
 
 export default function ChatThreadScreen() {
   const { id: conversationId } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
+  const { composerLiftStyle, chatListFooterStyle, typingBackdropStyle } = useKeyboardAnimation();
   const { user, dbUser, profile } = useAuth();
   const { signalTyping, clearTyping } = usePresenceActions();
   const [peer, setPeer] = useState<{
@@ -88,6 +125,7 @@ export default function ChatThreadScreen() {
   const [peerPresence, setPeerPresence] = useState<DbUserPresence | null>(null);
   const [peerTyping, setPeerTyping] = useState(false);
   const peerPresenceRef = useRef<DbUserPresence | null>(null);
+  const [linkedMeetup, setLinkedMeetup] = useState<LinkedMeetup | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [mediaById, setMediaById] = useState<Record<string, ChatMediaRow>>({});
   const [signedByPath, setSignedByPath] = useState<Record<string, string>>({});
@@ -98,15 +136,68 @@ export default function ChatThreadScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [editModal, setEditModal] = useState<EditModalState>(null);
   const [messageActionItems, setMessageActionItems] = useState<MessageActionItem[] | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [safetySheetOpen, setSafetySheetOpen] = useState(false);
+  const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
+  const contactBlockFromSendRef = useRef(false);
   const listRef = useRef<FlatList<UiMessage>>(null);
   const verifiedUser = isMessagingFullyVerified(dbUser?.verification_status);
+
+  const [appearance, setAppearance] = useState<ChatAppearanceState>(DEFAULT_CHAT_APPEARANCE);
+  const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
+
+  useEffect(() => {
+    void loadChatAppearance().then(setAppearance);
+  }, []);
+
+  const chatPreset = useMemo(() => presetForState(appearance), [appearance]);
+  const bubbleTheme = useMemo(() => resolveBubbleTheme(chatPreset, appearance), [chatPreset, appearance]);
+  const messageInputLook = useMemo(
+    () => ({
+      sendActive: chatPreset.sendActive,
+      inputBg: chatPreset.composerInputBg,
+      inputText: chatPreset.composerInputText,
+      inputBorder: chatPreset.composerInputBorder,
+      inputPlaceholder: chatPreset.composerInputPlaceholder,
+      attachIcon: chatPreset.composerAttachIcon,
+      fontSize: fontSizeFromScale(appearance.fontScale),
+      fontWeight: fontWeightFromEmphasis(appearance.fontEmphasis),
+    }),
+    [chatPreset, appearance.fontScale, appearance.fontEmphasis]
+  );
 
   const headerPresence = useMemo(
     () => derivePresenceUi(profile, peer?.preferences, peerPresence),
     [profile, peer?.preferences, peerPresence]
   );
 
+  const canOpenPlanDispute = useMemo(
+    () =>
+      !!linkedMeetup &&
+      ['agreed', 'awaiting_payment', 'active', 'completed'].includes(linkedMeetup.status),
+    [linkedMeetup]
+  );
+
   const showTypingIndicator = peerTyping && typingVisibleToViewer(profile, peer?.preferences);
+
+  const readReceiptsOn = getVisibilityPrefs(profile).read_receipts;
+
+  /** Approximate “read” when the peer has any later message (common 1:1 heuristic; no server read cursor). */
+  const approxReadByMessageId = useMemo(() => {
+    if (!user?.id) return new Map<string, boolean>();
+    let latestPeerMs = 0;
+    for (const m of messages) {
+      if (m.tempKey || m.sender_id === user.id) continue;
+      latestPeerMs = Math.max(latestPeerMs, new Date(m.created_at).getTime());
+    }
+    const map = new Map<string, boolean>();
+    for (const m of messages) {
+      if (m.tempKey || m.sender_id !== user.id) continue;
+      const t = new Date(m.created_at).getTime();
+      map.set(m.id, latestPeerMs > t);
+    }
+    return map;
+  }, [messages, user?.id]);
 
   useEffect(() => {
     peerPresenceRef.current = peerPresence;
@@ -149,6 +240,9 @@ export default function ChatThreadScreen() {
       });
     }
   }, []);
+
+  const hydrateSignedRef = useRef(hydrateSigned);
+  hydrateSignedRef.current = hydrateSigned;
 
   const loadInitial = useCallback(async () => {
     if (!conversationId || !isSupabaseConfigured) return;
@@ -227,150 +321,118 @@ export default function ChatThreadScreen() {
   }, [conversationId, user]);
 
   useEffect(() => {
+    if (!user?.id || !peer?.id || !isSupabaseConfigured) {
+      setLinkedMeetup(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchActiveMeetupWithPeer(user.id, peer.id).then((m) => {
+      if (!cancelled) setLinkedMeetup(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, peer?.id]);
+
+  useEffect(() => {
     if (!peer?.id || !isSupabaseConfigured) {
       setPeerPresence(null);
       return;
     }
+
     let cancelled = false;
-    void (async () => {
-      const { data } = await supabase.from('user_presence').select('*').eq('user_id', peer.id).maybeSingle();
-      if (!cancelled && data) setPeerPresence(data as DbUserPresence);
-    })();
-    const ch = supabase
-      .channel(`presence:${peer.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'user_presence',
-          filter: `user_id=eq.${peer.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'DELETE') return;
-          const row = payload.new as DbUserPresence;
-          setPeerPresence(row);
-        }
-      )
-      .subscribe();
+    void fetchUserPresence(peer.id).then((row) => {
+      if (!cancelled) setPeerPresence(row);
+    });
+
+    const unsubscribe = subscribeUserPresenceRealtime(peer.id, (row) => {
+      if (!cancelled) setPeerPresence(row);
+    });
+
     return () => {
       cancelled = true;
-      void supabase.removeChannel(ch);
+      unsubscribe();
     };
   }, [peer?.id]);
 
   useEffect(() => {
     if (!conversationId || !isSupabaseConfigured) return;
-    const channel = supabase
-      .channel(`thread-${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        async (payload) => {
-          const row = payload.new as ChatMessageRow;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === row.id)) return prev;
-            return [...prev, row];
-          });
-          let r: ChatMediaRow | null = null;
-          if (row.media_id) {
-            const { data: byFk } = await supabase
-              .from('media')
-              .select('parent_id, mime_type, storage_bucket, storage_path')
-              .eq('id', row.media_id)
-              .maybeSingle();
-            if (byFk) {
-              r = {
-                parent_id: row.id,
-                mime_type: byFk.mime_type as string | null,
-                storage_bucket: byFk.storage_bucket as string,
-                storage_path: byFk.storage_path as string,
-              };
-            }
-          }
-          if (!r) {
-            const { data: med } = await supabase
-              .from('media')
-              .select('parent_id, mime_type, storage_bucket, storage_path')
-              .eq('parent_table', 'messages')
-              .eq('parent_id', row.id)
-              .maybeSingle();
-            if (med?.parent_id) r = med as ChatMediaRow;
-          }
-          if (r) {
-            setMediaById((p) => ({ ...p, [row.id]: r }));
-            await hydrateSigned({ [row.id]: r });
-          }
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        async (payload) => {
-          const row = payload.new as ChatMessageRow;
-          setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
-          if (row.deleted_at || !row.media_id) {
-            setMediaById((p) => {
-              if (!p[row.id]) return p;
-              const next = { ...p };
-              delete next[row.id];
-              return next;
-            });
-          }
-          if (!row.media_id) return;
+
+    return subscribeThreadMessagesRealtime(conversationId, {
+      onInsert: async (row) => {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === row.id)) return prev;
+          return [...prev, row];
+        });
+        let r: ChatMediaRow | null = null;
+        if (row.media_id) {
           const { data: byFk } = await supabase
             .from('media')
             .select('parent_id, mime_type, storage_bucket, storage_path')
             .eq('id', row.media_id)
             .maybeSingle();
           if (byFk) {
-            const r: ChatMediaRow = {
+            r = {
               parent_id: row.id,
               mime_type: byFk.mime_type as string | null,
               storage_bucket: byFk.storage_bucket as string,
               storage_path: byFk.storage_path as string,
             };
-            setMediaById((p) => ({ ...p, [row.id]: r }));
-            await hydrateSigned({ [row.id]: r });
           }
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const id = (payload.old as { id?: string })?.id;
-          if (!id) return;
-          setMessages((prev) => prev.filter((m) => m.id !== id));
+        if (!r) {
+          const { data: med } = await supabase
+            .from('media')
+            .select('parent_id, mime_type, storage_bucket, storage_path')
+            .eq('parent_table', 'messages')
+            .eq('parent_id', row.id)
+            .maybeSingle();
+          if (med?.parent_id) r = med as ChatMediaRow;
+        }
+        if (r) {
+          setMediaById((p) => ({ ...p, [row.id]: r }));
+          await hydrateSignedRef.current({ [row.id]: r });
+        }
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      },
+      onUpdate: async (row) => {
+        setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+        if (row.deleted_at || !row.media_id) {
           setMediaById((p) => {
-            if (!p[id]) return p;
+            if (!p[row.id]) return p;
             const next = { ...p };
-            delete next[id];
+            delete next[row.id];
             return next;
           });
         }
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [conversationId, hydrateSigned]);
+        if (!row.media_id) return;
+        const { data: byFk } = await supabase
+          .from('media')
+          .select('parent_id, mime_type, storage_bucket, storage_path')
+          .eq('id', row.media_id)
+          .maybeSingle();
+        if (byFk) {
+          const r: ChatMediaRow = {
+            parent_id: row.id,
+            mime_type: byFk.mime_type as string | null,
+            storage_bucket: byFk.storage_bucket as string,
+            storage_path: byFk.storage_path as string,
+          };
+          setMediaById((p) => ({ ...p, [row.id]: r }));
+          await hydrateSignedRef.current({ [row.id]: r });
+        }
+      },
+      onDelete: (id) => {
+        setMessages((prev) => prev.filter((m) => m.id !== id));
+        setMediaById((p) => {
+          if (!p[id]) return p;
+          const next = { ...p };
+          delete next[id];
+          return next;
+        });
+      },
+    });
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -390,8 +452,56 @@ export default function ChatThreadScreen() {
     return count ?? 0;
   }, [user]);
 
+  const dismissContactBlockedModal = useCallback(async () => {
+    setContactBlockedOpen(false);
+    if (!contactBlockFromSendRef.current) return;
+    contactBlockFromSendRef.current = false;
+    const { data, error } = await supabase.rpc('record_contact_share_strike');
+    if (error) return;
+    const row = data as { strike_count?: number; status?: string } | null;
+    const n = row?.strike_count ?? 0;
+    const st = row?.status;
+    if (st === 'banned') {
+      Alert.alert('Account update', 'Your account access has been restricted.');
+      return;
+    }
+    if (st === 'suspended') {
+      Alert.alert('Suspension', 'Your account is temporarily suspended after repeated attempts.');
+      return;
+    }
+    if (n <= 1) {
+      Alert.alert(
+        'Heads up',
+        'This attempt was logged. Keep phone numbers and social handles on LinkUp until your plan is fully complete on both sides.'
+      );
+    } else if (n === 2) {
+      Alert.alert('Final warning', 'Another attempt may result in a temporary suspension.');
+    }
+  }, []);
+
+  const assertOutgoingContactAllowed = useCallback(
+    async (snippet: string) => {
+      if (!peer?.id) return true;
+      const unlocked = await pairContactShareUnlocked(supabase, peer.id);
+      if (unlocked) return true;
+      if (!detectOffPlatformContact(snippet)) return true;
+      contactBlockFromSendRef.current = true;
+      setContactBlockedOpen(true);
+      return false;
+    },
+    [peer?.id]
+  );
+
   const sendText = useCallback(async () => {
     if (!user || !conversationId || !text.trim() || sending) return;
+
+    if (dbUser?.account_status === 'suspended' || dbUser?.account_status === 'banned') {
+      Alert.alert(
+        'Messaging paused',
+        'Your account can’t send messages right now. Check your inbox for a notice.'
+      );
+      return;
+    }
 
     if (!verifiedUser) {
       const n = await countTodaySends();
@@ -405,18 +515,11 @@ export default function ChatThreadScreen() {
     }
 
     const body = text.trim();
+    const contactOk = await assertOutgoingContactAllowed(body);
+    if (!contactOk) return;
+
     clearTyping();
     const mod = await moderateMessageText(body);
-    logModerationResult(
-      {
-        conversationId,
-        senderId: user.id,
-        textSnippet: body,
-        status: mod.status,
-        reason: mod.reason,
-      },
-      supabase
-    );
 
     if (mod.status === 'blocked') {
       Alert.alert('Message blocked', mod.reason ?? 'Policy violation');
@@ -461,6 +564,12 @@ export default function ChatThreadScreen() {
       return;
     }
 
+    void persistModerationAfterSend({
+      contentType: 'message',
+      contentId: (data as ChatMessageRow).id,
+      textSample: body,
+    });
+
     setMessages((p) => {
       const without = p.filter((m) => m.tempKey !== tempKey);
       const row = data as ChatMessageRow;
@@ -468,7 +577,17 @@ export default function ChatThreadScreen() {
       return [...without, row];
     });
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
-  }, [user, conversationId, text, sending, verifiedUser, countTodaySends, clearTyping]);
+  }, [
+    user,
+    conversationId,
+    text,
+    sending,
+    verifiedUser,
+    countTodaySends,
+    clearTyping,
+    dbUser?.account_status,
+    assertOutgoingContactAllowed,
+  ]);
 
   const retryOptimistic = useCallback(
     async (tempKey: string) => {
@@ -476,17 +595,12 @@ export default function ChatThreadScreen() {
       if (!msg || !user || !conversationId) return;
       setMessages((p) => p.map((m) => (m.tempKey === tempKey ? { ...m, sendFailed: false } : m)));
       const snippet = messageDisplayText(msg) ?? '';
+      const contactOk = await assertOutgoingContactAllowed(snippet);
+      if (!contactOk) {
+        setMessages((p) => p.filter((m) => m.tempKey !== tempKey));
+        return;
+      }
       const mod = await moderateMessageText(snippet);
-      logModerationResult(
-        {
-          conversationId,
-          senderId: user.id,
-          textSnippet: snippet,
-          status: mod.status,
-          reason: mod.reason,
-        },
-        supabase
-      );
       if (mod.status === 'blocked') {
         Alert.alert('Message blocked', mod.reason ?? 'Policy violation');
         setMessages((p) => p.filter((m) => m.tempKey !== tempKey));
@@ -507,6 +621,11 @@ export default function ChatThreadScreen() {
         Alert.alert('Could not send', error.message);
         return;
       }
+      void persistModerationAfterSend({
+        contentType: 'message',
+        contentId: (data as ChatMessageRow).id,
+        textSample: snippet,
+      });
       setMessages((p) => {
         const without = p.filter((m) => m.tempKey !== tempKey);
         const row = data as ChatMessageRow;
@@ -514,7 +633,7 @@ export default function ChatThreadScreen() {
         return [...without, row];
       });
     },
-    [messages, user, conversationId]
+    [messages, user, conversationId, assertOutgoingContactAllowed]
   );
 
   const softDeleteForEveryone = useCallback(async (messageId: string) => {
@@ -552,17 +671,9 @@ export default function ChatThreadScreen() {
       Alert.alert('Empty message', 'Add some text or cancel.');
       return;
     }
+    const contactOk = await assertOutgoingContactAllowed(body);
+    if (!contactOk) return;
     const mod = await moderateMessageText(body);
-    logModerationResult(
-      {
-        conversationId,
-        senderId: user.id,
-        textSnippet: body,
-        status: mod.status,
-        reason: mod.reason,
-      },
-      supabase
-    );
     if (mod.status === 'blocked') {
       Alert.alert('Message blocked', mod.reason ?? 'Policy violation');
       return;
@@ -586,10 +697,15 @@ export default function ChatThreadScreen() {
     }
     setEditModal(null);
     if (data) {
+      void persistModerationAfterSend({
+        contentType: 'message',
+        contentId: editModal.messageId,
+        textSample: body,
+      });
       const row = data as ChatMessageRow;
       setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
     }
-  }, [editModal, user, conversationId]);
+  }, [editModal, user, conversationId, assertOutgoingContactAllowed]);
 
   const showMessageActions = useCallback(
     (m: UiMessage) => {
@@ -634,6 +750,14 @@ export default function ChatThreadScreen() {
 
   const pickAndSendMedia = useCallback(async () => {
     if (!user || !conversationId) return;
+
+    if (dbUser?.account_status === 'suspended' || dbUser?.account_status === 'banned') {
+      Alert.alert(
+        'Messaging paused',
+        'Your account can’t send messages right now. Check your inbox for a notice.'
+      );
+      return;
+    }
 
     if (!verifiedUser) {
       Alert.alert('Verification required', 'Verify your profile to send photos and videos.');
@@ -680,6 +804,10 @@ export default function ChatThreadScreen() {
       }
 
       const caption = text.trim() || null;
+      if (caption) {
+        const ok = await assertOutgoingContactAllowed(caption);
+        if (!ok) return;
+      }
       const { data: inserted, error: insErr } = await supabase
         .from('messages')
         .insert({
@@ -758,13 +886,60 @@ export default function ChatThreadScreen() {
       }
 
       setMessages((p) => (p.some((x) => x.id === msgId) ? p : [...p, finalized]));
+      void persistModerationAfterSend({
+        contentType: 'message',
+        contentId: msgId,
+        textSample: caption ?? '',
+      });
       clearTyping();
       setText('');
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     } finally {
       setSending(false);
     }
-  }, [user, conversationId, text, verifiedUser, clearTyping]);
+  }, [user, conversationId, text, verifiedUser, clearTyping, dbUser?.account_status, assertOutgoingContactAllowed]);
+
+  const onQuickSendOffer = useCallback(() => {
+    if (linkedMeetup) {
+      router.push(`/plan/${linkedMeetup.id}` as Href);
+      return;
+    }
+    Alert.alert(
+      'Send an offer',
+      'Open a hangout from Discover to connect, or continue one you’ve already started.',
+      [
+        { text: 'Discover', onPress: () => router.push('/' as Href) },
+        { text: 'Not now', style: 'cancel' },
+      ]
+    );
+  }, [linkedMeetup]);
+
+  const suggestMeetingArea = useCallback(async () => {
+    try {
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (!fg.granted) {
+        Alert.alert('Location off', 'Allow location to add a friendly “I’m around…” line to your message.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+      const label = [place?.city, place?.subregion].filter(Boolean).join(', ');
+      const line = label
+        ? `I'm usually around ${label} — happy to meet somewhere public nearby.`
+        : `I'm nearby — let's pick a public spot that works for both of us.`;
+      setText((t) => (t.trim() ? `${t.trim()}\n` : '') + line);
+    } catch {
+      Alert.alert('Location', 'Could not read your area right now.');
+    }
+  }, []);
+
+  const chatListFooter = useCallback(
+    () => <Animated.View style={chatListFooterStyle} />,
+    [chatListFooterStyle]
+  );
 
   const bubblePropsFor = useCallback(
     (m: UiMessage): { body: string | null; media: ChatBubbleMedia | null; legacy: string | null } => {
@@ -787,42 +962,128 @@ export default function ChatThreadScreen() {
   }
 
   const thread = (
-    <SafeAreaView style={styles.flex} edges={['top', 'left', 'right', 'bottom']}>
-      <View style={[styles.header, { paddingTop: spacing.sm }]}>
-          <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
-            <Ionicons name="chevron-back" size={26} color={colors.text} />
-          </Pressable>
-          <View style={styles.headerMid}>
-            <AvatarWithPresence
-              uri={peer?.avatarUrl}
-              name={peer?.name}
-              size={36}
-              presence={headerPresence}
-              showDot
-            />
-            <View style={styles.headerNameCol}>
-              <Text style={styles.headerName} numberOfLines={1}>
-                {peer?.name ?? '…'}
-              </Text>
-              {headerPresence.caption ? (
-                <Text style={styles.headerPresenceCap} numberOfLines={1}>
-                  {headerPresence.caption}
-                </Text>
-              ) : null}
-            </View>
-            {peer?.verified ? (
-              <Ionicons name="checkmark-circle" size={18} color={colors.primary} style={{ marginLeft: 4 }} />
-            ) : null}
-          </View>
-          <View style={{ width: 32 }} />
+    <SafeAreaView style={styles.flex} edges={['top', 'left', 'right']}>
+        <View style={styles.threadBg} pointerEvents="none">
+          <LinearGradient
+            colors={chatPreset.threadGradient}
+            locations={chatPreset.locations ?? [0, 0.3, 0.55, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {appearance.backgroundImageUri ? (
+            <ImageBackground
+              source={{ uri: appearance.backgroundImageUri }}
+              style={StyleSheet.absoluteFill}
+              imageStyle={styles.wallpaperImage}
+            >
+              <View style={styles.wallpaperDim} />
+            </ImageBackground>
+          ) : null}
         </View>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.threadBg, styles.typingBackdrop, typingBackdropStyle]}
+        />
+        <LinearGradient
+          colors={['rgba(255,255,255,0.98)', 'rgba(243,238,255,0.94)', 'rgba(255,248,252,0.92)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.headerGradient, { borderBottomColor: chatPreset.headerHairline }]}
+        >
+          <View style={[styles.header, { paddingTop: spacing.sm }]}>
+            <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
+              <Ionicons name="chevron-back" size={26} color={colors.text} />
+            </Pressable>
+            <Pressable
+              style={styles.headerMid}
+              onPress={() => peer?.id && router.push(`/user/${peer.id}` as Href)}
+              disabled={!peer?.id}
+              accessibilityRole="button"
+              accessibilityLabel="View profile"
+            >
+              <AvatarWithPresence
+                uri={peer?.avatarUrl}
+                name={peer?.name}
+                size={44}
+                presence={headerPresence}
+                showDot
+              />
+              <View style={styles.headerNameCol}>
+                <View style={styles.headerTitleRow}>
+                  <Text style={styles.headerName} numberOfLines={1}>
+                    {peer?.name ?? '…'}
+                  </Text>
+                  {peer?.verified ? (
+                    <Ionicons name="checkmark-circle" size={17} color={colors.primary} style={{ marginLeft: 4 }} />
+                  ) : null}
+                </View>
+                {linkedMeetup ? (
+                  <Pressable
+                    onPress={() => router.push(`/plan/${linkedMeetup.id}` as Href)}
+                    style={styles.headerMeetupPillOuter}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open meetup: ${linkedMeetup.title}`}
+                  >
+                    <LinearGradient
+                      colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.16)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.headerMeetupPill}
+                    >
+                      <Ionicons name="sparkles" size={14} color={colors.primary} />
+                      <Text style={styles.headerMeetupPillTxt} numberOfLines={1}>
+                        {linkedMeetup.title}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.secondary} />
+                    </LinearGradient>
+                  </Pressable>
+                ) : headerPresence.caption ? (
+                  <Text style={styles.headerPresenceCap} numberOfLines={1}>
+                    {headerPresence.caption}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+            {peer?.id && user?.id !== peer.id ? (
+              <View style={styles.headerRight}>
+                <Pressable
+                  onPress={() => setAppearanceSheetOpen(true)}
+                  style={styles.reportBtn}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Chat appearance"
+                >
+                  <Ionicons name="color-palette-outline" size={22} color={colors.textMuted} />
+                </Pressable>
+                <Pressable
+                  onPress={() => setSafetySheetOpen(true)}
+                  style={styles.reportBtn}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Safety and report"
+                >
+                  <Ionicons name="ellipsis-horizontal" size={22} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ width: 32 }} />
+            )}
+          </View>
+        </LinearGradient>
 
         {!verifiedUser ? (
-          <View style={styles.trustBanner}>
+          <LinearGradient
+            colors={['rgba(255, 193, 7, 0.2)', 'rgba(108, 99, 255, 0.12)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.trustBanner}
+          >
+            <Ionicons name="information-circle-outline" size={18} color="#B45309" style={{ marginRight: 8 }} />
             <Text style={styles.trustText}>
               Unverified · {UNVERIFIED_DAILY_MESSAGE_CAP} messages/day · no media until verified
             </Text>
-          </View>
+          </LinearGradient>
         ) : null}
 
         {loading ? (
@@ -832,10 +1093,12 @@ export default function ChatThreadScreen() {
         ) : (
           <FlatList
             ref={listRef}
+            style={styles.listFlex}
             data={messages}
             keyExtractor={(m) => m.tempKey ?? m.id}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
+            ListFooterComponent={chatListFooter}
             contentContainerStyle={styles.list}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
             onStartReachedThreshold={0.25}
@@ -851,6 +1114,18 @@ export default function ChatThreadScreen() {
               const mine = item.sender_id === user?.id;
               const { body, media, legacy } = bubblePropsFor(item);
               const onLongPress = item.tempKey ? undefined : () => showMessageActions(item);
+              const meta: ChatBubbleMeta | null =
+                !item.deleted_at && (body || media || legacy)
+                  ? {
+                      timeLabel: shortTimeLabel(item.created_at),
+                      showSent: mine && !item.tempKey,
+                      showRead:
+                        mine &&
+                        !item.tempKey &&
+                        readReceiptsOn &&
+                        (approxReadByMessageId.get(item.id) ?? false),
+                    }
+                  : null;
               return (
                 <View>
                   <ChatBubble
@@ -861,6 +1136,8 @@ export default function ChatThreadScreen() {
                     isDeleted={!!item.deleted_at}
                     showEdited={!!item.edited_at && !item.deleted_at}
                     onLongPress={onLongPress}
+                    meta={meta}
+                    theme={bubbleTheme}
                   />
                   {item.tempKey && item.sendFailed ? (
                     <ChatBubbleStatus failed onRetry={() => void retryOptimistic(item.tempKey!)} />
@@ -873,17 +1150,72 @@ export default function ChatThreadScreen() {
 
         <ChatTypingIndicator visible={showTypingIndicator} peerName={peer?.name ?? undefined} />
 
-        <MessageInput
-          value={text}
-          onChangeText={(t) => {
-            setText(t);
-            if (conversationId && t.trim().length > 0) signalTyping(conversationId);
-          }}
-          onSend={() => void sendText()}
-          onAttach={() => void pickAndSendMedia()}
-          sending={sending}
-          attachDisabled={!verifiedUser}
-        />
+        <Animated.View
+          style={[
+            styles.composerSheet,
+            {
+              paddingBottom: insets.bottom,
+              backgroundColor: chatPreset.composerBg,
+              borderTopColor: chatPreset.composerBorder,
+            },
+            composerLiftStyle,
+          ]}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.toolbarRow}
+          >
+            <Pressable
+              style={styles.toolItem}
+              onPress={() => router.push('/plan/create' as Href)}
+              accessibilityRole="button"
+              accessibilityLabel="Suggest a plan"
+            >
+              <View style={styles.toolIconWrap}>
+                <Ionicons name="calendar-outline" size={20} color={chatPreset.composerAttachIcon} />
+              </View>
+              <Text style={styles.toolLabel}>Plan</Text>
+            </Pressable>
+            <Pressable
+              style={styles.toolItem}
+              onPress={onQuickSendOffer}
+              accessibilityRole="button"
+              accessibilityLabel="Send or open offer"
+            >
+              <View style={[styles.toolIconWrap, styles.toolIconWrapAccent]}>
+                <Ionicons name="flash-outline" size={20} color={chatPreset.composerAttachIcon} />
+              </View>
+              <Text style={styles.toolLabel}>Offer</Text>
+            </Pressable>
+            <Pressable
+              style={styles.toolItem}
+              onPress={() => void suggestMeetingArea()}
+              accessibilityRole="button"
+              accessibilityLabel="Share your area"
+            >
+              <View style={styles.toolIconWrap}>
+                <Ionicons name="location-outline" size={20} color={chatPreset.composerAttachIcon} />
+              </View>
+              <Text style={styles.toolLabel}>Place</Text>
+            </Pressable>
+          </ScrollView>
+          <MessageInput
+            embeddedInSheet
+            threadLook={messageInputLook}
+            value={text}
+            onChangeText={(t) => {
+              setText(t);
+              if (conversationId && t.trim().length > 0) signalTyping(conversationId);
+            }}
+            onSend={() => void sendText()}
+            onAttach={() => void pickAndSendMedia()}
+            sending={sending}
+            attachDisabled={!verifiedUser}
+            placeholder="Message…"
+          />
+        </Animated.View>
 
         <Modal
           visible={!!editModal}
@@ -926,36 +1258,74 @@ export default function ChatThreadScreen() {
           </KeyboardAvoidingView>
         </Modal>
 
+        <ChatAppearanceSheet
+          visible={appearanceSheetOpen}
+          onClose={() => setAppearanceSheetOpen(false)}
+          value={appearance}
+          onSave={(next) => {
+            setAppearance(next);
+            void saveChatAppearance(next);
+          }}
+        />
+
         <MessageActionsSheet
           visible={messageActionItems !== null}
           onClose={() => setMessageActionItems(null)}
           title=""
           actions={messageActionItems ?? []}
         />
+
+        {user?.id && peer?.id ? (
+          <ChatSafetyEntrySheet
+            visible={safetySheetOpen}
+            onClose={() => setSafetySheetOpen(false)}
+            onReportUser={() => setReportOpen(true)}
+            onPlanDispute={() => {
+              if (linkedMeetup) router.push(`/dispute/${linkedMeetup.id}` as Href);
+            }}
+            canPlanDispute={canOpenPlanDispute}
+          />
+        ) : null}
+
+        <ContactShareBlockedModal visible={contactBlockedOpen} onDismiss={() => void dismissContactBlockedModal()} />
+
+        {user?.id && peer?.id ? (
+          <ReportSheet
+            visible={reportOpen}
+            onClose={() => setReportOpen(false)}
+            reporterId={user.id}
+            reportedUserId={peer.id}
+            contentType="user"
+            contentId={null}
+            title="Report member"
+          />
+        ) : null}
       </SafeAreaView>
   );
 
-  return Platform.OS === 'ios' ? (
-    <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={88}>
-      {thread}
-    </KeyboardAvoidingView>
-  ) : (
-    thread
-  );
+  return thread;
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1, backgroundColor: 'transparent' },
+  threadBg: { ...StyleSheet.absoluteFillObject },
+  wallpaperImage: { resizeMode: 'cover', opacity: 0.88 },
+  wallpaperDim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.16)' },
+  typingBackdrop: { backgroundColor: colors.text },
+  headerGradient: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(108, 99, 255, 0.1)',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
+    paddingBottom: 12,
+    backgroundColor: 'transparent',
   },
   back: { padding: 4, width: 36 },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  reportBtn: { padding: 4, width: 36, alignItems: 'center', justifyContent: 'center' },
   headerMid: {
     flex: 1,
     flexDirection: 'row',
@@ -964,18 +1334,82 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 4,
   },
-  headerNameCol: { flexShrink: 1, maxWidth: '56%', minWidth: 0 },
-  headerName: { fontSize: 17, fontWeight: '700', color: colors.text },
-  headerPresenceCap: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
-  trustBanner: {
-    paddingVertical: 8,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+  headerNameCol: { flexShrink: 1, maxWidth: '64%', minWidth: 0 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
+  headerName: { fontSize: 18, fontWeight: '800', color: colors.text, letterSpacing: -0.3 },
+  headerPresenceCap: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  headerMeetupPillOuter: { alignSelf: 'flex-start', marginTop: 6, borderRadius: radius.button, overflow: 'hidden' },
+  headerMeetupPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    maxWidth: '100%',
   },
-  trustText: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
-  list: { padding: spacing.md, paddingBottom: spacing.lg },
+  headerMeetupPillTxt: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(108, 99, 255, 0.1)',
+  },
+  trustText: { flex: 1, fontSize: 12, color: colors.text, fontWeight: '700', lineHeight: 17 },
+  composerSheet: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderTopWidth: 2,
+    paddingTop: 10,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: 6,
+    gap: spacing.md,
+  },
+  toolItem: { alignItems: 'center', minWidth: 56 },
+  toolIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+  },
+  toolIconWrapAccent: {
+    backgroundColor: 'rgba(255, 101, 132, 0.18)',
+    borderColor: 'rgba(255, 101, 132, 0.38)',
+  },
+  toolLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.primary,
+    letterSpacing: 0.2,
+  },
+  listFlex: { flex: 1 },
+  list: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    flexGrow: 1,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   editOverlay: { flex: 1 },
   editModalRoot: {

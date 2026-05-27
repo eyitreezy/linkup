@@ -1,7 +1,8 @@
 /**
- * Sent / Received filter — pill segmented control (Bumble-style).
+ * Sent / Received filter — pill segmented control with gradient active state.
  */
 import { colors, radius, spacing } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export type OffersSegment = 'sent' | 'received';
@@ -18,29 +19,37 @@ export function OffersSegmentedControl({ value, onChange, sentCount, receivedCou
     <View style={styles.wrap}>
       <Pressable
         onPress={() => onChange('sent')}
-        style={({ pressed }) => [
-          styles.segment,
-          value === 'sent' && styles.segmentActive,
-          pressed && styles.segmentPressed,
-        ]}
+        style={({ pressed }) => [styles.segment, pressed && styles.segmentPressed]}
         accessibilityRole="tab"
         accessibilityState={{ selected: value === 'sent' }}
       >
-        <Text style={[styles.label, value === 'sent' && styles.labelActive]} numberOfLines={1}>
+        {value === 'sent' ? (
+          <LinearGradient
+            colors={[colors.primary, '#8B7CFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.segmentFill}
+          />
+        ) : null}
+        <Text style={[styles.label, value === 'sent' && styles.labelOnGradient]} numberOfLines={1}>
           Sent{typeof sentCount === 'number' ? ` (${sentCount})` : ''}
         </Text>
       </Pressable>
       <Pressable
         onPress={() => onChange('received')}
-        style={({ pressed }) => [
-          styles.segment,
-          value === 'received' && styles.segmentActive,
-          pressed && styles.segmentPressed,
-        ]}
+        style={({ pressed }) => [styles.segment, pressed && styles.segmentPressed]}
         accessibilityRole="tab"
         accessibilityState={{ selected: value === 'received' }}
       >
-        <Text style={[styles.label, value === 'received' && styles.labelActive]} numberOfLines={1}>
+        {value === 'received' ? (
+          <LinearGradient
+            colors={[colors.secondary, '#FF9AAC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.segmentFill}
+          />
+        ) : null}
+        <Text style={[styles.label, value === 'received' && styles.labelOnGradient]} numberOfLines={1}>
           Received{typeof receivedCount === 'number' ? ` (${receivedCount})` : ''}
         </Text>
       </Pressable>
@@ -53,33 +62,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
     borderRadius: radius.button,
     padding: 4,
     gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
   },
   segment: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.button,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  segmentActive: {
-    backgroundColor: colors.surface,
-    shadowColor: '#1A1D26',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+  segmentFill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.button,
   },
   segmentPressed: { opacity: 0.92 },
   label: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.textMuted,
+    zIndex: 1,
   },
-  labelActive: {
-    color: colors.primary,
+  labelOnGradient: {
+    color: '#fff',
     fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.18)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });

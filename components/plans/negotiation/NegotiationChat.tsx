@@ -15,34 +15,79 @@ import {
   nextOfferRound,
   OFFER_TTL_MS,
 } from '@/lib/plans/offerRules';
+import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
+import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
+import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
+import { DropIdeaSheet } from '@/components/plans/negotiation/DropIdeaSheet';
+import { useDraggableSheet } from '@/hooks/useDraggableSheet';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { OfferBubble } from '@/components/plans/negotiation/OfferBubble';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   plan: DbPlan;
 };
 
+function appendNoteLine(current: string, line: string): string {
+  const t = current.trim();
+  const L = line.trim();
+  if (!L) return current;
+  if (t.includes(L)) return current;
+  return t ? `${t}\n${L}` : L;
+}
+
+function tonightAt(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function tomorrowAt(hour: number, minute: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+function nextSaturdayAt(hour: number, minute: number): Date {
+  const d = new Date();
+  const day = d.getDay();
+  let add = (6 - day + 7) % 7;
+  if (add === 0) {
+    const trial = new Date(d);
+    trial.setHours(hour, minute, 0, 0);
+    if (trial.getTime() <= Date.now()) add = 7;
+  }
+  d.setDate(d.getDate() + add);
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
 export function NegotiationChat({ plan }: Props) {
   const { user, dbUser } = useAuth();
   const insets = useSafeAreaInsets();
+  const { typingBackdropStyle } = useKeyboardAnimation();
   const listRef = useRef<FlatList>(null);
   const [offers, setOffers] = useState<DbPlanOffer[]>([]);
   const [amount, setAmount] = useState('');
@@ -52,10 +97,20 @@ export function NegotiationChat({ plan }: Props) {
   const [showTime, setShowTime] = useState(false);
   const [sending, setSending] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    variant: AppFeedbackVariant;
+    title: string;
+    message: string;
+  } | null>(null);
+
+  function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
+    setFeedback({ variant, title, message });
+  }
 
   const planId = plan.id;
   const isCreator = user?.id === plan.creator_id;
-  const canNegotiate = plan.status === 'negotiating';
+  const moodClosed = isPlanMoodWindowClosed(plan);
+  const canNegotiate = plan.status === 'negotiating' && !moodClosed;
 
   const load = useCallback(async () => {
     if (!planId || !isSupabaseConfigured) return;
@@ -106,7 +161,11 @@ export function NegotiationChat({ plan }: Props) {
     const lastBidder = [...sorted].reverse().find((o) => o.bidder_id !== plan.creator_id)?.bidder_id;
     const other = isCreator ? lastBidder ?? null : plan.creator_id;
     if (!other) {
-      Alert.alert('Messages', isCreator ? 'No bidder yet.' : 'Could not open chat.');
+      showFeedback(
+        'warning',
+        'Chat',
+        isCreator ? 'No one’s raised their hand yet — check back soon.' : 'Could not open chat.'
+      );
       return;
     }
     const conv = await getOrCreateConversation(supabase, user.id, other);
@@ -120,12 +179,20 @@ export function NegotiationChat({ plan }: Props) {
       return;
     }
     if (countOffersTowardLimit(offers) >= MAX_OFFERS_PER_PLAN) {
-      Alert.alert('Offer limit', `You can send up to ${MAX_OFFERS_PER_PLAN} active offer rounds on this plan.`);
+      showFeedback(
+        'warning',
+        'Let’s pause here',
+        `You’ve reached the friendly back-and-forth limit for this meetup (${MAX_OFFERS_PER_PLAN} rounds). Chat in messages to align, then try again if you open a new idea.`
+      );
       return;
     }
     const cents = amount.trim() ? Math.round(Number(amount) * 100) : null;
     if (cents != null && (Number.isNaN(cents) || cents < 0)) {
-      Alert.alert('Invalid amount', 'Enter a valid price or leave blank for open offers.');
+      showFeedback(
+        'warning',
+        'Hmm',
+        'Enter a valid amount or leave it blank — totally fine to figure out money later.'
+      );
       return;
     }
     setSending(true);
@@ -141,7 +208,7 @@ export function NegotiationChat({ plan }: Props) {
       proposed_scheduled_at: proposedAt ? proposedAt.toISOString() : null,
     });
     setSending(false);
-    if (error) Alert.alert('Error', error.message);
+    if (error) showFeedback('error', 'Error', error.message);
     else {
       setAmount('');
       setNote('');
@@ -153,7 +220,7 @@ export function NegotiationChat({ plan }: Props) {
   async function declineOffer(offer: DbPlanOffer) {
     if (!isCreator || !isSupabaseConfigured) return;
     const { error } = await supabase.from('plan_offers').update({ status: 'declined' }).eq('id', offer.id);
-    if (error) Alert.alert('Error', error.message);
+    if (error) showFeedback('error', 'Error', error.message);
     else void load();
   }
 
@@ -164,7 +231,7 @@ export function NegotiationChat({ plan }: Props) {
       return;
     }
     if (isOfferExpired(offer)) {
-      Alert.alert('Expired', 'This offer has expired.');
+      showFeedback('warning', 'Expired', 'This suggestion timed out — send a fresh one when you’re ready.');
       return;
     }
     const res = await acceptPlanOffer(supabase, {
@@ -173,45 +240,132 @@ export function NegotiationChat({ plan }: Props) {
       plan,
       currentUserId: user.id,
     });
-    if (res.error) Alert.alert('Error', res.error);
+    if (res.error) showFeedback('error', 'Error', res.error);
     else router.replace(`/plan/${planId}/agreement` as Href);
   }
 
   /** Offset for stacked chrome above this screen (plan title bar + safe area). */
   const kbOffset = insets.top + 52;
 
+  const [chatAreaHeight, setChatAreaHeight] = useState(0);
+  const [topBlockHeight, setTopBlockHeight] = useState(0);
+  const planTheMeetupGap = 18;
+
+  const expandedHeight = useMemo(() => {
+    if (chatAreaHeight <= 0 || topBlockHeight <= 0) return 400;
+    const raw = chatAreaHeight - topBlockHeight - planTheMeetupGap;
+    return Math.floor(Math.max(280, Math.min(raw, chatAreaHeight * 0.91)));
+  }, [chatAreaHeight, topBlockHeight]);
+
+  const collapsedHeight = useMemo(() => {
+    const ideal = 312;
+    const maxCollapsed = Math.max(230, expandedHeight - 96);
+    return Math.min(ideal, maxCollapsed);
+  }, [expandedHeight]);
+
+  const midHeight = useMemo(
+    () => Math.round(collapsedHeight + (expandedHeight - collapsedHeight) * 0.5),
+    [collapsedHeight, expandedHeight]
+  );
+
+  const sheet = useDraggableSheet({ expandedHeight, collapsedHeight, midHeight });
+
+  const listPaddingBottom = useMemo(
+    () =>
+      canNegotiate && user && !isCreator
+        ? collapsedHeight + Math.max(insets.bottom, spacing.md) + spacing.md
+        : spacing.xl * 1.25,
+    [canNegotiate, collapsedHeight, insets.bottom, isCreator, user]
+  );
+
   const composer =
     canNegotiate && user && !isCreator ? (
-      <KeyboardAvoidingView
-        behavior="padding"
+      <DropIdeaSheet
+        controller={sheet}
+        expandedHeight={expandedHeight}
         keyboardVerticalOffset={kbOffset}
-        style={styles.composerKb}
+        typingBackdropStyle={typingBackdropStyle}
       >
-        <ScrollView
+        <KeyboardAwareScrollView
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
           showsVerticalScrollIndicator={false}
-          bounces={false}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, spacing.md) }}
+          bounces
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingBottom: Math.max(insets.bottom, spacing.md),
+            paddingHorizontal: spacing.lg,
+          }}
         >
-          <View style={styles.composer}>
-            <Text style={styles.composerTitle}>Make an offer</Text>
-            <Text style={styles.composerSubtitle}>Optional price and time — add a note for context.</Text>
+            <Text style={styles.composerSubtitle}>
+              Time, vibe, where — the good stuff. Money’s optional; chemistry isn’t. Keep it light, you’ll polish it
+              together.
+            </Text>
+            <Text style={styles.chipsSectionLabel}>Quick sparks</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+              <Pressable
+                onPress={() => setProposedAt(tonightAt(19, 0))}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipTxt}>Tonight · 7pm</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setProposedAt(tomorrowAt(12, 0))}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipTxt}>Tomorrow · noon</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setProposedAt(nextSaturdayAt(11, 0))}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipTxt}>Sat · brunch</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setNote((n) => appendNoteLine(n, 'Somewhere public works for me.'))}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipTxt}>Public spot</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setNote((n) => appendNoteLine(n, 'Happy to try your favorite place nearby.'))}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipTxt}>Your pick</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setNote((n) => appendNoteLine(n, 'Keep it casual — open to ideas.'))}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipTxt}>Low-key</Text>
+              </Pressable>
+            </ScrollView>
             <Input
-              label="Price (optional)"
+              label="If it’s paid (optional)"
               variant="onboardingFlat"
               keyboardType="decimal-pad"
               value={amount}
               onChangeText={setAmount}
-              placeholder="Leave blank for open"
+              placeholder="Skip for now"
             />
-            <Text style={styles.fieldLabel}>Meet time</Text>
+            <Text style={styles.fieldLabel}>When</Text>
             <Pressable onPress={openMeetTimePicker} style={planCreateTouchableFieldStyle(styles.timeBtnRow)}>
-              <Text style={styles.timeBtnTxt}>
-                {proposedAt
-                  ? proposedAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-                  : 'Same as plan'}
-              </Text>
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              <View style={styles.timeRowLeft}>
+                <LinearGradient
+                  colors={['rgba(108, 99, 255, 0.18)', 'rgba(255, 101, 132, 0.14)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.timeIconBubble}
+                >
+                  <Ionicons name="calendar" size={18} color={colors.primary} />
+                </LinearGradient>
+                <Text style={styles.timeBtnTxt}>
+                  {proposedAt
+                    ? proposedAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                    : 'Same as the meetup idea'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
             {Platform.OS === 'ios' && showTime ? (
               <View style={styles.iosPickerWrap}>
@@ -227,56 +381,109 @@ export function NegotiationChat({ plan }: Props) {
               </View>
             ) : null}
             <Input
-              label="Note (optional)"
+              label="Add a note"
               variant="onboardingFlat"
               value={note}
               onChangeText={setNote}
-              placeholder="Add context"
+              placeholder="What sounds fun?"
             />
-            <Button title="Send offer" onPress={() => void sendOffer()} loading={sending} pill />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <Button
+              title="Send suggestion"
+              onPress={() => void sendOffer()}
+              loading={sending}
+              pill
+              fullWidth
+              style={styles.sendCta}
+            />
+        </KeyboardAwareScrollView>
+      </DropIdeaSheet>
     ) : null;
 
   return (
-    <View style={styles.flex}>
+    <View style={styles.flex} onLayout={(e) => setChatAreaHeight(e.nativeEvent.layout.height)}>
       <VerificationHardGateModal
         visible={gateOpen}
         onClose={() => setGateOpen(false)}
         verificationStatus={dbUser?.verification_status}
       />
-      <View style={styles.topBar}>
+      <AppFeedbackModal
+        visible={feedback != null}
+        onClose={() => setFeedback(null)}
+        variant={feedback?.variant ?? 'error'}
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+      />
+      <View style={styles.topBar} onLayout={(e) => setTopBlockHeight(e.nativeEvent.layout.height)}>
+        {moodClosed ? (
+          <View style={styles.expiredStrip}>
+            <Ionicons name="moon-outline" size={18} color="#64748b" />
+            <Text style={styles.expiredStripTxt}>
+              This mood window closed — you can read what was shared, but new offers stay paused.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.hintCard}>
           <View style={styles.hintCardHeader}>
-            <View style={styles.hintIconWrap}>
-              <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+            <LinearGradient
+              colors={[colors.primary, '#8B84FF', colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.hintIconGradient}
+            >
+              <Ionicons name="heart" size={20} color="#FFFFFF" />
+            </LinearGradient>
+            <View style={styles.hintTitleBlock}>
+              <Text style={styles.hintTitle}>Plan the meetup</Text>
+              <Text style={styles.hintKicker}>Make it real</Text>
             </View>
-            <Text style={styles.hintTitle}>How negotiation works</Text>
           </View>
           <Text style={styles.hint}>
-            Offers stay open 24h. Up to {MAX_OFFERS_PER_PLAN} active rounds. Use messages for casual chat.
+            Ideas expire in 24 hours — up to {MAX_OFFERS_PER_PLAN} gentle rounds here. Say hi in chat anytime; this spot is
+            for dates, times, and the practical stuff.
           </Text>
-          <Button title="Open messages" variant="ghost" pill onPress={() => void openDm()} style={styles.messagesBtn} />
+          <Pressable
+            onPress={() => void openDm()}
+            style={({ pressed }) => [styles.openChatPill, pressed && styles.openChatPillPressed]}
+          >
+            <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
+            <Text style={styles.openChatTxt}>Open chat</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} style={{ opacity: 0.7 }} />
+          </Pressable>
         </View>
       </View>
+      <Animated.View
+        style={[styles.listFlex, sheet.backdropAnimatedStyle] as unknown as StyleProp<ViewStyle>}
+      >
       <FlatList
         ref={listRef}
-        style={styles.listFlex}
+        style={styles.listFill}
         data={sorted}
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={[styles.list, sorted.length === 0 && styles.listEmpty]}
+        contentContainerStyle={[
+          styles.list,
+          sorted.length === 0 && styles.listEmpty,
+          { paddingBottom: listPaddingBottom },
+        ]}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="document-text-outline" size={28} color={colors.textMuted} />
-            </View>
-            <Text style={styles.emptyTitle}>No offers yet</Text>
+            <LinearGradient
+              colors={['rgba(108, 99, 255, 0.2)', 'rgba(255, 101, 132, 0.18)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.emptyIconRing}
+            >
+              <View style={styles.emptyIconInner}>
+                <Ionicons name="sparkles" size={30} color={colors.primary} />
+              </View>
+            </LinearGradient>
+            <Text style={styles.emptyTitle}>{isCreator ? 'Still quiet here' : 'Start a spark'}</Text>
             <Text style={styles.empty}>
-              {isCreator ? 'When someone sends an offer, it will appear here.' : 'Send the first offer below to start negotiating.'}
+              {isCreator
+                ? 'When someone sends a time or a vibe, it lands here. Until then, keep the chat warm — chemistry over logistics.'
+                : 'Lead with something easy — a time, a place, a feeling. You can always fine-tune what happens next.'}
             </Text>
           </View>
         }
@@ -292,16 +499,26 @@ export function NegotiationChat({ plan }: Props) {
                 isHost={hostSent}
                 showHostLabel
               />
-              {isCreator && item.status === 'pending' && !isOfferExpired(item) ? (
+              {isCreator && item.status === 'pending' && !isOfferExpired(item) && !moodClosed ? (
                 <View style={styles.actions}>
-                  <Button title="Accept" onPress={() => void acceptOfferRow(item)} style={styles.actionBtn} />
-                  <Button title="Decline" variant="ghost" onPress={() => void declineOffer(item)} style={styles.actionBtn} />
+                  <Button
+                    title="Sounds good"
+                    onPress={() => void acceptOfferRow(item)}
+                    style={Object.assign({}, styles.actionBtn, styles.actionBtnAccept)}
+                  />
+                  <Button
+                    title="Not quite"
+                    variant="ghost"
+                    onPress={() => void declineOffer(item)}
+                    style={styles.actionBtn}
+                  />
                 </View>
               ) : null}
             </View>
           );
         }}
       />
+      </Animated.View>
       {composer}
     </View>
   );
@@ -309,84 +526,196 @@ export function NegotiationChat({ plan }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  topBar: { paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
-  hintCard: {
-    backgroundColor: colors.surface,
+  topBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  expiredStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(100,116,139,0.12)',
     borderRadius: radius.lg,
     padding: spacing.md,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(148,163,184,0.35)',
+  },
+  expiredStripTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.text, lineHeight: 18 },
+  hintCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.14)',
     ...Platform.select({
       ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
+        shadowColor: '#4C1D95',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.09,
+        shadowRadius: 20,
       },
-      android: { elevation: 1 },
+      android: { elevation: 3 },
     }),
   },
-  hintCardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  hintIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: colors.authInputBg,
+  hintCardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  hintIconGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hintTitle: { fontSize: 15, fontWeight: '700', color: colors.text, flex: 1 },
-  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginBottom: spacing.md },
-  messagesBtn: { marginTop: 0 },
-  listFlex: { flex: 1 },
-  list: { paddingVertical: spacing.md, paddingBottom: spacing.xl, paddingHorizontal: spacing.xs },
-  listEmpty: { flexGrow: 1, justifyContent: 'center', paddingVertical: spacing.xl },
-  emptyWrap: { alignItems: 'center', paddingHorizontal: spacing.lg },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+  hintTitleBlock: { flex: 1, minWidth: 0 },
+  hintKicker: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.secondary,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  hintTitle: { fontSize: 19, fontWeight: '800', color: colors.text, letterSpacing: -0.5, lineHeight: 24 },
+  hint: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 21,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    letterSpacing: -0.15,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  empty: { textAlign: 'center', color: colors.textMuted, fontSize: 14, lineHeight: 20, maxWidth: 280 },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, marginHorizontal: spacing.md },
-  actionBtn: { flex: 1 },
-  composer: {
+  openChatPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
+    borderRadius: radius.button,
+    borderWidth: 1.5,
+    borderColor: 'rgba(108, 99, 255, 0.35)',
+    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+  },
+  openChatPillPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
+  openChatTxt: { fontSize: 15, fontWeight: '700', color: colors.primary, letterSpacing: -0.2 },
+  listFlex: { flex: 1 },
+  listFill: { flex: 1 },
+  list: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  listEmpty: { flexGrow: 1, justifyContent: 'center', paddingVertical: spacing.xl },
+  emptyWrap: { alignItems: 'center', paddingHorizontal: spacing.xl },
+  emptyIconRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  emptyIconInner: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    letterSpacing: -0.6,
+    textAlign: 'center',
+  },
+  empty: {
+    textAlign: 'center',
+    color: colors.textMuted,
+    fontSize: 15,
+    lineHeight: 23,
+    maxWidth: 300,
+    letterSpacing: -0.2,
+  },
+  actions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, marginHorizontal: spacing.md },
+  actionBtn: { flex: 1, minHeight: 50 },
+  actionBtnAccept: {
     ...Platform.select({
       ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.07,
-        shadowRadius: 12,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
       },
-      android: { elevation: 6 },
+      android: { elevation: 4 },
     }),
   },
-  composerTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: spacing.xs },
-  composerSubtitle: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: spacing.md },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.text, letterSpacing: 0.3, marginBottom: spacing.xs },
+  composerSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 21,
+    marginBottom: spacing.sm,
+    letterSpacing: -0.15,
+  },
+  chipsSectionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+    letterSpacing: 1.4,
+  },
+  chipRow: { flexDirection: 'row', gap: 8, paddingBottom: spacing.md, flexWrap: 'nowrap' },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+  },
+  chipPressed: { opacity: 0.88, transform: [{ scale: 0.97 }] },
+  chipTxt: { fontSize: 13, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 1.1,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+  },
   timeBtnRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
+    minHeight: 54,
   },
-  timeBtnTxt: { fontSize: 15, fontWeight: '600', color: colors.text, flex: 1, paddingRight: spacing.sm },
-  composerKb: { flexShrink: 0 },
+  timeRowLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1, minWidth: 0 },
+  timeIconBubble: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeBtnTxt: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    flex: 1,
+    letterSpacing: -0.2,
+    minWidth: 0,
+  },
+  sendCta: {
+    marginTop: spacing.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C63FF',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+      },
+      android: { elevation: 6 },
+    }),
+  },
   iosPickerWrap: { marginBottom: spacing.sm },
 });

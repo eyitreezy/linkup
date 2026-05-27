@@ -1,6 +1,7 @@
 import { authSoftLabelStyle } from '@/components/Input';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
 import { colors, radius } from '@/constants/theme';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -11,6 +12,9 @@ type Props = {
   onToggle: (tag: string) => void;
   max?: number;
 };
+
+/** Same horizontal gradient as active chips elsewhere (primary → violet → secondary). */
+const ACTIVE_GRADIENT = [colors.primary, '#8B7CE8', colors.secondary] as const;
 
 export function TagSelector({ label, options, selected, onToggle, max = 8 }: Props) {
   return (
@@ -25,9 +29,24 @@ export function TagSelector({ label, options, selected, onToggle, max = 8 }: Pro
               <Pressable
                 onPress={() => !disabled && onToggle(tag)}
                 disabled={disabled}
-                style={[styles.chip, on && styles.chipOn, disabled && styles.chipDisabled]}
+                style={[styles.chipOuter, disabled && styles.chipDisabled]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on, disabled }}
               >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{tag}</Text>
+                {on ? (
+                  <LinearGradient
+                    colors={[...ACTIVE_GRADIENT]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.chipActive}
+                  >
+                    <Text style={styles.chipTextOn}>{tag}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.chipIdle}>
+                    <Text style={styles.chipText}>{tag}</Text>
+                  </View>
+                )}
               </Pressable>
             </MotiView>
           );
@@ -41,7 +60,11 @@ const styles = StyleSheet.create({
   wrap: { marginBottom: onboarding.spacing.md },
   labelSpacing: { marginBottom: onboarding.spacing.sm },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, rowGap: 8 },
-  chip: {
+  chipOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
+  chipIdle: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.button,
@@ -49,11 +72,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D8DCE6',
   },
-  chipOn: {
-    backgroundColor: onboarding.accentSoft,
-    borderColor: onboarding.accent,
+  chipActive: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipDisabled: { opacity: 0.4 },
   chipText: { fontSize: 14, fontWeight: '600', color: onboarding.text },
-  chipTextOn: { color: onboarding.accent },
+  chipTextOn: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
 });

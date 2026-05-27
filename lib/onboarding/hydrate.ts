@@ -26,6 +26,11 @@ export function draftFromProfile(p: DbProfile | null): OnboardingDraft {
   if (p.age_min != null) d.ageMin = p.age_min;
   if (p.age_max != null) d.ageMax = p.age_max;
   if (p.radius_km != null) d.radiusKm = Number(p.radius_km);
+  if (p.location_label?.trim()) d.locationLabel = p.location_label.trim();
+  if (p.latitude != null && p.longitude != null) {
+    d.locationLatitude = p.latitude;
+    d.locationLongitude = p.longitude;
+  }
   d.profilePublic = p.is_profile_public;
   if (p.gender) d.selfGender = p.gender;
 
@@ -55,6 +60,24 @@ export function draftFromProfile(p: DbProfile | null): OnboardingDraft {
   }
 
   if (pref.safety_tips_acknowledged === true) d.safetyTipsAcknowledged = true;
+  if (pref.adult_confirmed === true) d.adultConfirmed = true;
+  else if (p.birth_date && ageFromBirthDate(d.birthDate) >= 18) d.adultConfirmed = true;
 
   return d;
+}
+
+/** After a successful save, merge uploaded photos without wiping in-progress local state. */
+export function mergeDraftAfterSave(
+  current: OnboardingDraft,
+  uploadedPhotoUrls: string[]
+): OnboardingDraft {
+  const mergedUrls =
+    uploadedPhotoUrls.length > 0
+      ? [...current.remotePhotoUrls, ...uploadedPhotoUrls]
+      : current.remotePhotoUrls;
+  return {
+    ...current,
+    localPhotoUris: [],
+    remotePhotoUrls: mergedUrls,
+  };
 }

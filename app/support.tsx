@@ -1,20 +1,23 @@
 /**
  * S1 — Support & help: quick topics, tickets (open / resolved), contact flow.
+ * Visual shell aligned with Notification Inbox (gradient, glass nav, list rows). No settings icon in header.
  */
 import { Button } from '@/components/Button';
+import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbSupportTicket, TicketStatus } from '@/types/database';
 import { Href, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,7 +25,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SUBJECT_OPTIONS = [
   'Payment & escrow',
@@ -73,7 +75,6 @@ function isOpenTab(s: TicketStatus): boolean {
 }
 
 export default function SupportHomeScreen() {
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [tickets, setTickets] = useState<DbSupportTicket[]>([]);
   const [tab, setTab] = useState<'open' | 'resolved'>('open');
@@ -133,197 +134,573 @@ export default function SupportHomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-      <View style={[styles.top, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backWrap}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Support & help</Text>
-          <Text style={styles.sub}>We’re here to help you</Text>
-        </View>
-        <View style={{ width: 26 }} />
-      </View>
+    <Screen safeAreaEdges={['top', 'left', 'right', 'bottom']} safeAreaStyle={styles.screenRoot}>
+      <View style={styles.flex}>
+        <LinearGradient
+          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          locations={[0, 0.32, 0.62, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.sectionLabel}>Quick help</Text>
-        <View style={styles.helpGrid}>
-          {HELP_CARDS.map((c) => (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.topNav}>
             <Pressable
-              key={c.title}
-              style={styles.helpCard}
-              onPress={() => {
-                if (c.onPress) c.onPress();
-                else Alert.alert(c.title, c.body);
-              }}
+              onPress={() => router.back()}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
             >
-              <View style={styles.helpIcon}>
-                <Ionicons name={c.icon} size={22} color={colors.primary} />
-              </View>
-              <Text style={styles.helpTitle}>{c.title}</Text>
-              <Text style={styles.helpBody} numberOfLines={3}>
-                {c.body}
-              </Text>
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
             </Pressable>
-          ))}
-        </View>
+            <View style={styles.headerBalance} />
+          </View>
 
-        <Button title="Contact support" onPress={() => setModalOpen(true)} style={{ marginBottom: spacing.lg }} />
+          <View style={styles.leadBlock}>
+            <LinearGradient
+              colors={[colors.primary, colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.leadAccent}
+            />
+            <View style={styles.leadTextCol}>
+              <Text style={styles.leadKicker}>Support</Text>
+              <Text style={styles.leadTitle}>Support & help</Text>
+              <Text style={styles.leadSub}>We’re here to help you — quick answers below or open a ticket anytime.</Text>
+            </View>
+          </View>
 
-        <View style={styles.tabs}>
-          <Pressable style={[styles.tab, tab === 'open' && styles.tabOn]} onPress={() => setTab('open')}>
-            <Text style={[styles.tabTxt, tab === 'open' && styles.tabTxtOn]}>Open</Text>
-          </Pressable>
-          <Pressable style={[styles.tab, tab === 'resolved' && styles.tabOn]} onPress={() => setTab('resolved')}>
-            <Text style={[styles.tabTxt, tab === 'resolved' && styles.tabTxtOn]}>Resolved</Text>
-          </Pressable>
-        </View>
+          <View style={styles.sectionHead}>
+            <View style={styles.sectionHeadRow}>
+              <View style={styles.sectionAccentDot} />
+              <Text style={styles.sectionTitle}>Quick help</Text>
+            </View>
+            <LinearGradient
+              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionRule}
+            />
+          </View>
 
-        {loading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.lg }} />
-        ) : (
-          <FlatList
-            data={filtered}
-            scrollEnabled={false}
-            keyExtractor={(t) => t.id}
-            ListEmptyComponent={
-              <Text style={styles.empty}>
-                {tab === 'open' ? 'No open tickets.' : 'No resolved tickets yet.'}
-              </Text>
-            }
-            renderItem={({ item }) => (
-              <View style={styles.ticketCard}>
-                <Text style={styles.ticketTitle}>{item.subject}</Text>
-                <View style={styles.ticketMeta}>
-                  <View style={[styles.pill, isOpenTab(item.status) ? styles.pillOpen : styles.pillDone]}>
-                    <Text style={styles.pillTxt}>{statusLabel(item.status)}</Text>
+          <LinearGradient
+            colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardOuter}
+          >
+            <View style={styles.cardInner}>
+              {HELP_CARDS.map((c, i) => (
+                <Pressable
+                  key={c.title}
+                  style={({ pressed }) => [
+                    styles.helpRow,
+                    i < HELP_CARDS.length - 1 && styles.helpRowDivider,
+                    pressed && styles.helpRowPressed,
+                  ]}
+                  onPress={() => {
+                    if (c.onPress) c.onPress();
+                    else Alert.alert(c.title, c.body);
+                  }}
+                >
+                  <View style={styles.helpIconWrap}>
+                    <Ionicons name={c.icon} size={22} color={colors.primary} />
                   </View>
-                  <Text style={styles.ticketDate}>
-                    Updated {new Date(item.updated_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                  <View style={styles.helpTextCol}>
+                    <Text style={styles.helpRowTitle}>{c.title}</Text>
+                    <Text style={styles.helpRowBody} numberOfLines={2}>
+                      {c.body}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+                </Pressable>
+              ))}
+            </View>
+          </LinearGradient>
+
+          <View style={styles.ctaWrap}>
+            <Pressable
+              onPress={() => setModalOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Contact support"
+              style={({ pressed }) => [styles.ctaOuter, pressed && styles.ctaPressed]}
+            >
+              <LinearGradient
+                colors={[colors.primary, '#8B7CE8', colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.ctaGrad}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={22} color="#FFFFFF" />
+                <Text style={styles.ctaLabel}>Contact support</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+
+          <View style={[styles.sectionHead, styles.sectionHeadSpaced]}>
+            <View style={styles.sectionHeadRow}>
+              <View style={styles.sectionAccentDot} />
+              <Text style={styles.sectionTitle}>Your tickets</Text>
+            </View>
+            <LinearGradient
+              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionRule}
+            />
+          </View>
+
+          <View style={styles.tabs}>
+            {(['open', 'resolved'] as const).map((t) => {
+              const on = tab === t;
+              const label = t === 'open' ? 'Open' : 'Resolved';
+              return (
+                <Pressable
+                  key={t}
+                  onPress={() => setTab(t)}
+                  style={styles.tabHit}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on }}
+                >
+                  {on ? (
+                    <LinearGradient
+                      colors={[colors.primary, '#8B7CE8', colors.secondary]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.tabGrad}
+                    >
+                      <Text style={styles.tabTxtOn}>{label}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.tabIdle}>
+                      <Text style={styles.tabTxt}>{label}</Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {loading ? (
+            <ActivityIndicator color={colors.primary} style={styles.loader} />
+          ) : filtered.length === 0 ? (
+            <View style={styles.emptyCardOuter}>
+              <LinearGradient
+                colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.emptyCardBorder}
+              >
+                <View style={styles.emptyCardInner}>
+                  <LinearGradient colors={[colors.primary, '#8B7CE8']} style={styles.emptyIconGrad}>
+                    <Ionicons name="file-tray-outline" size={26} color="#fff" />
+                  </LinearGradient>
+                  <Text style={styles.emptyTitle}>
+                    {tab === 'open' ? 'No open tickets' : 'No resolved tickets yet'}
+                  </Text>
+                  <Text style={styles.emptySub}>
+                    {tab === 'open'
+                      ? 'Tap Contact support when you need us — we read every message.'
+                      : 'Closed and resolved requests will appear here.'}
                   </Text>
                 </View>
-              </View>
-            )}
-          />
-        )}
-
-        <Pressable style={styles.disputesLink} onPress={() => router.push('/disputes' as Href)}>
-          <Text style={styles.disputesLinkTxt}>View escrow disputes</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-        </Pressable>
-      </ScrollView>
-
-      <Modal visible={modalOpen} animationType="slide" transparent statusBarTranslucent>
-        <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Contact support</Text>
-            <Text style={styles.modalSub}>We’ll email you from the address on your account.</Text>
-            <Text style={styles.inputLabel}>Topic</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
-              <View style={styles.chipsRow}>
-                {SUBJECT_OPTIONS.map((s) => (
-                  <Pressable key={s} onPress={() => setSubject(s)} style={[styles.chip, subject === s && styles.chipOn]}>
-                    <Text style={[styles.chipTxt, subject === s && styles.chipTxtOn]}>{s}</Text>
-                  </Pressable>
+              </LinearGradient>
+            </View>
+          ) : (
+            <LinearGradient
+              colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.cardOuter}
+            >
+              <View style={styles.cardInner}>
+                {filtered.map((item, i) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.ticketRow,
+                      i < filtered.length - 1 ? styles.ticketRowDivider : undefined,
+                    ]}
+                  >
+                    <Text style={styles.ticketTitle} numberOfLines={2}>
+                      {item.subject}
+                    </Text>
+                    <View style={styles.ticketMeta}>
+                      <View style={[styles.pill, isOpenTab(item.status) ? styles.pillOpen : styles.pillDone]}>
+                        <Text style={[styles.pillTxt, isOpenTab(item.status) ? styles.pillTxtOpen : styles.pillTxtDone]}>
+                          {statusLabel(item.status)}
+                        </Text>
+                      </View>
+                      <Text style={styles.ticketDate}>
+                        Updated {new Date(item.updated_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      </Text>
+                    </View>
+                  </View>
                 ))}
               </View>
-            </ScrollView>
-            <Text style={styles.inputLabel}>What’s going on?</Text>
-            <TextInput
-              style={styles.textarea}
-              placeholder="The more detail you share, the faster we can help."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              value={body}
-              onChangeText={setBody}
-              textAlignVertical="top"
-            />
-            <Button title="Submit" onPress={() => void submitTicket()} loading={submitting} />
-            <Button title="Cancel" variant="ghost" onPress={() => setModalOpen(false)} style={{ marginTop: spacing.sm }} />
+            </LinearGradient>
+          )}
+
+          <Pressable style={styles.disputesLink} onPress={() => router.push('/disputes' as Href)}>
+            <Text style={styles.disputesLinkTxt}>View escrow disputes</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
           </Pressable>
-        </Pressable>
-      </Modal>
-    </SafeAreaView>
+        </ScrollView>
+
+        <Modal visible={modalOpen} animationType="slide" transparent statusBarTranslucent>
+          <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
+            <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+              <LinearGradient
+                colors={['#FBFAFF', '#F5F3FF']}
+                style={StyleSheet.absoluteFillObject}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+              />
+              <Text style={styles.modalTitle}>Contact support</Text>
+              <Text style={styles.modalSub}>We’ll email you from the address on your account.</Text>
+              <Text style={styles.inputLabel}>Topic</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+                <View style={styles.chipsRow}>
+                  {SUBJECT_OPTIONS.map((s) => (
+                    <Pressable key={s} onPress={() => setSubject(s)} style={styles.chipHit}>
+                      {subject === s ? (
+                        <LinearGradient
+                          colors={[colors.primary, '#8B7CE8']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.chipGrad}
+                        >
+                          <Text style={styles.chipTxtOnWhite}>{s}</Text>
+                        </LinearGradient>
+                      ) : (
+                        <View style={styles.chipIdle}>
+                          <Text style={styles.chipTxt}>{s}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+              <Text style={styles.inputLabel}>What’s going on?</Text>
+              <TextInput
+                style={styles.textarea}
+                placeholder="The more detail you share, the faster we can help."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                value={body}
+                onChangeText={setBody}
+                textAlignVertical="top"
+              />
+              <Button title="Submit" onPress={() => void submitTicket()} loading={submitting} />
+              <Button title="Cancel" variant="ghost" onPress={() => setModalOpen(false)} style={{ marginTop: spacing.sm }} />
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  top: {
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
+  flex: { flex: 1 },
+  scroll: {
+    paddingBottom: spacing.xl * 2,
+  },
+  topNav: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  backWrap: { paddingRight: spacing.sm },
-  headerText: { flex: 1 },
-  title: { fontSize: 24, fontWeight: '800', color: colors.text },
-  sub: { fontSize: 15, color: colors.textMuted, marginTop: 4 },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
+    paddingTop: spacing.xs,
     marginBottom: spacing.sm,
-    letterSpacing: 0.5,
   },
-  helpGrid: { gap: spacing.md, marginBottom: spacing.lg },
-  helpCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  helpIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: '#EEF2FF',
+  iconPill: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
   },
-  helpTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 6 },
-  helpBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  headerBalance: {
+    width: 44,
+    height: 44,
+  },
+  pressed: { opacity: 0.92 },
+  leadBlock: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  leadAccent: {
+    width: 5,
+    marginTop: 8,
+    borderRadius: 3,
+    height: 52,
+  },
+  leadTextCol: { flex: 1, minWidth: 0 },
+  leadKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  leadTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.45,
+    marginBottom: 6,
+  },
+  leadSub: {
+    fontSize: 15,
+    color: colors.textMuted,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  sectionHead: {
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  sectionHeadSpaced: {
+    marginTop: spacing.md,
+  },
+  sectionHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  sectionAccentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    flex: 1,
+  },
+  sectionRule: {
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.9,
+  },
+  cardOuter: {
+    borderRadius: radius.xl,
+    padding: 2,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  cardInner: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: radius.xl - 1,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.92)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.07,
+        shadowRadius: 12,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  helpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  helpRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(26, 29, 38, 0.08)',
+  },
+  helpRowPressed: {
+    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+  },
+  helpIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+  },
+  helpTextCol: { flex: 1, minWidth: 0 },
+  helpRowTitle: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
+  helpRowBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, fontWeight: '600' },
+  ctaWrap: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  ctaOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    minHeight: 54,
+    alignSelf: 'stretch',
+    ...(Platform.OS === 'ios'
+      ? {
+          shadowColor: '#6C63FF',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.28,
+          shadowRadius: 18,
+        }
+      : { elevation: 5 }),
+  },
+  ctaPressed: {
+    opacity: 0.94,
+    transform: [{ scale: 0.97 }],
+  },
+  ctaGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    width: '100%',
+    minHeight: 54,
+    paddingVertical: 16,
+    paddingHorizontal: spacing.lg,
+  },
+  ctaLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    color: '#FFFFFF',
+  },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: radius.full,
-    padding: 4,
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: radius.full },
-  tabOn: { backgroundColor: colors.primary },
-  tabTxt: { fontSize: 14, fontWeight: '800', color: colors.textMuted },
-  tabTxtOn: { color: '#fff' },
-  empty: { color: colors.textMuted, paddingVertical: spacing.lg, textAlign: 'center' },
-  ticketCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
+  tabHit: {
+    flex: 1,
+    minWidth: 120,
+    borderRadius: radius.button,
+    overflow: 'hidden',
   },
-  ticketTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  ticketMeta: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.sm, flexWrap: 'wrap' },
-  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full },
-  pillOpen: { backgroundColor: '#EEF2FF' },
-  pillDone: { backgroundColor: '#ECFDF5' },
-  pillTxt: { fontSize: 12, fontWeight: '800', color: colors.text },
+  tabGrad: {
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    alignItems: 'center',
+  },
+  tabIdle: {
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+    alignItems: 'center',
+  },
+  tabTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
+  tabTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  loader: { marginVertical: spacing.lg },
+  emptyCardOuter: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  emptyCardBorder: {
+    borderRadius: radius.xl,
+    padding: 2,
+  },
+  emptyCardInner: {
+    borderRadius: radius.xl - 1,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  emptyIconGrad: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.25,
+    textAlign: 'center',
+  },
+  emptySub: {
+    marginTop: spacing.sm,
+    fontSize: 15,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  ticketRow: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  ticketRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(26, 29, 38, 0.08)',
+  },
+  ticketTitle: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
+  ticketMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.button },
+  pillOpen: { backgroundColor: 'rgba(108, 99, 255, 0.12)', borderWidth: 1, borderColor: 'rgba(108, 99, 255, 0.22)' },
+  pillDone: { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.22)' },
+  pillTxt: { fontSize: 12, fontWeight: '800' },
+  pillTxtOpen: { color: colors.primary },
+  pillTxtDone: { color: '#059669' },
   ticketDate: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
   disputesLink: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     gap: 4,
+    paddingBottom: spacing.md,
   },
-  disputesLinkTxt: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  disputesLinkTxt: { fontSize: 16, fontWeight: '800', color: colors.primary },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.45)',
@@ -336,30 +713,38 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xl,
     maxHeight: '90%',
+    overflow: 'hidden',
   },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.xs },
-  modalSub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.lg, lineHeight: 20 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text, marginBottom: spacing.xs, letterSpacing: -0.3 },
+  modalSub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.lg, lineHeight: 20, fontWeight: '600' },
   inputLabel: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
+  chipsScroll: { marginBottom: spacing.md },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
+  chipHit: { borderRadius: radius.button, overflow: 'hidden' },
+  chipGrad: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    paddingVertical: 10,
+    borderRadius: radius.button,
   },
-  chipOn: { borderColor: colors.primary, backgroundColor: '#EEF2FF' },
-  chipTxt: { fontSize: 13, fontWeight: '600', color: colors.text },
-  chipTxtOn: { color: colors.primary },
+  chipIdle: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+    borderWidth: 1.5,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+  },
+  chipTxt: { fontSize: 13, fontWeight: '700', color: colors.text },
+  chipTxtOnWhite: { fontSize: 13, fontWeight: '900', color: '#fff' },
   textarea: {
     minHeight: 120,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 15,
     color: colors.text,
     marginBottom: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
 });

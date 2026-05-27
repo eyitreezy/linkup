@@ -11,6 +11,7 @@ type Props = {
   label?: string;
   /** Elevated white button for use on gradient/cards */
   elevated?: boolean;
+  fullWidth?: boolean;
 };
 
 export function GoogleSignInButton({
@@ -18,6 +19,7 @@ export function GoogleSignInButton({
   loading,
   label = 'Continue with Google',
   elevated,
+  fullWidth,
 }: Props) {
   return (
     <Pressable
@@ -28,6 +30,10 @@ export function GoogleSignInButton({
       style={({ pressed }) => [
         styles.btn,
         elevated && styles.elevated,
+        fullWidth && styles.fullWidth,
+        {
+          transform: [{ scale: pressed && !loading ? 0.97 : 1 }],
+        },
         pressed && styles.pressed,
         loading && styles.disabled,
       ]}
@@ -60,15 +66,22 @@ const styles = StyleSheet.create({
   },
   elevated: {
     borderRadius: radius.button,
-    borderWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowColor: '#2D2640',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 5,
   },
-  pressed: { opacity: 0.92, backgroundColor: colors.background },
-  disabled: { opacity: 0.7 },
-  label: { fontSize: 16, fontWeight: '600', color: colors.text },
+  fullWidth: {
+    alignSelf: 'stretch',
+    width: '100%',
+    minHeight: 54,
+    borderRadius: radius.button,
+  },
+  pressed: { opacity: 0.94, backgroundColor: '#FAFAFE' },
+  disabled: { opacity: 0.65 },
+  label: { fontSize: 15, fontWeight: '600', color: colors.text, letterSpacing: -0.2 },
 });
