@@ -1,0 +1,26 @@
+# EAS upload — exclude local build artifacts (archive was ~547MB without this)
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.env
+.env.local
+.DS_Store
+secrets/
+
+# Android local builds / caches (native project is still uploaded)
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+android/build/
+android/local.properties
+
+# iOS local builds
+ios/Pods/
+ios/build/
+DerivedData/
+
+# Supabase / docs not needed on device build
+supabase/.temp/
+docs/
