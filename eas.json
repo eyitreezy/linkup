@@ -5,11 +5,17 @@
   "build": {
     "development": {
       "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_PRODUCTION": "false"
+      },
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
       "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_PRODUCTION": "false"
+      },
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -19,7 +25,10 @@
       }
     },
     "production": {
-      "node": "22.14.0"
+      "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_PRODUCTION": "false"
+      }
     }
   },
   "submit": {
