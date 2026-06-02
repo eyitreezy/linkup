@@ -3,6 +3,18 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "private": true,
+  "expo": {
+    "install": {
+      "exclude": [
+        "react-native-reanimated"
+      ]
+    },
+    "doctor": {
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
+      }
+    }
+  },
   "scripts": {
     "postinstall": "patch-package",
     "start": "expo start --dev-client",
@@ -22,6 +34,7 @@
     "@react-native-community/datetimepicker": "8.6.0",
     "@react-native-community/slider": "5.1.2",
     "@supabase/supabase-js": "^2.49.1",
+    "babel-preset-expo": "~55.0.8",
     "expo": "~55.0.12",
     "expo-auth-session": "~55.0.12",
     "expo-calendar": "~55.0.14",
@@ -51,7 +64,7 @@
     "react-dom": "19.2.0",
     "react-native": "0.83.6",
     "react-native-gesture-handler": "~2.30.0",
-    "react-native-reanimated": "~4.2.1",
+    "react-native-reanimated": "4.2.3",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
     "react-native-web": "~0.21.0",
