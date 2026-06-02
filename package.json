@@ -12,6 +12,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "eas:verify-install": "npm ci --include=dev",
     "supabase:deploy-push": "npx supabase functions deploy push-on-notification --no-verify-jwt && npx supabase functions deploy test-expo-push --no-verify-jwt"
   },
   "dependencies": {

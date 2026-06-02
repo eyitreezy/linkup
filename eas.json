@@ -4,13 +4,23 @@
   },
   "build": {
     "development": {
+      "node": "22.14.0",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "node": "22.14.0",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
     },
-    "production": {}
+    "production": {
+      "node": "22.14.0"
+    }
   },
   "submit": {
     "production": {}

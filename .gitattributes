@@ -1,0 +1,2 @@
+# Patches must use LF so patch-package applies on EAS (Linux) builders
+patches/*.patch text eol=lf
