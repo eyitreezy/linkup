@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "patch-package && node scripts/ensure-hermesc-executable.js",
     "start": "expo start --dev-client",
     "start:clear": "expo start --dev-client --clear",
     "android": "expo run:android",
@@ -62,6 +62,7 @@
     "patch-package": "^8.0.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "hermes-compiler": "0.14.1",
     "react-native": "0.83.6",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-reanimated": "4.2.3",
