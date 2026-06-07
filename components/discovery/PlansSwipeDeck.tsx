@@ -3,10 +3,12 @@
  */
 import { DiscoverySwipeCard } from '@/components/discovery/DiscoverySwipeCard';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
+import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { colors, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Platform, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   interpolate,
@@ -33,12 +35,32 @@ type Props = {
   onSwipeRight: (row: PlanFeedRow) => void;
   onSwipeLeft: (row: PlanFeedRow) => void;
   onPressCard: (row: PlanFeedRow) => void;
+  presenceForRow: (row: PlanFeedRow) => PresenceUi | null;
+  /** Tall deck target — parent accounts for mood lane + chrome. */
+  minDeckHeight?: number;
 };
 
 const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansSwipeDeckInner(
-  { items, index, onIndexChange, distanceForRow, onSwipeRight, onSwipeLeft, onPressCard },
+  {
+    items,
+    index,
+    onIndexChange,
+    distanceForRow,
+    onSwipeRight,
+    onSwipeLeft,
+    onPressCard,
+    presenceForRow,
+    minDeckHeight,
+  },
   ref
 ) {
+  const { height: winH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const deckHeight = Math.max(
+    minDeckHeight ?? 0,
+    Math.round(Math.max(440, Math.min(winH * 0.68, winH - insets.top - insets.bottom - 200)))
+  );
+
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -127,17 +149,22 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
       <View style={styles.done}>
         <Text style={styles.doneEmoji}>✨</Text>
         <Text style={styles.doneTitle}>You’re all caught up</Text>
-        <Text style={styles.doneSub}>Switch to the list view or pull to refresh for more meetup ideas nearby.</Text>
+        <Text style={styles.doneSub}>Open filters to switch views or pull to refresh for more meetup ideas nearby.</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.cardStack}>
+      <View style={[styles.cardStack, { height: deckHeight, minHeight: deckHeight }]}>
         {next ? (
           <View style={[styles.cardFace, styles.cardBehind]} pointerEvents="none">
-            <DiscoverySwipeCard row={next} distanceKm={distanceForRow(next)} onPress={() => {}} />
+            <DiscoverySwipeCard
+              row={next}
+              distanceKm={distanceForRow(next)}
+              presence={presenceForRow(next)}
+              onPress={() => {}}
+            />
           </View>
         ) : null}
         <GestureDetector gesture={pan}>
@@ -145,6 +172,7 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
             <DiscoverySwipeCard
               row={top}
               distanceKm={distanceForRow(top)}
+              presence={presenceForRow(top)}
               onPress={() => onPressCard(top)}
             />
             <Animated.View style={[styles.stamp, styles.stampLike, likeOpacity]} pointerEvents="none">
@@ -166,32 +194,38 @@ export const PlansSwipeDeck = memo(PlansSwipeDeckInner);
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
     minHeight: 0,
     width: '100%',
     alignSelf: 'stretch',
     paddingHorizontal: spacing.sm,
-    paddingTop: 2,
-    paddingBottom: 2,
+    paddingTop: 0,
+    paddingBottom: spacing.xs,
   },
   cardStack: {
-    flex: 1,
-    minHeight: 260,
     position: 'relative',
+    width: '100%',
   },
   cardFace: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
+    borderRadius: 32,
     overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.2,
-    shadowRadius: 22,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1035',
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.28,
+        shadowRadius: 28,
+      },
+      android: { elevation: 16 },
+    }),
   },
   cardBehind: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.92,
+    transform: [{ scale: 0.965 }, { translateY: 6 }],
+    opacity: 0.88,
   },
   stamp: {
     position: 'absolute',

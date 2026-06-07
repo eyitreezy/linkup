@@ -8,7 +8,7 @@ import {
   MessageActionsSheet,
   type MessageActionItem,
 } from '@/components/messages/MessageActionsSheet';
-import { MessageInput } from '@/components/messages/MessageInput';
+import { ChatComposer } from '@/components/messages/ChatComposer';
 import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -1161,48 +1161,8 @@ export default function ChatThreadScreen() {
             composerLiftStyle,
           ]}
         >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.toolbarRow}
-          >
-            <Pressable
-              style={styles.toolItem}
-              onPress={() => router.push('/plan/create' as Href)}
-              accessibilityRole="button"
-              accessibilityLabel="Suggest a plan"
-            >
-              <View style={styles.toolIconWrap}>
-                <Ionicons name="calendar-outline" size={20} color={chatPreset.composerAttachIcon} />
-              </View>
-              <Text style={styles.toolLabel}>Plan</Text>
-            </Pressable>
-            <Pressable
-              style={styles.toolItem}
-              onPress={onQuickSendOffer}
-              accessibilityRole="button"
-              accessibilityLabel="Send or open offer"
-            >
-              <View style={[styles.toolIconWrap, styles.toolIconWrapAccent]}>
-                <Ionicons name="flash-outline" size={20} color={chatPreset.composerAttachIcon} />
-              </View>
-              <Text style={styles.toolLabel}>Offer</Text>
-            </Pressable>
-            <Pressable
-              style={styles.toolItem}
-              onPress={() => void suggestMeetingArea()}
-              accessibilityRole="button"
-              accessibilityLabel="Share your area"
-            >
-              <View style={styles.toolIconWrap}>
-                <Ionicons name="location-outline" size={20} color={chatPreset.composerAttachIcon} />
-              </View>
-              <Text style={styles.toolLabel}>Place</Text>
-            </Pressable>
-          </ScrollView>
-          <MessageInput
-            embeddedInSheet
+          <ChatComposer
+            preset={chatPreset}
             threadLook={messageInputLook}
             value={text}
             onChangeText={(t) => {
@@ -1214,6 +1174,9 @@ export default function ChatThreadScreen() {
             sending={sending}
             attachDisabled={!verifiedUser}
             placeholder="Message…"
+            onPlan={() => router.push('/plan/create' as Href)}
+            onOffer={onQuickSendOffer}
+            onPlace={() => void suggestMeetingArea()}
           />
         </Animated.View>
 
@@ -1373,35 +1336,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 16,
-  },
-  toolbarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: 6,
-    gap: spacing.md,
-  },
-  toolItem: { alignItems: 'center', minWidth: 56 },
-  toolIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
-  },
-  toolIconWrapAccent: {
-    backgroundColor: 'rgba(255, 101, 132, 0.18)',
-    borderColor: 'rgba(255, 101, 132, 0.38)',
-  },
-  toolLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    fontWeight: '900',
-    color: colors.primary,
-    letterSpacing: 0.2,
   },
   listFlex: { flex: 1 },
   list: {

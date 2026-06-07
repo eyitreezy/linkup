@@ -6,13 +6,14 @@ import type { DbMeetType, DbPlan, DbProfile } from '@/types/database';
 export type PlanRowFromDb = DbPlan & { meet_types?: DbMeetType | null };
 
 const PROFILE_FIELDS =
-  'user_id, display_name, avatar_url, birth_date, verified_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences';
+  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences';
 
 type ProfileRow = Pick<
   DbProfile,
   | 'user_id'
   | 'display_name'
   | 'avatar_url'
+  | 'primary_photo_url'
   | 'birth_date'
   | 'verified_badge'
   | 'ai_trust_score'

@@ -1,7 +1,6 @@
 /**
  * Entry redirect — auth deep links → callback; session + pending onboarding → wizard; else login/tabs.
  */
-import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { captureAuthLinkIfPresent } from '@/lib/auth/pendingAuthUrl';
 import { postAuthHref } from '@/lib/auth/postAuthNavigation';
@@ -9,7 +8,7 @@ import { urlLooksLikeAuthRedirect } from '@/lib/authProviders';
 import * as Linking from 'expo-linking';
 import { Redirect, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 export default function Index() {
   const { session, profile, loading } = useAuth();
@@ -30,12 +29,8 @@ export default function Index() {
     };
   }, []);
 
-  if (pendingAuthLink === null) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+  if (pendingAuthLink === null || loading) {
+    return <View style={styles.blank} />;
   }
 
   if (pendingAuthLink) {
@@ -46,17 +41,9 @@ export default function Index() {
     return <Redirect href={postAuthHref(profile)} />;
   }
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return <Redirect href={'/(auth)/login' as Href} />;
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  blank: { flex: 1 },
 });

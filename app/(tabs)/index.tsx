@@ -1,5 +1,5 @@
 /**
- * Discovery feed — list-first meetup ideas + swipe mode; vibe filter lives in the filter sheet.
+ * Discovery feed — swipe-first meetup ideas + list mode; filters live in the filter sheet.
  */
 import { MoodTimelineCarousel } from '@/components/discovery/MoodTimelineCarousel';
 import { PlansSwipeDeck, type PlansSwipeDeckRef } from '@/components/discovery/PlansSwipeDeck';
@@ -33,6 +33,7 @@ import {
 } from '@/lib/plans/planFeedMerge';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import { prefetchPlanDetail, seedPlanDetailFromFeed } from '@/lib/plans/planDetailSeed';
+import { derivePresenceUi, hostPresenceMatchesFilter, resolveHostPresenceKind } from '@/lib/presence/derivePresenceUi';
 import { fetchPresenceMap } from '@/lib/presence/presenceHeartbeat';
 import { isPremiumSubscriber } from '@/lib/premium/access';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -40,18 +41,21 @@ import { isUserVerified, requiresVerificationGate } from '@/lib/verification/acc
 import type { DbPlanOffer, DbProfile, DbUserPresence } from '@/types/database';
 import { Href, router } from 'expo-router';
 import * as Location from 'expo-location';
+import { DEFAULT_TAB_BAR_INSET, useTabBarVisibilityOptional } from '@/contexts/TabBarVisibilityContext';
+import { useShowTabBarOnFocus, useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
 import { useFocusEffect } from '@react-navigation/native';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   type ListRenderItemInfo,
   Platform,
   RefreshControl,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 const PAGE_SIZE = 12;
 const FEED_MODE_STORAGE_KEY = 'linkup_discovery_feed_mode';
@@ -115,6 +119,11 @@ const DiscoverPlanListRow = memo(function DiscoverPlanListRow({
 });
 
 export default function PlansScreen() {
+  useShowTabBarOnFocus();
+  const tabBarScroll = useTabBarScrollProps();
+  const tabBarInset = useTabBarVisibilityOptional()?.tabBarInset ?? DEFAULT_TAB_BAR_INSET;
+  /** Pass / like / info row (~68px buttons + vertical padding). */
+  const swipeActionsClearance = 88;
   const { user, profile, dbUser } = useAuth();
   const [rows, setRows] = useState<PlanFeedRow[]>([]);
   const [perm, setPerm] = useState<Location.PermissionStatus | null>(null);
@@ -151,6 +160,7 @@ export default function PlansScreen() {
     minPriceCents: null,
     maxPriceCents: null,
     verifiedHostsOnly: false,
+    hostPresence: 'all',
     clientFiltersActive: false,
   });
   const [filterOpen, setFilterOpen] = useState(false);
@@ -163,7 +173,7 @@ export default function PlansScreen() {
   const [presenceByUser, setPresenceByUser] = useState<Record<string, DbUserPresence>>({});
   const offerFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [feedMode, setFeedMode] = useState<FeedViewMode>('list');
+  const [feedMode, setFeedMode] = useState<FeedViewMode>('swipe');
   const [discoveryMood, setDiscoveryMood] = useState<DiscoveryMood>('all');
   const [swipeIndex, setSwipeIndex] = useState(0);
   const swipeDeckRef = useRef<PlansSwipeDeckRef>(null);
@@ -320,23 +330,34 @@ export default function PlansScreen() {
   const presenceCreatorKey = useMemo(() => {
     const ids = new Set<string>();
     for (const r of rows) {
-      if (bidderOffersByPlan[r.id]) ids.add(r.creator_id);
+      if (user?.id && r.creator_id === user.id) continue;
+      ids.add(r.creator_id);
     }
     return [...ids].sort().join('|');
-  }, [rows, bidderOffersByPlan]);
+  }, [rows, user?.id]);
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) {
       setPresenceByUser({});
       return;
     }
-    const ids = [...new Set(rows.filter((r) => bidderOffersByPlan[r.id]).map((r) => r.creator_id))];
+    const ids = presenceCreatorKey ? presenceCreatorKey.split('|').filter(Boolean) : [];
     if (ids.length === 0) {
       setPresenceByUser({});
       return;
     }
     void fetchPresenceMap(ids).then(setPresenceByUser).catch(() => setPresenceByUser({}));
   }, [user?.id, presenceCreatorKey]);
+
+  const presenceForRow = useCallback(
+    (row: PlanFeedRow) =>
+      derivePresenceUi(
+        profile ?? null,
+        row.creatorProfile?.preferences,
+        presenceByUser[row.creator_id] ?? null
+      ),
+    [profile, presenceByUser]
+  );
 
   const filteredRows = useMemo(() => {
     const q = debouncedSearchQuery.trim().toLowerCase();
@@ -354,14 +375,27 @@ export default function PlansScreen() {
     [filteredRows, discoveryMood]
   );
 
+  const presenceFilteredRows = useMemo(() => {
+    if (feedFilter.hostPresence === 'all') return moodFilteredRows;
+    return moodFilteredRows.filter((row) => {
+      if (user?.id && row.creator_id === user.id) return true;
+      const kind = resolveHostPresenceKind(
+        profile ?? null,
+        row.creatorProfile?.preferences,
+        presenceByUser[row.creator_id] ?? null
+      );
+      return hostPresenceMatchesFilter(kind, feedFilter.hostPresence);
+    });
+  }, [moodFilteredRows, feedFilter.hostPresence, presenceByUser, profile, user?.id]);
+
   const moodTimelineRows = useMemo(
-    () => moodFilteredRows.filter((r) => r.is_mood_plan && !isPlanMoodWindowClosed(r)),
-    [moodFilteredRows]
+    () => presenceFilteredRows.filter((r) => r.is_mood_plan && !isPlanMoodWindowClosed(r)),
+    [presenceFilteredRows]
   );
 
   const standardDiscoverRows = useMemo(
-    () => moodFilteredRows.filter((r) => !r.is_mood_plan),
-    [moodFilteredRows]
+    () => presenceFilteredRows.filter((r) => !r.is_mood_plan),
+    [presenceFilteredRows]
   );
 
   const syncLocation = useCallback(async () => {
@@ -637,22 +671,9 @@ export default function PlansScreen() {
     router.push('/premium' as Href);
   }, []);
 
-  const listHeader = useMemo(
+  const feedBanner = useMemo(
     () => (
       <>
-        <View style={styles.listIntro}>
-          <Text style={styles.listIntroEyebrow}>Discover</Text>
-          <Text style={styles.listIntroTitle}>Meetups worth showing up for</Text>
-          <Text style={styles.listIntroSub}>
-            Curated cards near you — tap through for the full story, then say hello when the vibe fits.
-          </Text>
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.listIntroAccent}
-          />
-        </View>
         {unverified ? <PlansKycBanner visible /> : null}
         {showLocPrompt ? (
           <PlansLocationPrompt
@@ -672,28 +693,6 @@ export default function PlansScreen() {
       </>
     ),
     [unverified, showLocPrompt, error, onAllowLocation, retryLoad, moodTimelineRows, openPlanFromFeed]
-  );
-
-  /** Swipe mode: skip long intro so the deck can use almost the full screen; mood timeline still surfaces live sparks. */
-  const swipeListHeader = (
-    <>
-      {unverified ? <PlansKycBanner visible /> : null}
-      {showLocPrompt ? (
-        <PlansLocationPrompt
-          onAllow={onAllowLocation}
-          onNotNow={() => setLocPromptDismissed(true)}
-        />
-      ) : null}
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorTxt}>{error}</Text>
-          <Text style={styles.retry} onPress={() => void retryLoad()}>
-            Tap to retry
-          </Text>
-        </View>
-      ) : null}
-      <MoodTimelineCarousel rows={moodTimelineRows} onOpenPlan={openPlanFromFeed} />
-    </>
   );
 
   const searchActive = debouncedSearchQuery.trim().length > 0;
@@ -737,10 +736,8 @@ export default function PlansScreen() {
       </View>
     ) : standardDiscoverRows.length === 0 && moodTimelineRows.length > 0 ? (
       <View style={styles.moodEmpty}>
-        <Text style={styles.moodEmptyTitle}>Mood moments live above</Text>
-        <Text style={styles.moodEmptySub}>
-          The main list is for longer-lived meetups — explore the mood timeline for sparks on a countdown.
-        </Text>
+        <Text style={styles.moodEmptyTitle}>Mood moments in the timeline</Text>
+        <Text style={styles.moodEmptySub}>Swipe the timeline for sparks on a countdown — longer meetups land in the deck.</Text>
       </View>
     ) : (
       <PlansEmptyState onCreatePress={goCreatePlan} />
@@ -787,6 +784,17 @@ export default function PlansScreen() {
 
   const showSwipe = feedMode === 'swipe' && !error;
 
+  const { height: winH } = useWindowDimensions();
+  const hasMoodLane = moodTimelineRows.length > 0;
+  const swipeDeckMinHeight = useMemo(() => {
+    const moodLaneH = hasMoodLane ? 76 : 0;
+    const headerH = 52;
+    const actionsH = 76;
+    const buffer = 16;
+    const overhead = headerH + moodLaneH + actionsH + swipeActionsClearance + tabBarInset + buffer;
+    return Math.max(440, Math.round(winH - overhead));
+  }, [winH, hasMoodLane, tabBarInset, swipeActionsClearance]);
+
   useEffect(() => {
     if (!showSwipe || !hasMore || loadingMore || initialLoading || error) return;
     const remaining = standardDiscoverRows.length - swipeIndex;
@@ -829,14 +837,16 @@ export default function PlansScreen() {
           isPremium={subscriber}
           initial={feedFilter}
           discoveryMood={discoveryMood}
+          feedMode={feedMode}
           baseRadiusKm={radiusKm}
           onUpgrade={() => {
             setFilterOpen(false);
             router.push('/premium' as Href);
           }}
-          onApply={(next, nextMood) => {
+          onApply={(next, nextMood, nextFeedMode) => {
             setFeedFilter(next);
             setDiscoveryMood(nextMood);
+            persistFeedMode(nextFeedMode);
             setSwipeIndex(0);
             if (user && isSupabaseConfigured) {
               void supabase
@@ -849,6 +859,7 @@ export default function PlansScreen() {
                       minPriceCents: next.minPriceCents,
                       maxPriceCents: next.maxPriceCents,
                       verifiedHostsOnly: next.verifiedHostsOnly,
+                      hostPresence: next.hostPresence,
                       clientFiltersActive: next.clientFiltersActive,
                     },
                   },
@@ -879,8 +890,6 @@ export default function PlansScreen() {
         onPressFilter={() => setFilterOpen(true)}
         showUndo={subscriber && !!lastHiddenId}
         onUndoLastHide={undoHide}
-        feedMode={feedMode}
-        onFeedModeChange={persistFeedMode}
       />
       {feedMode === 'list' ? (
         <PlansSearchBar
@@ -891,16 +900,14 @@ export default function PlansScreen() {
       ) : null}
       {showSwipe && !initialLoading ? (
         <View style={styles.swipeColumn}>
-          {swipeListHeader}
+          <View style={styles.swipeFeedStrip}>{feedBanner}</View>
           {filteredRows.length === 0 ? (
             listEmpty
           ) : standardDiscoverRows.length === 0 ? (
             moodTimelineRows.length > 0 ? (
               <View style={styles.moodEmpty}>
-                <Text style={styles.moodEmptyTitle}>Swipe mood moments above</Text>
-                <Text style={styles.moodEmptySub}>
-                  This deck is for longer ideas; quick sparks stay in the horizontal timeline.
-                </Text>
+                <Text style={styles.moodEmptyTitle}>Mood moments in the timeline</Text>
+                <Text style={styles.moodEmptySub}>Explore the timeline — swipe the deck refreshes when longer meetups appear.</Text>
               </View>
             ) : moodFilteredRows.length === 0 ? (
               <View style={styles.moodEmpty}>
@@ -919,12 +926,14 @@ export default function PlansScreen() {
                   index={swipeIndex}
                   onIndexChange={setSwipeIndex}
                   distanceForRow={distanceForRow}
+                  presenceForRow={presenceForRow}
                   onSwipeRight={onSwipeInterested}
                   onSwipeLeft={onSwipePass}
                   onPressCard={(row) => openPlanFromFeed(row)}
+                  minDeckHeight={swipeDeckMinHeight}
                 />
               </View>
-              <View style={styles.swipeActionsZone}>
+              <View style={[styles.swipeActionsZone, { paddingBottom: tabBarInset + spacing.xs }]}>
                 <SwipeActionButtons
                   onPass={() => swipeDeckRef.current?.swipeLeft()}
                   onLike={() => swipeDeckRef.current?.swipeRight()}
@@ -941,11 +950,11 @@ export default function PlansScreen() {
           ) : null}
         </View>
       ) : (
-        <FlatList
+        <Animated.FlatList
           style={styles.list}
           data={standardDiscoverRows}
           keyExtractor={discoverListKeyExtractor}
-          ListHeaderComponent={listHeader}
+          ListHeaderComponent={feedBanner}
           contentContainerStyle={styles.listContentPremium}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -964,15 +973,17 @@ export default function PlansScreen() {
               <ActivityIndicator style={styles.footerSpinner} color={colors.primary} />
             ) : null
           }
+          {...tabBarScroll}
         />
       )}
       <PlansFab
         onPress={goCreatePlan}
         bottomOffset={
           showSwipe && !initialLoading && (standardDiscoverRows.length > 0 || moodTimelineRows.length > 0)
-            ? 148
-            : 88
+            ? tabBarInset + swipeActionsClearance + spacing.sm
+            : tabBarInset + spacing.md
         }
+        includeSafeAreaInset={false}
       />
     </Screen>
   );
@@ -982,65 +993,21 @@ const styles = StyleSheet.create({
   screenBg: { backgroundColor: 'transparent' },
   gradientBg: { ...StyleSheet.absoluteFillObject },
   swipeColumn: { flex: 1, minHeight: 0 },
-  swipeDeckZone: { flex: 1, minHeight: 0 },
+  swipeFeedStrip: { flexShrink: 0, flexGrow: 0 },
+  swipeDeckZone: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 0,
+    justifyContent: 'flex-start',
+  },
   swipeActionsZone: {
     flexGrow: 0,
     flexShrink: 0,
     justifyContent: 'center',
-    paddingBottom: 4,
+    paddingTop: spacing.xs,
   },
   list: { flex: 1, backgroundColor: 'transparent' },
   listContentPremium: { paddingBottom: 120, flexGrow: 1, paddingTop: spacing.xs },
-  listIntro: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.xl,
-    backgroundColor: 'rgba(237, 232, 255, 0.72)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108, 99, 255, 0.16)',
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#2a1f55',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.08,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 0,
-      },
-      default: {},
-    }),
-  },
-  listIntroEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.secondary,
-    letterSpacing: 1.4,
-    marginBottom: 6,
-  },
-  listIntroTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.5,
-    lineHeight: 28,
-  },
-  listIntroSub: {
-    marginTop: 8,
-    fontSize: 15,
-    color: colors.textMuted,
-    lineHeight: 22,
-    fontWeight: '500',
-  },
-  listIntroAccent: {
-    marginTop: spacing.md,
-    height: 4,
-    width: 56,
-    borderRadius: 2,
-  },
   searchEmpty: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,

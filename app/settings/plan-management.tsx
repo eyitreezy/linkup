@@ -4,7 +4,7 @@
 import { PlanShelfActionConfirmModal } from '@/components/plans/PlanShelfActionConfirmModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { PlanCreatorEditSheet } from '@/components/plans/PlanCreatorEditSheet';
-import { Screen } from '@/components/Screen';
+import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { distanceKm } from '@/lib/location';
@@ -316,23 +316,13 @@ export default function PlanManagementScreen() {
         : 'Try the All tab to see every plan, or pick another shelf above.';
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
-      <View style={styles.root}>
-        <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', '#F5F6FA']}
-          locations={[0, 0.35, 0.7, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.primary} />
-          }
-        >
+    <>
+      <SettingsStickyShell
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.primary} />
+        }
+      >
           <View style={styles.headerRow}>
             <View style={styles.headerIconWrap}>
               <LinearGradient
@@ -535,8 +525,7 @@ export default function PlanManagementScreen() {
               );
             })
           )}
-        </ScrollView>
-      </View>
+      </SettingsStickyShell>
 
       <PlanCreatorEditSheet
         visible={editPlan != null}
@@ -572,14 +561,15 @@ export default function PlanManagementScreen() {
           else await archivePlan(shelfDialog.planId);
         }}
       />
-    </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  screenTransparent: { backgroundColor: 'transparent', flex: 1 },
-  root: { flex: 1 },
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2.5 },
+  scroll: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl * 2.5,
+  },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
   headerIconWrap: {

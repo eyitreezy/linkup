@@ -40,6 +40,7 @@ function useMoodWindowLive(expiresAtIso: string | null | undefined): boolean {
   return live;
 }
 
+/** Instagram Live–style pulsing gradient ring + outer sparkle halo. */
 function LiveMoodBorder({
   active,
   children,
@@ -49,31 +50,53 @@ function LiveMoodBorder({
   children: ReactNode;
   borderRadius: number;
 }) {
-  const t = useSharedValue(0);
+  const pulse = useSharedValue(0);
+  const halo = useSharedValue(0);
 
   useEffect(() => {
     if (active) {
-      t.value = withRepeat(
+      pulse.value = withRepeat(
         withSequence(
-          withTiming(1, { duration: 1800, easing: Easing.bezier(0.4, 0, 0.2, 1) }),
-          withTiming(0, { duration: 1800, easing: Easing.bezier(0.4, 0, 0.2, 1) })
+          withTiming(1, { duration: 1400, easing: Easing.bezier(0.45, 0, 0.2, 1) }),
+          withTiming(0, { duration: 1400, easing: Easing.bezier(0.45, 0, 0.2, 1) })
+        ),
+        -1,
+        false
+      );
+      halo.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 2200, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: 0 })
         ),
         -1,
         false
       );
     } else {
-      cancelAnimation(t);
-      t.value = withTiming(0, { duration: 280 });
+      cancelAnimation(pulse);
+      cancelAnimation(halo);
+      pulse.value = withTiming(0, { duration: 280 });
+      halo.value = withTiming(0, { duration: 280 });
     }
-  }, [active, t]);
+  }, [active, pulse, halo]);
 
   const ringStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(t.value, [0, 0.5, 1], [
-      'rgba(108,99,255,0.92)',
-      'rgba(186,104,255,0.88)',
-      'rgba(255,101,132,0.94)',
+    borderColor: interpolateColor(pulse.value, [0, 0.33, 0.66, 1], [
+      '#F77737',
+      '#FD1D1D',
+      '#E1306C',
+      '#C13584',
     ]),
-    borderWidth: 2,
+    borderWidth: 2.5,
+  }));
+
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: (1 - halo.value) * 0.55,
+    transform: [{ scale: 1 + halo.value * 0.14 }],
+  }));
+
+  const sparkleStyle = useAnimatedStyle(() => ({
+    opacity: 0.25 + pulse.value * 0.45,
+    transform: [{ scale: 1 + pulse.value * 0.03 }],
   }));
 
   if (!active) {
@@ -83,8 +106,8 @@ function LiveMoodBorder({
           styles.liveRing,
           {
             borderRadius,
-            borderWidth: 2,
-            borderColor: 'rgba(167,139,250,0.55)',
+            borderWidth: 1.5,
+            borderColor: 'rgba(167,139,250,0.4)',
           },
         ]}
       >
@@ -94,7 +117,25 @@ function LiveMoodBorder({
   }
 
   return (
-    <Animated.View style={[styles.liveRing, { borderRadius }, ringStyle]}>{children}</Animated.View>
+    <View style={styles.liveRingHost}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.liveHalo,
+          { borderRadius: borderRadius + 8 },
+          haloStyle,
+        ]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.liveSparkle,
+          { borderRadius: borderRadius + 4 },
+          sparkleStyle,
+        ]}
+      />
+      <Animated.View style={[styles.liveRing, { borderRadius }, ringStyle]}>{children}</Animated.View>
+    </View>
   );
 }
 
@@ -139,6 +180,14 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
 
   const open = () => onOpenPlan(row);
 
+  function onCardPress() {
+    if (!expanded) {
+      setChevronOpen(true);
+      return;
+    }
+    open();
+  }
+
   return (
     <MotiView
       from={{ opacity: 0.88, translateY: 5 }}
@@ -176,13 +225,13 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
           />
           <View style={styles.rowWrap}>
             <Pressable
-              onPress={open}
+              onPress={onCardPress}
               onHoverIn={() => Platform.OS === 'web' && setHovered(true)}
               onHoverOut={() => Platform.OS === 'web' && setHovered(false)}
               style={({ pressed }) => [styles.mainPress, pressed && styles.mainPressPressed]}
               accessibilityRole="button"
               accessibilityHint={
-                expanded ? 'Opens this mood plan' : 'Opens plan. On web, hover to see more detail.'
+                expanded ? 'Opens this mood plan' : 'Expands mood details. Tap again to open the plan.'
               }
             >
               {!expanded ? (
@@ -202,42 +251,9 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
                       {name}
                     </Text>
                   </View>
-                  {row.mood_expires_at ? (
-                    <View style={styles.pillCount}>
-                      <Ionicons name="hourglass-outline" size={15} color={colors.secondary} />
-                      <MoodPlanCountdown expiresAtIso={row.mood_expires_at} />
-                    </View>
-                  ) : null}
                 </View>
               ) : (
                 <View style={styles.cardBody}>
-                  <View style={styles.topMetaRow}>
-                    <LinearGradient
-                      colors={['rgba(108,99,255,0.22)', 'rgba(255,101,132,0.2)', 'rgba(16,185,129,0.14)']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.pulseCapsule}
-                    >
-                      <View style={styles.pulseRow}>
-                        <Ionicons name="sparkles" size={15} color={colors.primary} />
-                        <Text style={styles.pulseLabel}>Mood moment</Text>
-                      </View>
-                    </LinearGradient>
-                    {meta.moodTypeLabel ? (
-                      <LinearGradient
-                        colors={['rgba(255,255,255,0.95)', 'rgba(225,220,255,0.88)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.moodChip}
-                      >
-                        <Text style={styles.moodChipTxt} numberOfLines={1}>
-                          {meta.moodTypeLabel}
-                        </Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.topMetaSpacer} />
-                    )}
-                  </View>
                   <Text style={styles.title} numberOfLines={3}>
                     {row.title}
                   </Text>
@@ -308,6 +324,30 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
 });
 
 const styles = StyleSheet.create({
+  liveRingHost: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  liveHalo: {
+    ...StyleSheet.absoluteFillObject,
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: -6,
+    borderWidth: 3,
+    borderColor: 'rgba(255,48,72,0.35)',
+    backgroundColor: 'rgba(255,101,132,0.08)',
+  },
+  liveSparkle: {
+    ...StyleSheet.absoluteFillObject,
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderWidth: 2,
+    borderColor: 'rgba(253,29,29,0.28)',
+    backgroundColor: 'transparent',
+  },
   liveRing: {
     overflow: 'hidden',
   },
@@ -333,9 +373,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: spacing.md,
-    minHeight: 58,
+    minHeight: 56,
   },
   pillAvatar: {
     width: 38,
@@ -374,15 +414,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: -0.12,
   },
-  pillCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    flexShrink: 0,
-    paddingLeft: 8,
-    marginLeft: 0,
-    minHeight: 40,
-  },
   chevronSpin: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -406,38 +437,6 @@ const styles = StyleSheet.create({
     paddingRight: Platform.OS !== 'web' ? spacing.md : spacing.md,
     gap: 0,
   },
-  topMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
-    width: '100%',
-  },
-  topMetaSpacer: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 1,
-  },
-  pulseCapsule: {
-    flexShrink: 0,
-    borderRadius: radius.button,
-    overflow: 'hidden',
-  },
-  pulseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-  },
-  pulseLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: colors.text,
-    letterSpacing: 0.85,
-    opacity: 0.88,
-  },
   title: {
     fontSize: 17,
     fontWeight: '800',
@@ -445,21 +444,6 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     letterSpacing: -0.35,
     marginBottom: 10,
-  },
-  moodChip: {
-    flexShrink: 1,
-    maxWidth: '52%',
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.28)',
-  },
-  moodChipTxt: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-    textTransform: 'lowercase',
   },
   hostRow: {
     flexDirection: 'row',

@@ -4,12 +4,14 @@
 import { LinkUpTabBar } from '@/components/navigation/LinkUpTabBar';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { TabBarVisibilityProvider } from '@/contexts/TabBarVisibilityContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs, type Href } from 'expo-router';
+import { View } from 'react-native';
 
 export default function TabsLayout() {
   const { session, profile, loading } = useAuth();
-  if (loading && !session) {
+  if (loading) {
     return null;
   }
   if (!session) {
@@ -20,17 +22,33 @@ export default function TabsLayout() {
   }
 
   return (
-    <Tabs
-      tabBar={(props) => <LinkUpTabBar {...props} />}
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        headerStyle: { backgroundColor: colors.background },
-        headerTintColor: colors.text,
-        headerTitle: () => null,
-        tabBarShowLabel: false,
-      }}
-    >
+    <TabBarVisibilityProvider>
+      <Tabs
+        tabBar={(props) => <LinkUpTabBar {...props} />}
+        screenOptions={{
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerTitle: () => null,
+          tabBarShowLabel: false,
+          tabBarBackground: () => <View style={{ backgroundColor: 'transparent' }} />,
+          sceneContainerStyle: { backgroundColor: colors.background },
+          tabBarStyle: {
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 0,
+            minHeight: 0,
+            paddingTop: 0,
+            paddingBottom: 0,
+            elevation: 0,
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+          },
+        }}
+      >
       <Tabs.Screen
         name="index"
         options={{
@@ -79,6 +97,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
-    </Tabs>
+      </Tabs>
+    </TabBarVisibilityProvider>
   );
 }

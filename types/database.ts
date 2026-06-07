@@ -68,6 +68,7 @@ export interface ProfilePreferences {
     minPriceCents?: number | null;
     maxPriceCents?: number | null;
     verifiedHostsOnly?: boolean;
+    hostPresence?: 'all' | 'online' | 'offline';
     maxDistanceKm?: number | null;
     clientFiltersActive?: boolean;
   };
@@ -127,6 +128,8 @@ export interface DbProfile {
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
+  /** Main profile photo — synced with avatar_url and first in photo_urls when set. */
+  primary_photo_url?: string | null;
   birth_date?: string | null;
   photo_urls?: string[] | null;
   gender?: string | null;
@@ -431,6 +434,7 @@ export type NotificationEventType =
   | 'escrow_funded'
   | 'escrow_status'
   | 'plan_reminder'
+  | 'payment_reminder'
   | 'completion_release'
   | 'cancel_chargeback'
   | 'message'

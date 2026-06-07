@@ -56,8 +56,8 @@ export const FundingDeadlineUrgencyBanner = memo(function FundingDeadlineUrgency
           {isMoodPlan ? 'Mood plan — fund escrow soon' : 'Complete funding'}
         </Text>
         <Text style={[styles.sub, isMoodPlan && styles.subOnDark]}>
-          <Text style={[styles.mono, isMoodPlan && styles.monoOnDark]}>{label}</Text> remaining to fund — both sides
-          should pay their share before this time.
+          <Text style={[styles.mono, isMoodPlan && styles.monoOnDark]}>{label}</Text> remaining to fund escrow on this
+          screen. Automated push and email reminders run if notifications are on in Settings.
         </Text>
       </View>
     </View>

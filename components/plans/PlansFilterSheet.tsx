@@ -1,7 +1,9 @@
 import { Input } from '@/components/Input';
 import { DiscoverMoodStrip } from '@/components/discovery/DiscoverMoodStrip';
+import type { FeedViewMode } from '@/components/plans/NearbyPlansHeader';
 import { colors, radius, spacing } from '@/constants/theme';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
+import type { HostPresenceFilter } from '@/lib/presence/derivePresenceUi';
 import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
 import { formatFilterPriceMajor, parseFilterPriceMajor } from '@/lib/discovery/feedPriceFilter';
 import { isDiscoverFilterConstraintActive } from '@/lib/discovery/parseStoredFeedFilters';
@@ -27,9 +29,16 @@ export type FeedFilterState = {
   minPriceCents: number | null;
   maxPriceCents: number | null;
   verifiedHostsOnly: boolean;
+  hostPresence: HostPresenceFilter;
   /** When false, discover shows all non-expired plans (distance is sort-only). */
   clientFiltersActive: boolean;
 };
+
+const HOST_PRESENCE_OPTIONS: { id: HostPresenceFilter; label: string }[] = [
+  { id: 'all', label: 'All hosts' },
+  { id: 'online', label: 'Online now' },
+  { id: 'offline', label: 'Offline' },
+];
 
 type Props = {
   visible: boolean;
@@ -37,7 +46,8 @@ type Props = {
   isPremium: boolean;
   initial: FeedFilterState;
   discoveryMood: DiscoveryMood;
-  onApply: (next: FeedFilterState, nextMood: DiscoveryMood) => void;
+  feedMode: FeedViewMode;
+  onApply: (next: FeedFilterState, nextMood: DiscoveryMood, nextFeedMode: FeedViewMode) => void;
   onUpgrade: () => void;
   baseRadiusKm: number;
 };
@@ -48,17 +58,21 @@ export function PlansFilterSheet({
   isPremium,
   initial,
   discoveryMood,
+  feedMode,
   onApply,
   onUpgrade,
   baseRadiusKm,
 }: Props) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const sheetHeight = winH * 0.92;
   const [maxKm, setMaxKm] = useState(initial.maxDistanceKm);
   const [minPriceText, setMinPriceText] = useState(() => formatFilterPriceMajor(initial.minPriceCents));
   const [maxPriceText, setMaxPriceText] = useState(() => formatFilterPriceMajor(initial.maxPriceCents));
   const [verifiedOnly, setVerifiedOnly] = useState(initial.verifiedHostsOnly);
+  const [hostPresence, setHostPresence] = useState<HostPresenceFilter>(initial.hostPresence);
   const [mood, setMood] = useState<DiscoveryMood>(discoveryMood);
+  const [displayMode, setDisplayMode] = useState<FeedViewMode>(feedMode);
   const [priceRangeErrorOpen, setPriceRangeErrorOpen] = useState(false);
 
   useEffect(() => {
@@ -67,9 +81,11 @@ export function PlansFilterSheet({
       setMinPriceText(formatFilterPriceMajor(initial.minPriceCents));
       setMaxPriceText(formatFilterPriceMajor(initial.maxPriceCents));
       setVerifiedOnly(initial.verifiedHostsOnly);
+      setHostPresence(initial.hostPresence);
       setMood(discoveryMood);
+      setDisplayMode(feedMode);
     }
-  }, [visible, initial, discoveryMood]);
+  }, [visible, initial, discoveryMood, feedMode]);
 
   function apply() {
     const minPriceCents = parseFilterPriceMajor(minPriceText);
@@ -85,12 +101,14 @@ export function PlansFilterSheet({
         minPriceCents,
         maxPriceCents,
         verifiedHostsOnly,
+        hostPresence,
         clientFiltersActive: isDiscoverFilterConstraintActive(
-          { maxDistanceKm: maxKm, minPriceCents, maxPriceCents, verifiedHostsOnly },
+          { maxDistanceKm: maxKm, minPriceCents, maxPriceCents, verifiedHostsOnly, hostPresence },
           baseRadiusKm
         ),
       },
-      mood
+      mood,
+      displayMode
     );
     onClose();
   }
@@ -108,41 +126,94 @@ export function PlansFilterSheet({
       />
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheetOuter} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.sheetOuter, { height: sheetHeight, maxHeight: sheetHeight }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <LinearGradient
             colors={['#FFFFFF', '#FAF7FF', '#FFFAFC', '#F4FFFB']}
             locations={[0, 0.35, 0.72, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[styles.sheetGradient, { paddingBottom: spacing.sm + insets.bottom }]}
+            style={styles.sheetGradient}
           >
-            <View style={styles.sheetHandleWrap} pointerEvents="none">
-              <View style={styles.sheetHandle} />
-            </View>
+            <View style={styles.sheetBody}>
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetHandleWrap} pointerEvents="none">
+                  <View style={styles.sheetHandle} />
+                </View>
 
-            <View style={styles.titleRow}>
-              <LinearGradient
-                colors={[colors.primary, colors.secondary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.titleIcon}
-              >
-                <Ionicons name="options-outline" size={20} color="#fff" />
-              </LinearGradient>
-              <View style={styles.titleTextCol}>
-                <Text style={styles.title}>Discover filters</Text>
-                <Text style={styles.sectionLead}>
-                  Tune your feed — vibe first, then distance{isPremium ? ', price, and host signals' : ''}.
-                </Text>
+                <View style={styles.titleRow}>
+                  <LinearGradient
+                    colors={[colors.primary, colors.secondary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.titleIcon}
+                  >
+                    <Ionicons name="options-outline" size={20} color="#fff" />
+                  </LinearGradient>
+                  <View style={styles.titleTextCol}>
+                    <Text style={styles.title}>Discover filters</Text>
+                    <Text style={styles.sectionLead}>
+                      Tune your feed — vibe first, then distance{isPremium ? ', price, and host signals' : ''}.
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
 
-            <ScrollView
-              style={{ maxHeight: winH * 0.78 }}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
+              <ScrollView
+                style={styles.sheetScroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces
+              >
+              <Text style={styles.sectionEyebrow}>Display</Text>
+              <View style={styles.sectionCard}>
+                <Text style={styles.label}>Feed layout</Text>
+                <View style={styles.displayPillRow}>
+                  {(
+                    [
+                      { id: 'swipe' as const, label: 'Swipe', icon: 'albums-outline' as const },
+                      { id: 'list' as const, label: 'List', icon: 'list-outline' as const },
+                    ] as const
+                  ).map((opt) => {
+                    const active = displayMode === opt.id;
+                    return (
+                      <Pressable
+                        key={opt.id}
+                        onPress={() => setDisplayMode(opt.id)}
+                        style={({ pressed }) => [
+                          styles.displayPillOuter,
+                          active && styles.displayPillOuterOn,
+                          pressed && styles.displayPillPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`${opt.label} view`}
+                      >
+                        {active ? (
+                          <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.displayPillGradient}
+                          >
+                            <Ionicons name={opt.icon} size={17} color="#fff" />
+                            <Text style={styles.displayPillTxtOn}>{opt.label}</Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.displayPillInner}>
+                            <Ionicons name={opt.icon} size={17} color={colors.textMuted} />
+                            <Text style={styles.displayPillTxt}>{opt.label}</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
               <Text style={styles.sectionEyebrow}>Vibe</Text>
               <LinearGradient
                 colors={['rgba(108,99,255,0.45)', 'rgba(255,101,132,0.35)', 'rgba(16,185,129,0.25)']}
@@ -154,6 +225,49 @@ export function PlansFilterSheet({
                   <DiscoverMoodStrip variant="embedded" value={mood} onChange={setMood} />
                 </View>
               </LinearGradient>
+
+              <Text style={styles.sectionEyebrow}>Host status</Text>
+              <View style={styles.sectionCard}>
+                <Text style={styles.label}>Show hosts who are</Text>
+                <View style={styles.presenceChipRow}>
+                  {HOST_PRESENCE_OPTIONS.map((opt) => {
+                    const active = hostPresence === opt.id;
+                    return (
+                      <Pressable
+                        key={opt.id}
+                        onPress={() => setHostPresence(opt.id)}
+                        style={({ pressed }) => [
+                          styles.presenceChipOuter,
+                          active && styles.presenceChipOuterOn,
+                          pressed && styles.presenceChipPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={opt.label}
+                      >
+                        {active ? (
+                          <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.presenceChipGradient}
+                          >
+                            <Text style={styles.presenceChipTxtOn}>{opt.label}</Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.presenceChipInner}>
+                            <Text style={styles.presenceChipTxt}>{opt.label}</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.presenceHint}>
+                  Respects each host&apos;s privacy settings. Hosts who hide activity won&apos;t appear in Online or
+                  Offline filters.
+                </Text>
+              </View>
 
               <Text style={styles.sectionEyebrow}>Location</Text>
               <View style={styles.sectionCard}>
@@ -225,34 +339,35 @@ export function PlansFilterSheet({
                   </View>
                 </View>
               )}
-            </ScrollView>
+              </ScrollView>
 
-            <View style={styles.footerActions}>
-              <View style={styles.footerRow}>
-                <Pressable
-                  onPress={onClose}
-                  style={({ pressed }) => [styles.footerCancel, pressed && styles.footerPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel filters"
-                  hitSlop={8}
-                >
-                  <Text style={styles.footerCancelTxt}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={apply}
-                  style={({ pressed }) => [styles.footerApplyOuter, pressed && styles.footerPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Apply discover filters"
-                >
-                  <LinearGradient
-                    colors={[colors.primary, colors.secondary]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.footerApplyGrad}
+              <View style={[styles.footerActions, { paddingBottom: spacing.sm + insets.bottom }]}>
+                <View style={styles.footerRow}>
+                  <Pressable
+                    onPress={onClose}
+                    style={({ pressed }) => [styles.footerCancel, pressed && styles.footerPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel filters"
+                    hitSlop={8}
                   >
-                    <Text style={styles.footerApplyTxt}>Apply filters</Text>
-                  </LinearGradient>
-                </Pressable>
+                    <Text style={styles.footerCancelTxt}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={apply}
+                    style={({ pressed }) => [styles.footerApplyOuter, pressed && styles.footerPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Apply discover filters"
+                  >
+                    <LinearGradient
+                      colors={[colors.primary, colors.secondary]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.footerApplyGrad}
+                    >
+                      <Text style={styles.footerApplyTxt}>Apply filters</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
               </View>
             </View>
           </LinearGradient>
@@ -271,20 +386,32 @@ const styles = StyleSheet.create({
   },
   sheetOuter: {
     width: '100%',
-    maxHeight: '92%',
     borderTopLeftRadius: radius.xl + 4,
     borderTopRightRadius: radius.xl + 4,
     overflow: 'hidden',
   },
   sheetGradient: {
+    flex: 1,
     borderTopLeftRadius: radius.xl + 4,
     borderTopRightRadius: radius.xl + 4,
-    paddingTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
     borderColor: 'rgba(108,99,255,0.12)',
+  },
+  sheetBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  sheetHeader: {
+    flexShrink: 0,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  sheetScroll: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing.lg,
   },
   sheetHandleWrap: { alignItems: 'center', paddingBottom: spacing.sm },
   sheetHandle: {
@@ -316,7 +443,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   scrollContent: {
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
   },
   sectionEyebrow: {
     fontSize: 11,
@@ -403,15 +530,27 @@ const styles = StyleSheet.create({
   upsellBody: { fontSize: 14, color: colors.textMuted, marginTop: 8, lineHeight: 21, fontWeight: '500' },
   upsellCta: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: spacing.md },
   footerActions: {
-    marginTop: spacing.md,
+    flexShrink: 0,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(108,99,255,0.14)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+      },
+      android: { elevation: 8 },
+    }),
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
   },
   footerCancel: {
     justifyContent: 'center',
@@ -461,4 +600,77 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   footerPressed: { opacity: 0.9 },
+  presenceChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  presenceChipOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  presenceChipOuterOn: {
+    borderColor: 'transparent',
+  },
+  presenceChipPressed: { opacity: 0.92 },
+  presenceChipInner: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  presenceChipGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+  },
+  presenceChipTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
+  presenceChipTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  presenceHint: {
+    marginTop: spacing.sm,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  displayPillRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  displayPillOuter: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  displayPillOuterOn: {
+    borderColor: 'transparent',
+  },
+  displayPillPressed: { opacity: 0.92 },
+  displayPillInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  displayPillGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.button,
+  },
+  displayPillTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
+  displayPillTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff' },
 });

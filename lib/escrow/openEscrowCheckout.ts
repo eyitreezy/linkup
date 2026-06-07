@@ -1,5 +1,11 @@
-import * as Linking from 'expo-linking';
-import { getPaystackPublicKey, paystackCheckoutUrl } from '@/lib/paystack';
+import {
+  getEscrowPaystackCallbackUrl,
+  isAllowedPaystackCallbackUrl,
+  paystackCallbackUrlError,
+} from '@/lib/paystack/callbackUrl';
+import { invokePaystackInitialize } from '@/lib/paystack/invokePaystackInitialize';
+import { openPaystackCheckoutInBrowser } from '@/lib/paystack/openPaystackBrowser';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 export type OpenEscrowCheckoutArgs = {
   email: string;
@@ -10,45 +16,57 @@ export type OpenEscrowCheckoutArgs = {
   escrowLeg?: 'host' | 'guest';
 };
 
-/** Opens Paystack hosted checkout. Public key only; verification happens on the server/webhook. */
+/** Opens Paystack checkout via server initialize (required — no legacy URL fallback). */
 export async function openEscrowPaystackCheckout(args: OpenEscrowCheckoutArgs): Promise<{
   ok: boolean;
   error?: string;
   reference: string;
   url?: string;
 }> {
-  const pk = getPaystackPublicKey();
-  if (!pk) {
-    return { ok: false, error: 'Paystack is not configured (EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY).', reference: '' };
-  }
-  if (!args.email) {
+  if (!args.email?.trim()) {
     return { ok: false, error: 'Add an email on your account to pay.', reference: '' };
   }
 
-  const reference = `escrow-${args.escrowId}-${args.escrowLeg ?? 'full'}-${Date.now()}`;
-  const callbackUrl =
-    process.env.EXPO_PUBLIC_PAYSTACK_ESCROW_CALLBACK_URL ?? Linking.createURL(`/escrow/${args.escrowId}`);
+  if (!isSupabaseConfigured) {
+    return {
+      ok: false,
+      error: 'Supabase is not configured. Escrow checkout requires paystack-initialize on the server.',
+      reference: '',
+    };
+  }
 
-  const meta: Record<string, string> = {
+  const callbackUrl = getEscrowPaystackCallbackUrl(args.escrowId);
+  if (!isAllowedPaystackCallbackUrl(callbackUrl)) {
+    return { ok: false, error: paystackCallbackUrlError(), reference: '' };
+  }
+
+  const init = await invokePaystackInitialize({
+    kind: 'escrow',
+    email: args.email.trim(),
+    amount_kobo: args.amountKobo,
+    callback_url: callbackUrl,
     escrow_id: args.escrowId,
     plan_id: args.planId,
-    linkup: 'escrow',
-    transaction_type: 'escrow',
-  };
-  if (args.escrowLeg) meta.escrow_leg = args.escrowLeg;
-
-  const url = paystackCheckoutUrl({
-    email: args.email,
-    amountKobo: args.amountKobo,
-    reference,
-    callbackUrl,
-    metadata: meta,
+    escrow_leg: args.escrowLeg,
   });
 
-  const can = await Linking.canOpenURL(url);
-  if (!can) {
-    return { ok: false, error: 'Cannot open checkout on this device.', reference, url };
+  if (!init.ok) {
+    return { ok: false, error: init.error, reference: '' };
   }
-  await Linking.openURL(url);
-  return { ok: true, reference, url };
+
+  const opened = await openPaystackCheckoutInBrowser(init.data.authorization_url, callbackUrl);
+  if (!opened.ok) {
+    return {
+      ok: false,
+      error: opened.error,
+      reference: init.data.reference,
+      url: init.data.authorization_url,
+    };
+  }
+
+  return {
+    ok: true,
+    reference: init.data.reference,
+    url: init.data.authorization_url,
+  };
 }

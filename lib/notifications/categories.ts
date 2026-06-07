@@ -7,6 +7,7 @@ const ACTIVITY: NotificationEventType[] = [
   'offer_counter',
   'mutual_agreement',
   'plan_reminder',
+  'payment_reminder',
   'message',
 ];
 
@@ -54,6 +55,7 @@ export function priorityForType(type: string): 'high' | 'medium' | 'low' {
     type === 'message' ||
     type.startsWith('offer_') ||
     type === 'mutual_agreement' ||
+    type === 'payment_reminder' ||
     type === 'completion_release' ||
     type === 'premium_activated'
   ) {

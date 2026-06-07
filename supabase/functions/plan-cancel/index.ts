@@ -1,5 +1,5 @@
 /**
- * CORS + JWT → `submit_plan_cancellation` RPC (server-side bands).
+ * CORS + JWT → `submit_plan_cancellation` RPC (role/timing matrix, Pattern B splits).
  *
  * POST JSON: { "plan_id": "<uuid>", "no_show": false }
  * Header: Authorization: Bearer <user access token>

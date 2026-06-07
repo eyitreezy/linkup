@@ -49,12 +49,14 @@ export default function PremiumOverviewScreen() {
           >
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </Pressable>
-          <View style={styles.topNavBadge}>
-            <Ionicons name="diamond-outline" size={16} color={colors.primary} />
-            <Text style={styles.topNavBadgeText}>
-              {subscriber ? 'Member' : 'Premium'}
-            </Text>
-          </View>
+          {!subscriber ? (
+            <View style={styles.topNavBadge}>
+              <Ionicons name="diamond-outline" size={16} color={colors.primary} />
+              <Text style={styles.topNavBadgeText}>Premium</Text>
+            </View>
+          ) : (
+            <View style={styles.topNavSpacer} />
+          )}
         </View>
 
         <ScrollView
@@ -213,6 +215,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     marginBottom: spacing.sm,
   },
+  topNavSpacer: { width: 44, height: 44 },
   topNavBadge: {
     flexDirection: 'row',
     alignItems: 'center',

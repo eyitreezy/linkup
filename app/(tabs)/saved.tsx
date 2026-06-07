@@ -13,14 +13,9 @@ import { Href, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
+import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 function SavedSkeleton() {
   return (
@@ -40,6 +35,7 @@ function SavedSkeleton() {
 }
 
 export default function SavedPlansScreen() {
+  const tabBarScroll = useTabBarScrollProps();
   const { user } = useAuth();
   const [items, setItems] = useState<Awaited<ReturnType<typeof fetchSavedPlansList>>>([]);
   const [loading, setLoading] = useState(true);
@@ -159,11 +155,12 @@ export default function SavedPlansScreen() {
           ) : null}
         </View>
 
-        <FlatList
+        <Animated.FlatList
           data={loading ? [] : items}
           keyExtractor={(x) => x.plan.id}
           style={styles.listFlex}
           contentContainerStyle={styles.list}
+          {...tabBarScroll}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }

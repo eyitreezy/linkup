@@ -29,6 +29,8 @@ export type MessageInputProps = {
   embeddedInSheet?: boolean;
   /** Match chat thread theme (optional). */
   threadLook?: MessageInputThreadLook | null;
+  /** Parent provides + toggle (ChatComposer); omit default attach button. */
+  hideLeadingAttach?: boolean;
 };
 
 export function MessageInput({
@@ -41,27 +43,30 @@ export function MessageInput({
   placeholder = 'Message…',
   embeddedInSheet,
   threadLook,
+  hideLeadingAttach,
 }: MessageInputProps) {
   const canSend = value.trim().length > 0 && !sending;
   const tl = threadLook;
   return (
     <View style={[styles.row, embeddedInSheet && styles.rowEmbedded]}>
-      <Pressable
-        onPress={onAttach}
-        disabled={attachDisabled || sending}
-        style={({ pressed }) => [
-          styles.iconBtn,
-          (attachDisabled || sending) && styles.iconDisabled,
-          pressed && styles.iconPressed,
-        ]}
-        accessibilityLabel="Attach photo or video"
-      >
-        <Ionicons
-          name="add-circle-outline"
-          size={28}
-          color={attachDisabled ? colors.textMuted : (tl?.attachIcon ?? colors.primary)}
-        />
-      </Pressable>
+      {!hideLeadingAttach ? (
+        <Pressable
+          onPress={onAttach}
+          disabled={attachDisabled || sending}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            (attachDisabled || sending) && styles.iconDisabled,
+            pressed && styles.iconPressed,
+          ]}
+          accessibilityLabel="Attach photo or video"
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={28}
+            color={attachDisabled ? colors.textMuted : (tl?.attachIcon ?? colors.primary)}
+          />
+        </Pressable>
+      ) : null}
       <TextInput
         style={[
           styles.input,

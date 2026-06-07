@@ -9,6 +9,7 @@ import type { MeetingIntent, OnboardingDraft } from '@/types/onboarding';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { resolveDraftPhotoUrls } from '@/lib/profile/media/photoOrder';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 
 type Props = {
@@ -29,9 +30,14 @@ const intentLabel = (m: MeetingIntent | null): string | null => {
 
 export function ProfileCardPreview({ draft, fullWidth = false }: Props) {
   const { width: winW } = useWindowDimensions();
-  const uri = draft.localPhotoUris[0] ?? draft.remotePhotoUrls[0];
+  const photos = resolveDraftPhotoUrls(
+    draft.remotePhotoUrls,
+    draft.localPhotoUris,
+    draft.primaryPhotoRef
+  );
+  const heroUri = photos[0] ?? null;
+  const morePhotos = photos.length > 1 ? photos.slice(1) : [];
   const age = ageFromBirthDate(draft.birthDate);
-  const photos = [...draft.remotePhotoUrls, ...draft.localPhotoUris];
   const intent = intentLabel(draft.meetingIntent);
 
   const cardSizeStyle = fullWidth ? styles.cardFull : { maxWidth: Math.min(winW - onboarding.spacing.lg * 2, 420) };
@@ -41,8 +47,8 @@ export function ProfileCardPreview({ draft, fullWidth = false }: Props) {
       <View style={[styles.card, cardSizeStyle]}>
         {/* Tinder-style: full-bleed photo, name on gradient */}
         <View style={styles.hero}>
-          {uri ? (
-            <Image source={{ uri }} style={styles.heroImg} resizeMode="cover" />
+          {heroUri ? (
+            <Image source={{ uri: heroUri }} style={styles.heroImg} resizeMode="cover" />
           ) : (
             <View style={[styles.heroImg, styles.heroPlaceholder]} />
           )}
@@ -109,11 +115,15 @@ export function ProfileCardPreview({ draft, fullWidth = false }: Props) {
               )
           )}
 
-          {photos.length > 1 ? (
+          {morePhotos.length > 0 ? (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>More photos</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {photos.slice(1).map((u, i) => (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.morePhotosRow}
+              >
+                {morePhotos.map((u, i) => (
                   <Image key={`${u}-${i}`} source={{ uri: u }} style={styles.thumb} />
                 ))}
               </ScrollView>
@@ -247,11 +257,16 @@ const styles = StyleSheet.create({
     color: onboarding.text,
     letterSpacing: -0.2,
   },
+  morePhotosRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: onboarding.spacing.sm,
+    paddingVertical: 2,
+  },
   thumb: {
     width: 80,
     height: 80,
     borderRadius: radius.lg,
-    marginRight: onboarding.spacing.sm,
     backgroundColor: '#eee',
   },
 });

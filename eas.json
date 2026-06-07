@@ -5,6 +5,7 @@
   "build": {
     "development": {
       "node": "22.14.0",
+      "environment": "development",
       "env": {
         "NPM_CONFIG_PRODUCTION": "false"
       },
@@ -13,6 +14,7 @@
     },
     "preview": {
       "node": "22.14.0",
+      "environment": "preview",
       "env": {
         "NPM_CONFIG_PRODUCTION": "false"
       },
@@ -26,6 +28,7 @@
     },
     "production": {
       "node": "22.14.0",
+      "environment": "production",
       "env": {
         "NPM_CONFIG_PRODUCTION": "false"
       }

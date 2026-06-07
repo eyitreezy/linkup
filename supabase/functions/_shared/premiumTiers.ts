@@ -12,6 +12,13 @@ export const PREMIUM_TIERS_SERVER: ServerPremiumTier[] = [
   { id: 'quarterly', durationDays: 90, bonusBoostCredits: 12 },
 ];
 
+/** Must match `lib/premium/catalog.ts` priceKobo — server never trusts client amount. */
+export const PREMIUM_PRICE_KOBO: Record<string, number> = {
+  weekly: 150_000,
+  monthly: 399_000,
+  quarterly: 999_000,
+};
+
 export function getServerTier(tierId: string | undefined): ServerPremiumTier | null {
   return PREMIUM_TIERS_SERVER.find((t) => t.id === tierId) ?? null;
 }

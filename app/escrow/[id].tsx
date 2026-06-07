@@ -1,9 +1,11 @@
 /**
  * E1 — Escrow detail: Paystack funding, trust copy, timeline, release & disputes.
  */
-import { Button } from '@/components/Button';
 import { EscrowConfirmModal } from '@/components/escrow/EscrowConfirmModal';
 import { EscrowCounterpartyHeader, type EscrowParty } from '@/components/escrow/EscrowCounterpartyHeader';
+import { EscrowFundCTA } from '@/components/escrow/EscrowFundCTA';
+import { EscrowScreenHeader } from '@/components/escrow/EscrowScreenHeader';
+import { EscrowSplitFundingCard } from '@/components/escrow/EscrowSplitFundingCard';
 import { EscrowStatusBadge } from '@/components/escrow/EscrowStatusBadge';
 import { EscrowStepIndicator } from '@/components/escrow/EscrowStepIndicator';
 import { EscrowSummaryCard } from '@/components/escrow/EscrowSummaryCard';
@@ -11,9 +13,12 @@ import { EscrowTimeline } from '@/components/escrow/EscrowTimeline';
 import { FundingDeadlineUrgencyBanner } from '@/components/escrow/FundingDeadlineUrgencyBanner';
 import { OpenDisputeModal } from '@/components/escrow/OpenDisputeModal';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
-import { colors, spacing } from '@/constants/theme';
+import { Screen } from '@/components/Screen';
+import { DiscoveryGradientBg } from '@/components/ui/DiscoveryGradientBg';
+import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildEscrowTimeline } from '@/lib/escrow/buildEscrowTimeline';
+import { formatEscrowMoney, isMeetupWithinHours, meetupHoursUntilLabel } from '@/lib/escrow/escrowPaymentPreview';
 import {
   confirmMeetupComplete,
   markEscrowFunded,
@@ -30,16 +35,18 @@ import type { DbEscrowDispute, DbEscrowTransaction, DbPlan } from '@/types/datab
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function paymentStatusLabel(status: DbEscrowTransaction['status']): string {
   switch (status) {
@@ -275,11 +282,14 @@ export default function EscrowDetailScreen() {
 
   if (!escrow || !user) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
-          <ActivityIndicator color={colors.primary} size="large" />
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <DiscoveryGradientBg />
+          <View style={[styles.center, { paddingTop: insets.top }]}>
+            <ActivityIndicator color={colors.primary} size="large" />
+          </View>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -309,8 +319,25 @@ export default function EscrowDetailScreen() {
   const whenLabel = formatIsoDateTime(plan?.agreed_scheduled_at, plan?.scheduled_at ?? undefined);
   const locationLabel = plan?.agreed_location ?? plan?.location_label ?? '—';
   const amountLabel = (escrow.amount_cents / 100).toFixed(0);
+  const userPayCents =
+    needHostLeg
+      ? (escrow.host_share_cents ?? 0)
+      : needGuestLeg
+        ? (escrow.guest_share_cents ?? 0)
+        : showFundSingle
+          ? escrow.amount_cents
+          : 0;
+  const yourShareLabel =
+    userPayCents > 0 ? formatEscrowMoney(userPayCents, escrow.currency) : null;
+  const fundConfirmAmountLabel = yourShareLabel ?? formatEscrowMoney(escrow.amount_cents, escrow.currency);
+  const meetupIso = plan?.agreed_scheduled_at ?? plan?.scheduled_at ?? null;
+  const meetupSoonPending = escrow.status === 'pending_funding' && isMeetupWithinHours(meetupIso, 48);
+  const meetupWhenLabel = meetupHoursUntilLabel(meetupIso);
   const trustNote =
     'Your payment is secure and stays in escrow until you confirm the meetup completed successfully.';
+  const fundCtaSubtitle = patternB
+    ? `Your share: ${fundConfirmAmountLabel} · guest and host pay separately on this screen`
+    : `Total held: ${formatEscrowMoney(escrow.amount_cents, escrow.currency)} via Paystack`;
 
   const disputed = escrow.status === 'disputed';
   const showWaitingFunded =
@@ -320,7 +347,9 @@ export default function EscrowDetailScreen() {
   const showDisputedBanner = disputed;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
+    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+      <View style={styles.flex}>
+        <DiscoveryGradientBg />
       <VerificationHardGateModal
         visible={gateOpen}
         onClose={() => setGateOpen(false)}
@@ -330,9 +359,9 @@ export default function EscrowDetailScreen() {
       />
       <EscrowConfirmModal
         visible={fundConfirmOpen}
-        title="Fund escrow?"
-        message="You will open a secure Paystack checkout. Funds are held until the meetup is confirmed or a dispute is resolved."
-        confirmLabel="Continue"
+        title="Open secure checkout?"
+        message={`You'll pay ${fundConfirmAmountLabel} in Paystack. Funds stay in escrow until the meetup is confirmed or a dispute is resolved.`}
+        confirmLabel="Continue to Paystack"
         cancelLabel="Not now"
         onCancel={() => setFundConfirmOpen(false)}
         onConfirm={() => void onConfirmFund()}
@@ -365,21 +394,42 @@ export default function EscrowDetailScreen() {
         onSubmit={(rid, lbl, d) => void onDisputeSubmit(rid, lbl, d)}
       />
 
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, spacing.sm) }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button">
-          <Ionicons name="chevron-back" size={28} color={colors.text} />
-        </Pressable>
-        <Text style={styles.topTitle}>Secure payment</Text>
-        <Pressable onPress={() => router.push('/support' as Href)} hitSlop={12}>
-          <Text style={styles.helpLink}>Help</Text>
-        </Pressable>
-      </View>
+      <EscrowScreenHeader topInset={insets.top} />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.leadBlock}>
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.leadAccent}
+          />
+          <View style={styles.leadTextCol}>
+            <Text style={styles.leadKicker}>Escrow</Text>
+            <Text style={styles.leadTitle}>
+              {showFund ? 'Complete payment' : 'Secure hold'}
+            </Text>
+            <Text style={styles.leadSub}>
+              {showFund
+                ? 'This is the payment screen — Paystack checkout opens when you tap below.'
+                : 'Track funding, meetup, and release in one place.'}
+            </Text>
+          </View>
+        </View>
+
+        {meetupSoonPending && meetupWhenLabel ? (
+          <View style={styles.meetupUrgent}>
+            <Ionicons name="alarm-outline" size={20} color={colors.warning} />
+            <Text style={styles.meetupUrgentTxt}>
+              Meetup {meetupWhenLabel} — {showFund ? 'fund escrow now' : 'complete funding soon'} so you&apos;re covered.
+            </Text>
+          </View>
+        ) : null}
+
         {counterparty ? (
           <EscrowCounterpartyHeader
             title={plan?.title ?? 'Paid plan'}
@@ -398,12 +448,26 @@ export default function EscrowDetailScreen() {
           />
         ) : null}
 
-        <Button
-          title="Message"
-          variant="secondary"
+        <Pressable
           onPress={() => void openChatWithCounterparty()}
-          style={styles.chatBtn}
-        />
+          style={({ pressed }) => [styles.messageCtaOuter, pressed && { opacity: 0.92 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Message counterparty"
+        >
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.messageCtaRing}
+          >
+            <View style={styles.messageCtaInner}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
+              <Text style={styles.messageCtaText} numberOfLines={1}>
+                Message {counterparty?.name ?? 'counterparty'}
+              </Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
 
         <View style={styles.badgeRow}>
           <EscrowStatusBadge status={escrow.status} />
@@ -432,23 +496,19 @@ export default function EscrowDetailScreen() {
           whenLabel={whenLabel}
           locationLabel={locationLabel}
           trustNote={trustNote}
+          yourShareLabel={yourShareLabel}
         />
 
         {patternB && escrow.status === 'pending_funding' ? (
-          <View style={styles.splitCard}>
-            <Text style={styles.splitTitle}>Split escrow</Text>
-            <Text style={styles.splitLine}>
-              Host share: ₦{((escrow.host_share_cents ?? 0) / 100).toFixed(0)}
-              {escrow.host_funded_at ? ' · Paid ✓' : ' · Pending'}
-            </Text>
-            <Text style={styles.splitLine}>
-              Guest share: ₦{((escrow.guest_share_cents ?? 0) / 100).toFixed(0)}
-              {escrow.guest_funded_at ? ' · Paid ✓' : ' · Pending'}
-            </Text>
-            {escrow.funding_deadline ? (
-              <Text style={styles.splitHint}>Fund by {formatIsoDateTime(escrow.funding_deadline)}</Text>
-            ) : null}
-          </View>
+          <EscrowSplitFundingCard
+            hostShareCents={escrow.host_share_cents ?? 0}
+            guestShareCents={escrow.guest_share_cents ?? 0}
+            hostFunded={!!escrow.host_funded_at}
+            guestFunded={!!escrow.guest_funded_at}
+            currency={escrow.currency}
+            fundingDeadlineIso={escrow.funding_deadline}
+            currentUserIsHost={user.id === escrow.host_id}
+          />
         ) : null}
 
         {showSplitWaitingOther ? (
@@ -462,22 +522,20 @@ export default function EscrowDetailScreen() {
         <EscrowTimeline items={timelineItems} />
 
         {showFund ? (
-          <View style={styles.ctaBlock}>
-            <Pressable
-              style={[styles.primaryBtn, busy && styles.btnDisabled]}
-              disabled={busy}
+          <>
+            <EscrowFundCTA
+              title={busy ? 'Please wait…' : needHostLeg || needGuestLeg ? 'Pay your share' : 'Fund escrow'}
+              subtitle={fundCtaSubtitle}
               onPress={() => setFundConfirmOpen(true)}
-            >
-              <Text style={styles.primaryBtnTxt}>
-                {busy ? 'Please wait…' : needHostLeg || needGuestLeg ? 'Pay your share' : 'Fund escrow'}
-              </Text>
-            </Pressable>
+              disabled={busy}
+              loading={busy}
+            />
             {__DEV__ ? (
               <Pressable style={styles.ghostBtn} onPress={() => void onDemoFunded()} disabled={busy}>
                 <Text style={styles.ghostBtnTxt}>Demo: mark funded (no Paystack)</Text>
               </Pressable>
             ) : null}
-          </View>
+          </>
         ) : null}
 
         {showWaitingFunded ? (
@@ -489,7 +547,7 @@ export default function EscrowDetailScreen() {
               released.
             </Text>
             <Pressable
-              style={[styles.secondaryBtn, { marginTop: spacing.md }, busy && styles.btnDisabled]}
+              style={[styles.secondaryBtn, { marginTop: spacing.md }, busy && { opacity: 0.6 }]}
               disabled={busy}
               onPress={() => setCompleteConfirmOpen(true)}
             >
@@ -502,19 +560,18 @@ export default function EscrowDetailScreen() {
         ) : null}
 
         {showReleaseBlock ? (
-          <View style={styles.ctaBlock}>
-            <Text style={styles.releaseHint}>Meetup marked complete. Release when you&apos;re satisfied.</Text>
-            <Pressable
-              style={[styles.primaryBtn, busy && styles.btnDisabled]}
-              disabled={busy}
+          <>
+            <EscrowFundCTA
+              title="Release funds"
+              subtitle="Meetup marked complete. Release when you're satisfied."
               onPress={() => setReleaseConfirmOpen(true)}
-            >
-              <Text style={styles.primaryBtnTxt}>Release funds</Text>
-            </Pressable>
+              disabled={busy}
+              loading={busy}
+            />
             <Pressable style={styles.ghostBtn} onPress={() => setDisputeOpen(true)} disabled={busy}>
               <Text style={styles.ghostBtnTxt}>Report issue</Text>
             </Pressable>
-          </View>
+          </>
         ) : null}
 
         {escrow.status === 'funded' && !disputed && !showWaitingFunded && !showReleaseBlock ? (
@@ -534,24 +591,79 @@ export default function EscrowDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
+  flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  topBar: {
+  scroll: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl * 2 },
+  leadBlock: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  leadAccent: { width: 5, marginTop: 8, borderRadius: 3, height: 52 },
+  leadTextCol: { flex: 1, minWidth: 0 },
+  leadKicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  leadTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  leadSub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, fontWeight: '600' },
+  meetupUrgent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+  },
+  meetupUrgentTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  messageCtaOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C63FF',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  messageCtaRing: { padding: 2, borderRadius: radius.button },
+  messageCtaInner: {
+    borderRadius: radius.button - 4,
+    backgroundColor: colors.surface,
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    justifyContent: 'center',
+    gap: 10,
   },
-  topTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
-  helpLink: { fontSize: 16, fontWeight: '700', color: colors.primary },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  chatBtn: { marginBottom: spacing.md },
+  messageCtaText: { fontSize: 16, fontWeight: '800', color: colors.primary, flexShrink: 1 },
   badgeRow: { marginBottom: spacing.sm },
   warnBanner: {
     flexDirection: 'row',
@@ -563,16 +675,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   warnTxt: { flex: 1, color: '#991B1B', fontWeight: '600', lineHeight: 20 },
-  ctaBlock: { marginBottom: spacing.xl },
-  primaryBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 200,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  primaryBtnTxt: { color: '#fff', fontSize: 17, fontWeight: '800' },
-  btnDisabled: { opacity: 0.6 },
-  ghostBtn: { paddingVertical: 14, alignItems: 'center' },
+  ghostBtn: { paddingVertical: 14, alignItems: 'center', marginBottom: spacing.lg },
   ghostBtnTxt: { color: colors.primary, fontSize: 16, fontWeight: '700' },
   secondaryBtn: {
     borderWidth: 2,
@@ -585,34 +688,30 @@ const styles = StyleSheet.create({
   secondaryBtnTxt: { color: colors.primary, fontSize: 16, fontWeight: '800' },
   infoCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
     marginBottom: spacing.xl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: { elevation: 4 },
+    }),
   },
   infoTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
   infoSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: spacing.sm },
-  releaseHint: { fontSize: 15, color: colors.text, fontWeight: '600', marginBottom: spacing.md, lineHeight: 22 },
-  splitCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.lg,
-    gap: 6,
-  },
-  splitTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  splitLine: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
-  splitHint: { fontSize: 13, color: colors.textMuted, marginTop: spacing.xs },
   waitSplitCard: {
     flexDirection: 'row',
     gap: spacing.sm,
     alignItems: 'flex-start',
     backgroundColor: 'rgba(108,99,255,0.08)',
     padding: spacing.md,
-    borderRadius: 16,
+    borderRadius: radius.xl,
     marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: 'rgba(108,99,255,0.25)',
@@ -623,10 +722,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     padding: spacing.lg,
-    borderRadius: 16,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
     marginTop: spacing.md,
+    marginBottom: spacing.lg,
   },
   successTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
   successSub: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: spacing.sm, lineHeight: 20 },

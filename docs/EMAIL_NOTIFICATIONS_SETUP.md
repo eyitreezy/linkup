@@ -39,6 +39,7 @@ When `public.notifications` gets a new row, `notification-email` sends **generic
 | `kyc_*`, `account_restriction` | LinkUp — account or verification update |
 | `premium_activated` | LinkUp — Premium |
 | `plan_reminder` | LinkUp — reminder |
+| `payment_reminder` | LinkUp — fund your meetup |
 | `report_submitted` | LinkUp — report received |
 | Other types | LinkUp — notification |
 
@@ -223,7 +224,13 @@ Do **not** put the service role key in the webhook URL or headers for these func
 
 ---
 
-## 7. Verify end-to-end
+## 7. Payment reminders (`awaiting_payment`)
+
+Escrow funding reminders use type **`payment_reminder`** (same webhook path as other notifications). See **[PAYMENT_REMINDER_AUTOMATION.md](./PAYMENT_REMINDER_AUTOMATION.md)** for the cron function and schedule.
+
+---
+
+## 8. Verify end-to-end
 
 ### A. User preferences
 
@@ -254,7 +261,7 @@ Turn **Email** OFF in app settings, trigger another notification → Resend shou
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause |
 |---------|----------------|
@@ -268,7 +275,7 @@ Turn **Email** OFF in app settings, trigger another notification → Resend shou
 
 ---
 
-## 9. Security and copy policy
+## 10. Security and copy policy
 
 - Never put escrow amounts, card data, or KYC pass/fail text in email bodies — the function uses type-based templates only.
 - Do not commit `RESEND_API_KEY` to git; keep it in Supabase Edge Function secrets.
@@ -276,7 +283,7 @@ Turn **Email** OFF in app settings, trigger another notification → Resend shou
 
 ---
 
-## 10. Reference files
+## 11. Reference files
 
 | File | Role |
 |------|------|
@@ -288,7 +295,7 @@ Turn **Email** OFF in app settings, trigger another notification → Resend shou
 
 ---
 
-## 11. Production checklist
+## 12. Production checklist
 
 - [ ] Resend domain verified (SPF/DKIM)
 - [ ] `RESEND_API_KEY`, `RESEND_FROM`, `NOTIFICATION_EMAIL_WEBHOOK_SECRET` set

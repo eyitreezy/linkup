@@ -7,7 +7,10 @@ import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgree
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
 import { PreAgreementFullscreenModal } from '@/components/plans/agreement/PreAgreementFullscreenModal';
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
+import { AgreementPaymentPreviewCard } from '@/components/plans/agreement/AgreementPaymentPreviewCard';
+import { MeetupFundingReminderBanner } from '@/components/plans/agreement/MeetupFundingReminderBanner';
 import { PlanSummaryCard } from '@/components/plans/agreement/PlanSummaryCard';
+import { DiscoveryGradientBg } from '@/components/ui/DiscoveryGradientBg';
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
@@ -15,6 +18,10 @@ import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
+import {
+  getAgreementPaymentPreview,
+  isMeetupWithinHours,
+} from '@/lib/escrow/escrowPaymentPreview';
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { goToDiscoveryFeed } from '@/lib/navigation/goToDiscoveryFeed';
@@ -46,18 +53,6 @@ function formatOfferExpiry(iso: string | null | undefined): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function InboxGradientBg() {
-  return (
-    <LinearGradient
-      colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
-      locations={[0, 0.32, 0.62, 1]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={StyleSheet.absoluteFillObject}
-    />
-  );
 }
 
 function AgreementTopNav({ topInset }: { topInset: number }) {
@@ -194,7 +189,7 @@ export default function PlanAgreementScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <InboxGradientBg />
+          <DiscoveryGradientBg />
           <View style={[styles.center, { paddingTop: insets.top }]}>
             <ActivityIndicator color={colors.primary} size="large" />
           </View>
@@ -207,7 +202,7 @@ export default function PlanAgreementScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <InboxGradientBg />
+          <DiscoveryGradientBg />
           <View style={[styles.center, { paddingTop: insets.top }]}>
             <ActivityIndicator color={colors.primary} size="large" />
           </View>
@@ -220,7 +215,7 @@ export default function PlanAgreementScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <InboxGradientBg />
+          <DiscoveryGradientBg />
           <AgreementTopNav topInset={insets.top} />
           <View style={styles.fallbackPad}>
             <Text style={styles.muted}>This plan could not be loaded.</Text>
@@ -237,7 +232,7 @@ export default function PlanAgreementScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <InboxGradientBg />
+          <DiscoveryGradientBg />
           <AgreementTopNav topInset={insets.top} />
           <View style={styles.fallbackPad}>
             <Text style={styles.muted}>No accepted offer for this plan.</Text>
@@ -254,7 +249,7 @@ export default function PlanAgreementScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <InboxGradientBg />
+          <DiscoveryGradientBg />
           <AgreementTopNav topInset={insets.top} />
           <View style={styles.fallbackPad}>
             <Text style={styles.title}>Plan cancelled</Text>
@@ -277,7 +272,7 @@ export default function PlanAgreementScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <InboxGradientBg />
+          <DiscoveryGradientBg />
           <AgreementTopNav topInset={insets.top} />
           <View style={styles.fallbackPad}>
             <Text style={styles.muted}>You don&apos;t have access to this agreement.</Text>
@@ -464,17 +459,40 @@ export default function PlanAgreementScreen() {
     ? (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? null)
     : null;
 
+  const paymentPreview =
+    paymentRequired && escrowCents != null && escrowCents > 0
+      ? getAgreementPaymentPreview(planRow, offerRow.bidder_id, escrowCents, user.id)
+      : null;
+
+  const meetupIso =
+    planRow.agreed_scheduled_at ?? planRow.scheduled_at ?? offerRow.proposed_scheduled_at ?? null;
+  const meetupSoon =
+    paymentRequired && (needsConfirm || awaitingPay) && isMeetupWithinHours(meetupIso, 48);
+
+  let paymentPreviewVariant: 'you_pay_next' | 'counterparty_pays' | 'split_you_pay' | 'split_waiting' | null =
+    null;
+  if (paymentPreview) {
+    if (paymentPreview.pattern === 'B') {
+      paymentPreviewVariant = 'split_you_pay';
+    } else if (paymentPreview.userIsPayer) {
+      paymentPreviewVariant = 'you_pay_next';
+    } else {
+      paymentPreviewVariant = 'counterparty_pays';
+    }
+  }
+
   const gateTitle = 'Verification required to continue';
   const gateMessage =
     'Confirming plans and sending secure payments requires a verified identity on LinkUp.';
 
-  const leadSub =
-    'Review the meetup summary, cancellation rules, and CTAs — same polished flow as your inbox.';
+  const leadSub = paymentRequired
+    ? 'Review the summary below. Secure payment happens on the next screen — not while you negotiate.'
+    : 'Review the meetup summary and confirm when you are ready.';
 
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
-        <InboxGradientBg />
+        <DiscoveryGradientBg />
         <VerificationHardGateModal
           visible={gateOpen}
           onClose={() => setGateOpen(false)}
@@ -505,6 +523,7 @@ export default function PlanAgreementScreen() {
           locationLabel={locationLabel ?? null}
           priceLabel={priceLabel}
           escrowAmountCents={escrowCents != null && escrowCents > 0 ? escrowCents : null}
+          userPaysCents={paymentPreview?.userPaysCents ?? null}
           currencyLabel={planRow.currency ?? 'NGN'}
           busy={legalBusy}
           onConfirm={() => void onLegalGateConfirm()}
@@ -559,6 +578,21 @@ export default function PlanAgreementScreen() {
             priceLabel={priceLabel}
             notes={notes}
           />
+
+          {meetupSoon ? (
+            <MeetupFundingReminderBanner
+              meetupIso={meetupIso}
+              role={
+                paymentPreview?.userIsPayer && (needsConfirm || awaitingPay)
+                  ? 'payer'
+                  : 'host_waiting'
+              }
+            />
+          ) : null}
+
+          {paymentPreview && paymentPreviewVariant ? (
+            <AgreementPaymentPreviewCard preview={paymentPreview} variant={paymentPreviewVariant} />
+          ) : null}
 
           <CancellationSummaryCard />
 

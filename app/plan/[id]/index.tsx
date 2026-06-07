@@ -5,7 +5,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
-import { PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
+import { PlanReportFlagButton, PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
 import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
 import { ReportSheet } from '@/components/trust/ReportSheet';
 import { VerificationBadge } from '@/components/trust/VerificationBadge';
@@ -228,7 +228,9 @@ export default function PlanOverviewScreen() {
       }
       const { data: profs } = await supabase
         .from('profiles')
-        .select('user_id, display_name, avatar_url, verified_badge, latitude, longitude, location_label')
+        .select(
+          'user_id, display_name, avatar_url, verified_badge, latitude, longitude, location_label'
+        )
         .in('user_id', [...idSet]);
       const map: Record<string, ProfileMini> = {};
       for (const row of profs ?? []) {
@@ -295,25 +297,10 @@ export default function PlanOverviewScreen() {
           style={StyleSheet.absoluteFill}
         />
         <PlanStackScreenHeader
-          title="Plan"
-          barStyle={styles.headerBar}
+          title="Meetup details"
           right={
             user?.id && plan && plan.creator_id !== user.id ? (
-              <Pressable
-                onPress={() => setReportPlanOpen(true)}
-                hitSlop={8}
-                accessibilityLabel="Report this plan"
-                style={({ pressed }) => [styles.reportPlanBtn, pressed && styles.reportPlanBtnPressed]}
-              >
-                <LinearGradient
-                  colors={[colors.primary, '#8B7CE8', colors.secondary]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.reportPlanBtnGrad}
-                >
-                  <Ionicons name="flag" size={18} color="#FFFFFF" />
-                </LinearGradient>
-              </Pressable>
+              <PlanReportFlagButton onPress={() => setReportPlanOpen(true)} />
             ) : null
           }
         />
@@ -1058,25 +1045,8 @@ export default function PlanOverviewScreen() {
 const styles = StyleSheet.create({
   screenTransparent: { backgroundColor: 'transparent' },
   shell: { flex: 1, position: 'relative' },
-  headerBar: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108,99,255,0.12)',
-  },
-  reportPlanBtn: {
-    borderRadius: radius.button,
-    overflow: 'hidden',
-  },
-  reportPlanBtnGrad: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reportPlanBtnPressed: { opacity: 0.88, transform: [{ scale: 0.96 }] },
   scroll: { flex: 1 },
-  scrollContent: { padding: spacing.md, paddingBottom: spacing.xl },
+  scrollContent: { padding: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl },
   centerState: {
     flex: 1,
     justifyContent: 'center',

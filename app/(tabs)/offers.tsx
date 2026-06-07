@@ -21,14 +21,9 @@ import { Href, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
+import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 function OffersSkeleton() {
   return (
@@ -51,6 +46,7 @@ function OffersSkeleton() {
 }
 
 export default function OffersScreen() {
+  const tabBarScroll = useTabBarScrollProps();
   const { user, dbUser } = useAuth();
   const [segment, setSegment] = useState<OffersSegment>('sent');
   const [sent, setSent] = useState<OfferDashboardRow[]>([]);
@@ -212,12 +208,13 @@ export default function OffersScreen() {
           receivedCount={received.length}
         />
 
-        <FlatList
+        <Animated.FlatList
           data={loading ? [] : list}
           keyExtractor={(r) => r.offer.id}
           extraData={busyOfferId}
           style={styles.listFlex}
           contentContainerStyle={styles.list}
+          {...tabBarScroll}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }

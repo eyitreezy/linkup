@@ -1,4 +1,4 @@
-import { Screen } from '@/components/Screen';
+import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { syncExpoPushTokenForUser } from '@/lib/notifications/registerPushNotifications';
@@ -7,9 +7,8 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { ProfilePreferences } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 function PrefSwitch({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
   return (
@@ -102,30 +101,7 @@ export default function NotificationsSettingsScreen() {
   );
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-      <View style={styles.flex}>
-        <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-          <View style={styles.topNav}>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </Pressable>
-          </View>
-
+    <SettingsStickyShell contentContainerStyle={styles.scroll}>
           <View style={styles.leadBlock}>
             <LinearGradient
               colors={[colors.primary, colors.secondary]}
@@ -282,43 +258,12 @@ export default function NotificationsSettingsScreen() {
           <Text style={styles.note}>
             Push and email for notification events need Supabase webhooks — see docs/PUSH_VERIFY_AND_SETUP.md and docs/EMAIL_NOTIFICATIONS_SETUP.md.
           </Text>
-        </ScrollView>
-      </View>
-    </Screen>
+    </SettingsStickyShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1, backgroundColor: 'transparent' },
-  flex: { flex: 1 },
-  scroll: { paddingBottom: spacing.xl * 2 },
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  iconPill: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  pressed: { opacity: 0.92 },
+  scroll: { paddingBottom: spacing.xl },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',

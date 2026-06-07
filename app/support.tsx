@@ -3,7 +3,7 @@
  * Visual shell aligned with Notification Inbox (gradient, glass nav, list rows). No settings icon in header.
  */
 import { Button } from '@/components/Button';
-import { Screen } from '@/components/Screen';
+import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -134,35 +134,11 @@ export default function SupportHomeScreen() {
   }
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right', 'bottom']} safeAreaStyle={styles.screenRoot}>
-      <View style={styles.flex}>
-        <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.topNav}>
-            <Pressable
-              onPress={() => router.back()}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
-            >
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </Pressable>
-            <View style={styles.headerBalance} />
-          </View>
-
+    <>
+      <SettingsStickyShell
+        safeAreaEdges={['top', 'left', 'right', 'bottom']}
+        contentContainerStyle={styles.scroll}
+      >
           <View style={styles.leadBlock}>
             <LinearGradient
               colors={[colors.primary, colors.secondary]}
@@ -352,7 +328,7 @@ export default function SupportHomeScreen() {
             <Text style={styles.disputesLinkTxt}>View escrow disputes</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.primary} />
           </Pressable>
-        </ScrollView>
+      </SettingsStickyShell>
 
         <Modal visible={modalOpen} animationType="slide" transparent statusBarTranslucent>
           <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
@@ -403,49 +379,14 @@ export default function SupportHomeScreen() {
             </Pressable>
           </Pressable>
         </Modal>
-      </View>
-    </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1, backgroundColor: 'transparent' },
-  flex: { flex: 1 },
   scroll: {
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xl,
   },
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  iconPill: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  headerBalance: {
-    width: 44,
-    height: 44,
-  },
-  pressed: { opacity: 0.92 },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',

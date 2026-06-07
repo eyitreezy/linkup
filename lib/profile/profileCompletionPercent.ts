@@ -8,7 +8,7 @@ export function profileCompletionPercent(profile: DbProfile | null | undefined, 
   const weights: boolean[] = [
     !!(profile.display_name?.trim().length),
     !!(profile.bio?.trim().length),
-    (profile.photo_urls?.length ?? 0) >= 1 || !!profile.avatar_url,
+    (profile.photo_urls?.length ?? 0) >= 1 || !!profile.avatar_url || !!profile.primary_photo_url,
     (profile.preferences?.interests?.length ?? 0) >= 1,
     (profile.preferences?.prompt_answers?.filter((p) => p.answer?.trim().length).length ?? 0) >= 1,
     verified,

@@ -15,10 +15,11 @@ import { isPremiumSubscriber } from '@/lib/premium/access';
 import { isUserVerified } from '@/lib/verification/access';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Href, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
+import { Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function SettingsSectionHeader({ title }: { title: string }) {
@@ -39,12 +40,14 @@ function SettingsSectionHeader({ title }: { title: string }) {
 }
 
 export default function ProfileScreen() {
+  const tabBarScroll = useTabBarScrollProps();
   const insets = useSafeAreaInsets();
   const { user, profile, dbUser, signOut, isAdmin, refreshProfile } = useAuth();
   const { unreadCount } = useNotificationInbox();
   const [plansCreated, setPlansCreated] = useState<number | null>(null);
   const [plansDone, setPlansDone] = useState<number | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const verified = !!(dbUser && isUserVerified(dbUser.verification_status));
   const completion = profileCompletionPercent(profile ?? null, verified);
   const subscriber = isPremiumSubscriber(dbUser);
@@ -71,6 +74,12 @@ export default function ProfileScreen() {
     void loadStats();
   }, [loadStats]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refreshProfile(), loadStats()]);
+    setRefreshing(false);
+  }, [refreshProfile, loadStats]);
+
   const name = profile?.display_name?.trim() || user?.email?.split('@')[0] || 'You';
 
   return (
@@ -85,16 +94,7 @@ export default function ProfileScreen() {
           pointerEvents="none"
         />
 
-        <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingTop: spacing.xl + spacing.md,
-              paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xl * 2,
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.profileHeader}>
           <View style={styles.leadBlock}>
             <LinearGradient
               colors={[colors.primary, colors.secondary]}
@@ -110,7 +110,21 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
+        </View>
 
+        <Animated.ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xl * 2 + 72,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          {...tabBarScroll}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+        >
           <LinearGradient
             colors={['rgba(108,99,255,0.16)', 'rgba(255,101,132,0.1)']}
             start={{ x: 0, y: 0 }}
@@ -252,17 +266,7 @@ export default function ProfileScreen() {
               />
             </View>
           </LinearGradient>
-
-          <Pressable
-            onPress={() => void refreshProfile()}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh profile data"
-            style={({ pressed }) => [styles.refreshBtn, pressed && styles.pressed]}
-          >
-            <Ionicons name="refresh-outline" size={18} color={colors.primary} />
-            <Text style={styles.refreshTxt}>Refresh profile data</Text>
-          </Pressable>
-        </ScrollView>
+        </Animated.ScrollView>
 
         <LogoutConfirmModal visible={logoutOpen} onClose={() => setLogoutOpen(false)} onConfirm={() => void signOut()} />
       </View>
@@ -273,14 +277,16 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   screenRoot: { flex: 1, backgroundColor: 'transparent' },
   flex: { flex: 1 },
-  scroll: {},
-  pressed: { opacity: 0.92 },
+  profileHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  scroll: { paddingTop: spacing.xs },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.lg,
-    marginHorizontal: spacing.md,
   },
   leadAccent: {
     width: 5,
@@ -434,19 +440,5 @@ const styles = StyleSheet.create({
       },
       android: { elevation: 2 },
     }),
-  },
-  refreshBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  refreshTxt: {
-    color: colors.primary,
-    fontWeight: '800',
-    fontSize: 15,
   },
 });

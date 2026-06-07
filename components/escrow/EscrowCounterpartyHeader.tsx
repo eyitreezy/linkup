@@ -44,8 +44,20 @@ export function EscrowCounterpartyHeader({ title, counterparty, youLabel }: Prop
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: spacing.lg },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.md, lineHeight: 28 },
+  wrap: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+    shadowColor: '#2a1f55',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  title: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: spacing.md, lineHeight: 26 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   avatar: { width: 56, height: 56, borderRadius: radius.button, backgroundColor: colors.border },
   avatarPh: { alignItems: 'center', justifyContent: 'center' },

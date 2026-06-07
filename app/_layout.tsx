@@ -6,12 +6,12 @@ import 'react-native-reanimated';
 import { AuthDeepLinkBootstrap } from '@/components/auth/AuthDeepLinkBootstrap';
 import { AuthPasswordRecoveryBootstrap } from '@/components/auth/AuthPasswordRecoveryBootstrap';
 import { PushTokenSyncBootstrap } from '@/components/notifications/PushTokenSyncBootstrap';
+import { SplashGate } from '@/components/splash/SplashGate';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { NotificationInboxProvider } from '@/contexts/NotificationInboxContext';
 import { PresenceProvider } from '@/contexts/PresenceContext';
 import { colors } from '@/constants/theme';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -40,20 +40,21 @@ export default function RootLayout() {
           <PushTokenSyncBootstrap />
           <PresenceProvider>
             <NotificationInboxProvider>
-              <StatusBar style="dark" />
-              <Stack
-                screenOptions={{
-                  /** All top-level routes use in-screen or nested stack headers — a default native header adds a second top band (gap under status bar) on plan, chat, etc. */
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.background },
-                }}
-              >
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="auth" options={{ headerShown: false }} />
-                <Stack.Screen name="onboarding" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="notifications" />
-              </Stack>
+              <SplashGate>
+                <Stack
+                  screenOptions={{
+                    /** All top-level routes use in-screen or nested stack headers — a default native header adds a second top band (gap under status bar) on plan, chat, etc. */
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.background },
+                  }}
+                >
+                  <Stack.Screen name="(auth)" />
+                  <Stack.Screen name="auth" options={{ headerShown: false }} />
+                  <Stack.Screen name="onboarding" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen name="notifications" />
+                </Stack>
+              </SplashGate>
             </NotificationInboxProvider>
           </PresenceProvider>
         </AuthProvider>

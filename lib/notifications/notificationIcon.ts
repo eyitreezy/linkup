@@ -18,6 +18,7 @@ export function notificationIcon(type: string): IonName {
     case 'escrow_status':
       return 'wallet';
     case 'plan_reminder':
+    case 'payment_reminder':
       return 'alarm-outline';
     case 'completion_release':
       return 'checkmark-done-outline';

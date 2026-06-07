@@ -71,6 +71,12 @@ function genericEmailForType(type: string | undefined): { subject: string; text:
       text: 'A quick reminder about something you’re planning on LinkUp. Open the app for details.',
     };
   }
+  if (t === 'payment_reminder') {
+    return {
+      subject: 'LinkUp — fund your meetup',
+      text: 'Your plan still needs secure escrow payment. Open LinkUp to complete Paystack checkout before the funding window ends.',
+    };
+  }
   if (t === 'report_submitted') {
     return {
       subject: 'LinkUp — report received',

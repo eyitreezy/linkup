@@ -9,14 +9,10 @@ import type { DbGoodwillCredit, DbWalletLedgerRow } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
+import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function formatMoney(cents: number, currency = 'NGN'): string {
   return `${currency} ${(cents / 100).toLocaleString()}`;
@@ -27,6 +23,8 @@ function sourcePretty(source: string): string {
 }
 
 export default function WalletScreen() {
+  const tabBarScroll = useTabBarScrollProps();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [ledger, setLedger] = useState<DbWalletLedgerRow[]>([]);
   const [goodwill, setGoodwill] = useState<DbGoodwillCredit[]>([]);
@@ -107,35 +105,38 @@ export default function WalletScreen() {
           style={StyleSheet.absoluteFill}
         />
 
-        <ScrollView
-          contentContainerStyle={styles.scroll}
+        <View style={styles.heroHeader}>
+          <View style={styles.heroLeft}>
+            <LinearGradient
+              colors={[colors.primary, '#8B7CF8', colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroBadge}
+            >
+              <Ionicons name="wallet" size={22} color="#fff" />
+            </LinearGradient>
+            <View style={styles.heroText}>
+              <Text style={styles.heroKicker}>Your money hub</Text>
+              <Text style={styles.heroTitle}>Wallet</Text>
+              <Text style={styles.heroSub}>
+                Cash from escrow releases and refunds. Goodwill credits can lower fees when things go fairly — plain
+                language, no fine print buried in the corner.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <Animated.ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xl * 2 + 72 },
+          ]}
           showsVerticalScrollIndicator={false}
+          {...tabBarScroll}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
         >
-          <View style={styles.headerRow}>
-            <View style={styles.headerIconWrap}>
-              <LinearGradient
-                colors={[colors.primary, '#8B7CF8']}
-                style={styles.headerIconGrad}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Ionicons name="wallet" size={26} color="#fff" />
-              </LinearGradient>
-            </View>
-            <View style={styles.headerText}>
-              <Text style={styles.eyebrow}>Your money hub</Text>
-              <Text style={styles.title}>Wallet</Text>
-            </View>
-          </View>
-
-          <Text style={styles.sub}>
-            Cash from escrow releases and refunds. Goodwill credits can lower fees when things go fairly — plain
-            language, no fine print buried in the corner.
-          </Text>
-
           {loading ? (
             <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} size="large" />
           ) : (
@@ -175,8 +176,8 @@ export default function WalletScreen() {
                 </View>
                 <Text style={styles.goodwillAmt}>{formatMoney(goodwillRemaining)}</Text>
                 <Text style={styles.goodwillHint}>
-                  Non-cash credits from fair outcomes (e.g. cancellations). Auto-apply to fees · expire 60 days from
-                  issue.
+                  Issued when a host cancels within 48h or no-shows. Offsets platform fees on future escrows · not
+                  cash · expires 60 days from issue.
                 </Text>
               </LinearGradient>
 
@@ -227,7 +228,7 @@ export default function WalletScreen() {
               )}
             </>
           )}
-        </ScrollView>
+        </Animated.ScrollView>
       </View>
     </Screen>
   );
@@ -236,26 +237,29 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   screenTransparent: { backgroundColor: 'transparent', flex: 1 },
   root: { flex: 1 },
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2.5 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-  headerIconWrap: {
-    borderRadius: radius.button,
-    overflow: 'hidden',
-    shadowColor: '#6C63FF',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
-  headerIconGrad: {
-    width: 52,
-    height: 52,
+  heroLeft: { flexDirection: 'row', gap: spacing.md, flex: 1, alignItems: 'flex-start' },
+  heroBadge: {
+    width: 48,
+    height: 48,
     borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  headerText: { flex: 1 },
-  eyebrow: {
+  heroText: { flex: 1, minWidth: 0 },
+  heroKicker: {
     fontSize: 11,
     fontWeight: '800',
     color: colors.secondary,
@@ -263,8 +267,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
     marginBottom: 2,
   },
-  title: { fontSize: 30, fontWeight: '900', color: colors.text, letterSpacing: -0.6 },
-  sub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, marginBottom: spacing.lg },
+  heroTitle: { fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.5, marginBottom: 4 },
+  heroSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600' },
+  scroll: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },
   balanceShell: {
     borderRadius: radius.xl,
     padding: 2,

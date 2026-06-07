@@ -18,9 +18,21 @@ type Props = {
 export function AvatarWithPresence({ uri, name, size = 48, presence, showDot = true }: Props) {
   const dot = showDot && presence?.dot;
   const dotColor =
-    dot === 'online' ? colors.success : dot === 'recent' ? colors.textMuted : 'transparent';
+    dot === 'online'
+      ? colors.success
+      : dot === 'recent'
+        ? colors.textMuted
+        : dot === 'offline'
+          ? '#94A3B8'
+          : 'transparent';
   const ring =
-    dot === 'online' ? 'rgba(16, 185, 129, 0.35)' : dot === 'recent' ? 'rgba(107, 114, 128, 0.35)' : 'transparent';
+    dot === 'online'
+      ? 'rgba(16, 185, 129, 0.35)'
+      : dot === 'recent'
+        ? 'rgba(107, 114, 128, 0.35)'
+        : dot === 'offline'
+          ? 'rgba(148, 163, 184, 0.4)'
+          : 'transparent';
 
   return (
     <View style={styles.wrap}>

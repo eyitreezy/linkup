@@ -1,10 +1,12 @@
 import type { FeedFilterState } from '@/components/plans/PlansFilterSheet';
+import type { HostPresenceFilter } from '@/lib/presence/derivePresenceUi';
 
 type StoredFeedFilters = {
   maxDistanceKm?: number | null;
   minPriceCents?: number | null;
   maxPriceCents?: number | null;
   verifiedHostsOnly?: boolean;
+  hostPresence?: HostPresenceFilter;
   /** Set when the user taps Apply in the filter sheet with at least one constraint. */
   clientFiltersActive?: boolean;
   /** @deprecated Old max-price slider stored cents in `maxPrice`, not `maxPriceCents`. Ignored. */
@@ -22,18 +24,25 @@ export function defaultDiscoverFeedFilter(fallbackMaxKm: number): FeedFilterStat
     minPriceCents: null,
     maxPriceCents: null,
     verifiedHostsOnly: false,
+    hostPresence: 'all',
     clientFiltersActive: false,
   };
+}
+
+function parseHostPresence(raw: unknown): HostPresenceFilter {
+  if (raw === 'online' || raw === 'offline') return raw;
+  return 'all';
 }
 
 /** True when Apply should turn on client-side price / distance / verified filtering. */
 export function isDiscoverFilterConstraintActive(
   f: Pick<
     FeedFilterState,
-    'maxDistanceKm' | 'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly'
+    'maxDistanceKm' | 'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
   >,
   baseRadiusKm: number
 ): boolean {
+  if (f.hostPresence !== 'all') return true;
   if (f.verifiedHostsOnly) return true;
   if (f.minPriceCents != null) return true;
   if (f.maxPriceCents != null) return true;
@@ -54,6 +63,7 @@ export function parseStoredFeedFilters(raw: unknown, fallbackMaxKm: number): Fee
     maxPriceCents:
       f.clientFiltersActive === true ? normalizePriceCents(f.maxPriceCents) : null,
     verifiedHostsOnly: !!f.verifiedHostsOnly,
+    hostPresence: parseHostPresence(f.hostPresence),
   };
 
   const clientFiltersActive =

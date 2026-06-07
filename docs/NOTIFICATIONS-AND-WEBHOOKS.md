@@ -10,19 +10,20 @@ Production setup for **in-app notifications**, **Expo push**, and **Paystack** s
 | `paystack-webhook-premium` | `charge.success` for Premium — verifies signature, claims charge (no double credits), updates `users`, notifies, stores prefs reference. |
 | `push-on-notification` | Optional: Database Webhook on `notifications` INSERT → Expo push (for SQL triggers without duplicating paystack pushes). |
 | `notification-email` | Optional: Database Webhook on `notifications` INSERT → Resend email (generic copy by type). |
+| `payment-reminder-sweep` | Cron: `sweep_awaiting_payment_reminders()` → `payment_reminder` rows for `awaiting_payment` / `pending_funding`. |
 
-Deploy:
+Deploy (Windows: `.\scripts\deploy-paystack.ps1`). Full checklist: **[PAYSTACK_SETUP.md](./PAYSTACK_SETUP.md)**.
 
 ```bash
 supabase secrets set PAYSTACK_SECRET_KEY=sk_live_...
+supabase functions deploy paystack-initialize
 supabase functions deploy paystack-webhook-escrow --no-verify-jwt
 supabase functions deploy paystack-webhook-premium --no-verify-jwt
 ```
 
-Paystack Dashboard → **Developers → Webhooks** — add **two** URLs (same secret key verifies both):
+Paystack Dashboard → **Settings → API Keys & Webhooks** — one **Test Webhook URL** / **Live Webhook URL** field:
 
-- `https://<project-ref>.supabase.co/functions/v1/paystack-webhook-escrow`
-- `https://<project-ref>.supabase.co/functions/v1/paystack-webhook-premium`
+- `https://<project-ref>.supabase.co/functions/v1/paystack-webhook` (routes to escrow + premium handlers)
 
 Use **charge.success** (or “All events” and let functions ignore non-matching metadata).
 
@@ -65,6 +66,16 @@ The push function skips `escrow_funded` and `premium_activated` if you use both 
 Deploy `notification-email`, set `RESEND_API_KEY`, `RESEND_FROM`, `NOTIFICATION_EMAIL_WEBHOOK_SECRET`, and add a **Database Webhook** on `public.notifications` INSERT → that function (header `x-linkup-webhook-secret`). Respects `profiles.preferences.notifications.email === false`.
 
 Full checklist: **[EMAIL_NOTIFICATIONS_SETUP.md](./EMAIL_NOTIFICATIONS_SETUP.md)**.
+
+## Payment reminders (`awaiting_payment`)
+
+Migration `20260528120000_payment_reminder_automation.sql` + cron function **`payment-reminder-sweep`**:
+
+- **Immediate** push/email when escrow is created (payer + waiting party).
+- **Scheduled** nudges: 30m after create, funding deadline (12h / 2h), meetup soon (48h / 24h).
+- Split escrow: reminds the other leg when one share is paid.
+
+Requires the same **`notifications` INSERT** webhooks as above. Full setup: **[PAYMENT_REMINDER_AUTOMATION.md](./PAYMENT_REMINDER_AUTOMATION.md)**.
 
 ## Client
 

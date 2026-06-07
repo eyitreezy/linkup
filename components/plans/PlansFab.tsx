@@ -9,12 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type Props = {
   onPress: () => void;
   bottomOffset?: number;
+  /** When false, `bottomOffset` is assumed to include bottom safe area (e.g. tab bar inset). */
+  includeSafeAreaInset?: boolean;
 };
 
-export function PlansFab({ onPress, bottomOffset = 88 }: Props) {
+export function PlansFab({ onPress, bottomOffset = 88, includeSafeAreaInset = true }: Props) {
   const insets = useSafeAreaInsets();
+  const bottom = bottomOffset + (includeSafeAreaInset ? insets.bottom : 0);
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, { bottom: bottomOffset + insets.bottom }]}>
+    <View pointerEvents="box-none" style={[styles.wrap, { bottom }]}>
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}

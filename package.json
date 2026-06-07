@@ -26,6 +26,8 @@
     "lint": "expo lint",
     "eas:verify-install": "npm ci --include=dev",
     "eas:verify-install:production": "npm ci",
+    "eas:env:push:preview": "eas env:push --environment preview --path .env",
+    "eas:env:push:development": "eas env:push --environment development --path .env",
     "supabase:deploy-push": "npx supabase functions deploy push-on-notification --no-verify-jwt && npx supabase functions deploy test-expo-push --no-verify-jwt"
   },
   "dependencies": {

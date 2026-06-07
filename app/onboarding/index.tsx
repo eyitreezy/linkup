@@ -11,7 +11,10 @@ import {
 import { OnboardingStickyProgress } from '@/components/onboarding/OnboardingStickyProgress';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
 import { Screen } from '@/components/Screen';
-import { PhotoUploader } from '@/components/onboarding/PhotoUploader';
+import { ProfilePhotoGallery } from '@/components/profile/ProfilePhotoGallery';
+import { ProfileVideoUploader } from '@/components/profile/ProfileVideoUploader';
+import { PROFILE_MIN_PHOTOS_ONBOARDING } from '@/lib/profile/media/constants';
+import { defaultPrimaryRef } from '@/lib/profile/media/photoOrder';
 import { ProfileCardPreview } from '@/components/onboarding/ProfileCardPreview';
 import { PromptSelector } from '@/components/onboarding/PromptSelector';
 import { TagSelector } from '@/components/onboarding/TagSelector';
@@ -33,7 +36,13 @@ import {
   SAFETY_TIPS,
 } from '@/lib/onboarding/constants';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
-import { draftFromProfile, ageFromBirthDate, mergeDraftAfterSave } from '@/lib/onboarding/hydrate';
+import {
+  draftFromProfile,
+  ageFromBirthDate,
+  mergeDraftAfterSave,
+  enrichDraftWithProfileVideo,
+  fetchProfileVideoDraftPatch,
+} from '@/lib/onboarding/hydrate';
 import {
   finalizeOnboarding,
   persistOnboardingResumeStep,
@@ -62,7 +71,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function OnboardingScreen() {
-  const { session, profile, refreshProfile } = useAuth();
+  const { session, profile, refreshProfile, loading: authLoading } = useAuth();
   const { user, session: activeSession, ready: authReady } = useAuthBootstrap();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
@@ -78,7 +87,12 @@ export default function OnboardingScreen() {
     if (!profile?.user_id || skipDraftHydrateRef.current) return;
     if (hydratedUserRef.current === profile.user_id) return;
     hydratedUserRef.current = profile.user_id;
-    setDraft(draftFromProfile(profile));
+    const base = draftFromProfile(profile);
+    setDraft(base);
+    void fetchProfileVideoDraftPatch(profile.user_id).then((patch) => {
+      if (!patch) return;
+      setDraft((d) => ({ ...d, ...patch }));
+    });
   }, [profile?.user_id]);
 
   /**
@@ -117,14 +131,24 @@ export default function OnboardingScreen() {
 
   const canContinue1 = useMemo(() => {
     const photos = draft.localPhotoUris.length + draft.remotePhotoUrls.length;
+    const hasVideo = !!(draft.localVideoUri || draft.remoteVideoUrl);
     const age = ageFromBirthDate(draft.birthDate);
     return (
       draft.displayName.trim().length >= 1 &&
-      photos >= 1 &&
+      photos >= PROFILE_MIN_PHOTOS_ONBOARDING &&
+      hasVideo &&
       draft.adultConfirmed &&
       age >= 18
     );
-  }, [draft.displayName, draft.localPhotoUris.length, draft.remotePhotoUrls.length, draft.birthDate, draft.adultConfirmed]);
+  }, [
+    draft.displayName,
+    draft.localPhotoUris.length,
+    draft.remotePhotoUrls.length,
+    draft.localVideoUri,
+    draft.remoteVideoUrl,
+    draft.birthDate,
+    draft.adultConfirmed,
+  ]);
 
   const canContinue2 = useMemo(() => {
     const filled = draft.promptAnswers.filter((p) => p.answer.trim().length > 0);
@@ -157,7 +181,12 @@ export default function OnboardingScreen() {
       Alert.alert('Could not save', error.message);
       return;
     }
-    setDraft((d) => mergeDraftAfterSave(d, uploadedPhotoUrls));
+    const merged = mergeDraftAfterSave(draft, uploadedPhotoUrls);
+    const enriched = await enrichDraftWithProfileVideo(user.id, {
+      ...merged,
+      localVideoUri: null,
+    });
+    setDraft(enriched);
     setStep((s) => Math.min(s + 1, ONBOARDING_TOTAL_STEPS - 1));
     skipDraftHydrateRef.current = true;
     await refreshProfile();
@@ -222,7 +251,9 @@ export default function OnboardingScreen() {
     [user?.id, draft, prefs, refreshProfile]
   );
 
-  if (!authReady && !activeSession?.user) {
+  const showBootstrapSpinner = (!authReady && !activeSession?.user) || (!!activeSession?.user && authLoading);
+
+  if (showBootstrapSpinner) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <LinearGradient
@@ -383,10 +414,17 @@ export default function OnboardingScreen() {
                   trackColor={{ true: colors.primary }}
                 />
               </View>
-              <PhotoUploader
+              <ProfilePhotoGallery
                 localUris={draft.localPhotoUris}
                 remoteUrls={draft.remotePhotoUrls}
-                onChangeLocal={(uris) => setDraft((d) => ({ ...d, localPhotoUris: uris }))}
+                primaryRef={draft.primaryPhotoRef}
+                onChangeLocal={(uris) =>
+                  setDraft((d) => ({
+                    ...d,
+                    localPhotoUris: uris,
+                    primaryPhotoRef: d.primaryPhotoRef ?? defaultPrimaryRef(d.remotePhotoUrls, uris),
+                  }))
+                }
                 onRemoveLocal={(i) =>
                   setDraft((d) => ({
                     ...d,
@@ -397,6 +435,20 @@ export default function OnboardingScreen() {
                   setDraft((d) => ({
                     ...d,
                     remotePhotoUrls: d.remotePhotoUrls.filter((_, j) => j !== i),
+                  }))
+                }
+                onPrimaryChange={(ref) => setDraft((d) => ({ ...d, primaryPhotoRef: ref }))}
+              />
+              <ProfileVideoUploader
+                localUri={draft.localVideoUri}
+                remoteUrl={draft.remoteVideoUrl}
+                required
+                onPickLocal={(uri) => setDraft((d) => ({ ...d, localVideoUri: uri }))}
+                onRemove={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    localVideoUri: null,
+                    remoteVideoUrl: null,
                   }))
                 }
               />
@@ -611,15 +663,19 @@ export default function OnboardingScreen() {
       {step < 4 ? (
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           <View style={styles.footerRow}>
-            <Pressable
-              onPress={() => setShowSkipModal(true)}
-              hitSlop={8}
-              style={({ pressed }) => [styles.footerSkip, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Skip onboarding"
-            >
-              <Text style={styles.skipTxt}>Skip</Text>
-            </Pressable>
+            {step > 0 ? (
+              <Pressable
+                onPress={() => setShowSkipModal(true)}
+                hitSlop={8}
+                style={({ pressed }) => [styles.footerSkip, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Skip onboarding"
+              >
+                <Text style={styles.skipTxt}>Skip</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.footerSkip} />
+            )}
             <Button
               title="Continue"
               onPress={onContinue}

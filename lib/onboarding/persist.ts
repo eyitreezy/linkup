@@ -3,6 +3,8 @@
  */
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
 import { runInitialProfileScreening } from '@/lib/onboarding/profileScreening';
+import { PROFILE_MIN_PHOTOS_ONBOARDING } from '@/lib/profile/media/constants';
+import { persistProfileMediaFromDraft } from '@/lib/profile/media/persist';
 import { supabase } from '@/lib/supabase';
 import type { OnboardingDraft } from '@/types/onboarding';
 import { preferencesFromDraft } from '@/types/onboarding';
@@ -87,20 +89,22 @@ export async function saveOnboardingStep(args: {
   }
 
   let uploadedPhotoUrls: string[] = [];
-  let photo_urls = [...draft.remotePhotoUrls];
-  if (draft.localPhotoUris.length > 0) {
-    try {
-      uploadedPhotoUrls = await uploadNewLocalPhotos(userId, draft.localPhotoUris);
-      photo_urls = [...photo_urls, ...uploadedPhotoUrls];
-    } catch (e) {
-      return {
-        error: e instanceof Error ? e : new Error(String(e)),
-        uploadedPhotoUrls: [],
-      };
-    }
-  }
+  let photo_urls: string[] = [];
+  let primary_photo_url: string | null = null;
+  let avatar_url: string | null = null;
 
-  const avatar_url = photo_urls[0] ?? null;
+  try {
+    const persisted = await persistProfileMediaFromDraft({ userId, draft });
+    uploadedPhotoUrls = persisted.uploadedPhotoUrls;
+    photo_urls = persisted.media.photo_urls;
+    primary_photo_url = persisted.media.primary_photo_url;
+    avatar_url = persisted.media.avatar_url;
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e : new Error(String(e)),
+      uploadedPhotoUrls: [],
+    };
+  }
 
   const { error } = await supabase
     .from('profiles')
@@ -110,6 +114,7 @@ export async function saveOnboardingStep(args: {
       birth_date: birthIso(draft.birthDate),
       gender: draft.selfGender,
       photo_urls,
+      primary_photo_url,
       avatar_url,
       age_min: draft.ageMin,
       age_max: draft.ageMax,
@@ -162,18 +167,31 @@ export async function finalizeOnboarding(args: {
     };
   }
 
+  const photoCount = draft.localPhotoUris.length + draft.remotePhotoUrls.length;
+  const hasVideo = !!(draft.localVideoUri || draft.remoteVideoUrl);
+  if (mode === 'publish' && (photoCount < PROFILE_MIN_PHOTOS_ONBOARDING || !hasVideo)) {
+    return {
+      error: new Error(`Add at least ${PROFILE_MIN_PHOTOS_ONBOARDING} photos and one intro video to publish.`),
+      uploadedPhotoUrls: [],
+    };
+  }
+
   let uploadedPhotoUrls: string[] = [];
-  let photo_urls = [...draft.remotePhotoUrls];
-  if (draft.localPhotoUris.length > 0) {
-    try {
-      uploadedPhotoUrls = await uploadNewLocalPhotos(userId, draft.localPhotoUris);
-      photo_urls = [...photo_urls, ...uploadedPhotoUrls];
-    } catch (e) {
-      return {
-        error: e instanceof Error ? e : new Error(String(e)),
-        uploadedPhotoUrls: [],
-      };
-    }
+  let photo_urls: string[] = [];
+  let primary_photo_url: string | null = null;
+  let avatar_url: string | null = null;
+
+  try {
+    const persisted = await persistProfileMediaFromDraft({ userId, draft });
+    uploadedPhotoUrls = persisted.uploadedPhotoUrls;
+    photo_urls = persisted.media.photo_urls;
+    primary_photo_url = persisted.media.primary_photo_url;
+    avatar_url = persisted.media.avatar_url;
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e : new Error(String(e)),
+      uploadedPhotoUrls: [],
+    };
   }
 
   const mergedPrefs: ProfilePreferences = {
@@ -181,8 +199,6 @@ export async function finalizeOnboarding(args: {
     ...preferencesFromDraft(draft),
     profile_draft: mode === 'draft',
   };
-
-  const avatar_url = photo_urls[0] ?? null;
 
   /** Broader than bio-only `scoreProfileBio`; still non-blocking if it throws. */
   let finalizeTrust: number | undefined;
@@ -211,6 +227,7 @@ export async function finalizeOnboarding(args: {
       birth_date: birthIso(draft.birthDate),
       gender: draft.selfGender,
       photo_urls,
+      primary_photo_url,
       avatar_url,
       age_min: draft.ageMin,
       age_max: draft.ageMax,

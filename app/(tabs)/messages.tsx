@@ -17,8 +17,10 @@ import type { DbUserPresence } from '@/types/database';
 import { Href, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 type InboxRow = {
   id: string;
@@ -46,6 +48,7 @@ function previewForLast(
 }
 
 export default function MessagesInboxScreen() {
+  const tabBarScroll = useTabBarScrollProps();
   const { user } = useAuth();
   const [rows, setRows] = useState<InboxRow[]>([]);
   const [convIds, setConvIds] = useState<string[]>([]);
@@ -325,12 +328,13 @@ export default function MessagesInboxScreen() {
         ) : null}
       </View>
 
-      <FlatList
+      <Animated.FlatList
         data={rows}
         keyExtractor={(r) => r.id}
         style={styles.listFlex}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={listHeader}
+        {...tabBarScroll}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

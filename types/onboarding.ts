@@ -2,6 +2,7 @@
  * Client-side onboarding draft (maps to profiles + preferences JSONB).
  */
 import type { ProfilePreferences } from '@/types/database';
+import type { PrimaryPhotoRef } from '@/lib/profile/media/types';
 
 export type MeetingIntent = 'friendship' | 'dating' | 'activity' | 'networking';
 
@@ -20,6 +21,14 @@ export type OnboardingDraft = {
   localPhotoUris: string[];
   /** Already uploaded public URLs (from DB or after upload) */
   remotePhotoUrls: string[];
+  /** Which tile is the primary / avatar photo */
+  primaryPhotoRef: PrimaryPhotoRef | null;
+  /** Local intro video before upload */
+  localVideoUri: string | null;
+  /** Persisted intro video public URL */
+  remoteVideoUrl: string | null;
+  /** media.id for profile intro video */
+  remoteVideoMediaId: string | null;
   bio: string;
   interests: string[];
   languages: string[];
@@ -51,6 +60,10 @@ export function defaultOnboardingDraft(partial?: Partial<OnboardingDraft>): Onbo
     birthDate: partial?.birthDate ?? d,
     localPhotoUris: [],
     remotePhotoUrls: [],
+    primaryPhotoRef: null,
+    localVideoUri: null,
+    remoteVideoUrl: null,
+    remoteVideoMediaId: null,
     bio: '',
     interests: [],
     languages: [],

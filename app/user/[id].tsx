@@ -6,7 +6,11 @@ import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
+import { HostMediaGallery } from '@/components/plans/HostMediaGallery';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
+import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
+import { buildHostMediaSequence } from '@/lib/profile/media/buildHostMediaSequence';
+import { fetchProfileVideo, type ProfileVideoRecord } from '@/lib/profile/media/profileVideo';
 import { fetchUserPresence, subscribeUserPresenceRealtime } from '@/lib/presence/subscribeUserPresenceRealtime';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbProfile, DbUserPresence } from '@/types/database';
@@ -60,6 +64,7 @@ export default function PublicUserScreen() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [theirPresence, setTheirPresence] = useState<DbUserPresence | null>(null);
+  const [profileVideo, setProfileVideo] = useState<ProfileVideoRecord | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -73,7 +78,10 @@ export default function PublicUserScreen() {
     if (pe || !p) {
       setProfile(null);
     } else {
-      setProfile(p as DbProfile);
+      const row = p as DbProfile;
+      setProfile(row);
+      const video = await fetchProfileVideo(row.user_id);
+      setProfileVideo(video);
     }
     setLoading(false);
   }, [id]);
@@ -115,6 +123,11 @@ export default function PublicUserScreen() {
 
   const isSelf = !!(user?.id && id && user.id === id);
   const canInteract = !!(user?.id && id && !isSelf);
+
+  const mediaItems = useMemo(
+    () => buildHostMediaSequence(profile, profileVideo),
+    [profile, profileVideo]
+  );
 
   async function onMessage() {
     if (!user?.id || !id || chatBusy) return;
@@ -179,10 +192,6 @@ export default function PublicUserScreen() {
             >
               <Ionicons name="arrow-back" size={22} color={colors.text} />
             </Pressable>
-            <View style={styles.topNavBadge}>
-              <Ionicons name="person-outline" size={16} color={colors.primary} />
-              <Text style={styles.topNavBadgeText}>Profile</Text>
-            </View>
           </View>
           <View style={styles.unavailableCard}>
             <Ionicons name="lock-closed-outline" size={32} color={colors.textMuted} />
@@ -212,11 +221,9 @@ export default function PublicUserScreen() {
           >
             <Ionicons name="arrow-back" size={22} color={colors.text} />
           </Pressable>
-          <View style={styles.topNavBadge}>
-            <Ionicons name="person-outline" size={16} color={colors.primary} />
-            <Text style={styles.topNavBadgeText}>Profile</Text>
-          </View>
         </View>
+
+        <HostMediaGallery items={mediaItems} loading={loading} edgeToEdge />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -252,7 +259,7 @@ export default function PublicUserScreen() {
             >
               <View style={styles.avatarInner}>
                 <AvatarWithPresence
-                  uri={profile.avatar_url}
+                  uri={resolveProfileHeroPhoto(profile)}
                   name={name}
                   size={104}
                   presence={presenceUi}
@@ -283,7 +290,11 @@ export default function PublicUserScreen() {
                     styles.presenceDot,
                     {
                       backgroundColor:
-                        presenceUi.dot === 'online' ? colors.success : colors.textMuted,
+                        presenceUi.dot === 'online'
+                          ? colors.success
+                          : presenceUi.dot === 'offline'
+                            ? '#94A3B8'
+                            : colors.textMuted,
                     },
                   ]}
                 />
@@ -362,36 +373,9 @@ const styles = StyleSheet.create({
   topNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
     marginBottom: spacing.sm,
-  },
-  topNavBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.button,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  topNavBadgeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: 0.2,
   },
   iconPill: {
     width: 44,
@@ -415,6 +399,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.92 },
   scroll: {
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xl * 2,
   },
   leadBlock: {

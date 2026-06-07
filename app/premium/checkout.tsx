@@ -112,7 +112,7 @@ export default function PremiumCheckoutScreen() {
               <Text style={styles.leadKicker}>Premium</Text>
               <Text style={styles.leadTitle}>Complete upgrade</Text>
               <Text style={styles.leadSub}>
-                Open Paystack in your browser, then confirm below to unlock Premium in the app (demo flow).
+                Paystack opens in a secure browser tab. After payment you return to LinkUp automatically.
               </Text>
             </View>
           </View>

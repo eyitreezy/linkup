@@ -24,6 +24,8 @@ type Props = {
   whenLabel: string;
   locationLabel: string;
   trustNote: string;
+  /** e.g. "Your share" when split escrow — shown above total. */
+  yourShareLabel?: string | null;
 };
 
 export function EscrowSummaryCard({
@@ -33,11 +35,20 @@ export function EscrowSummaryCard({
   whenLabel,
   locationLabel,
   trustNote,
+  yourShareLabel,
 }: Props) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Escrow summary</Text>
-      <Row icon="cash-outline" label="Amount" value={`${amountLabel} ${currency}`} emphasize />
+      {yourShareLabel ? (
+        <Row icon="wallet-outline" label="Your payment" value={yourShareLabel} emphasize />
+      ) : null}
+      <Row
+        icon="cash-outline"
+        label={yourShareLabel ? 'Total held' : 'Amount'}
+        value={`${amountLabel} ${currency}`}
+        emphasize={!yourShareLabel}
+      />
       <Row icon="card-outline" label="Payment status" value={paymentStatusLabel} />
       <Row icon="time-outline" label="When" value={whenLabel} />
       <Row icon="location-outline" label="Where" value={locationLabel} />
@@ -52,18 +63,25 @@ export function EscrowSummaryCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.lg,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+    shadowColor: '#2a1f55',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: spacing.md },
+  cardTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: spacing.md,
+  },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md },
   rowText: { flex: 1 },
   rowLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 2 },

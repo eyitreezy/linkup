@@ -182,7 +182,11 @@ With the Database Webhook enabled, trigger a real event (e.g. another account se
 
 Transactional email for the same `notifications` rows uses **Resend** and `notification-email` — not the push toggle. See **[EMAIL_NOTIFICATIONS_SETUP.md](./EMAIL_NOTIFICATIONS_SETUP.md)**.
 
-## 8. Reference files
+## 8. Payment reminders (`awaiting_payment`)
+
+Automated **`payment_reminder`** notifications (push via this webhook + email via Resend) fire when escrow is created and on a **15-minute cron** sweep. See **[PAYMENT_REMINDER_AUTOMATION.md](./PAYMENT_REMINDER_AUTOMATION.md)**.
+
+## 9. Reference files
 
 - Client: `lib/notifications/registerPushNotifications.ts`, `contexts/NotificationInboxContext.tsx`
 - Server: `supabase/functions/_shared/expoPush.ts`, `push-on-notification`, `test-expo-push`

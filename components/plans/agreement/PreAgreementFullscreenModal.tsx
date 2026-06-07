@@ -2,6 +2,8 @@
  * Bumble-style fullscreen legal gate before escrow / activation — no swipe-to-dismiss.
  */
 import { colors, radius, spacing } from '@/constants/theme';
+import { CancellationPolicyRowGroups } from '@/components/plans/CancellationPolicyRows';
+import { AGREEMENT_CANCELLATION_POLICY_GROUPS } from '@/lib/plans/cancellationPolicy';
 import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
@@ -24,6 +26,8 @@ export type PreAgreementModalProps = {
   locationLabel: string | null;
   priceLabel: string;
   escrowAmountCents: number | null;
+  /** Amount this user pays on the next screen (split = share only). */
+  userPaysCents?: number | null;
   currencyLabel: string;
   busy: boolean;
   onConfirm: () => void;
@@ -36,6 +40,7 @@ export function PreAgreementFullscreenModal({
   locationLabel,
   priceLabel,
   escrowAmountCents,
+  userPaysCents,
   currencyLabel,
   busy,
   onConfirm,
@@ -91,6 +96,17 @@ export function PreAgreementFullscreenModal({
                 <Text style={styles.muted}>
                   Funds are protected with Paystack and released per plan rules after the meetup.
                 </Text>
+                {(userPaysCents ?? escrowAmountCents) > 0 ? (
+                  <View style={styles.nextPayCallout}>
+                    <Text style={styles.nextPayTitle}>After you confirm</Text>
+                    <Text style={styles.nextPayBody}>
+                      The next screen opens secure payment — you&apos;ll pay{' '}
+                      {currencyLabel === 'NGN' ? '₦' : `${currencyLabel} `}
+                      {((userPaysCents ?? escrowAmountCents) / 100).toLocaleString()} via Paystack. Nothing is
+                      charged on this review screen.
+                    </Text>
+                  </View>
+                ) : null}
               </>
             ) : (
               <Text style={styles.line}>No escrow for this free plan.</Text>
@@ -115,12 +131,16 @@ export function PreAgreementFullscreenModal({
           </Section>
 
           <Section title="Cancellation policy" icon="shield-checkmark-outline">
-            <Text style={styles.line}>• More than 24h: full refund to payer</Text>
-            <Text style={styles.line}>• 6–24h: partial refund</Text>
-            <Text style={styles.line}>• Under 6h: stronger fee / smaller refund</Text>
-            <Text style={styles.line}>• No-show: maximum fee</Text>
-            <Text style={styles.line}>• Mutual: both agree — neutral outcome</Text>
-            <Text style={styles.muted}>Rules differ slightly for host vs guest; server decides bands from timestamps.</Text>
+            <Text style={[styles.muted, styles.policyIntro]}>
+              Role- and timing-based rules — calculated from meetup time vs when someone cancels in-app.
+            </Text>
+            <CancellationPolicyRowGroups groups={AGREEMENT_CANCELLATION_POLICY_GROUPS} dense />
+            <View style={styles.policyCallout}>
+              <Ionicons name="server-outline" size={16} color={colors.primary} />
+              <Text style={styles.policyCalloutTxt}>
+                Outcomes are enforced on LinkUp servers after Paystack funding — not editable in chat.
+              </Text>
+            </View>
           </Section>
         </ScrollView>
 
@@ -208,6 +228,29 @@ const styles = StyleSheet.create({
   line: { fontSize: 14, color: colors.text, marginTop: 6, lineHeight: 20 },
   muted: { fontSize: 13, color: colors.textMuted, marginTop: 8, lineHeight: 18 },
   mutedSmall: { fontSize: 12, color: colors.textMuted, marginTop: 10, lineHeight: 17 },
+  nextPayCallout: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+  },
+  nextPayTitle: { fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 6 },
+  nextPayBody: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  policyIntro: { marginBottom: spacing.sm },
+  policyCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.22)',
+  },
+  policyCalloutTxt: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textMuted, lineHeight: 17 },
   feeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

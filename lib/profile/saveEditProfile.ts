@@ -2,8 +2,8 @@
  * Full profile save from onboarding-shaped draft (Edit profile) — preserves premium/settings preference keys.
  */
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
-import { uploadNewLocalPhotos } from '@/lib/onboarding/persist';
 import { runInitialProfileScreening } from '@/lib/onboarding/profileScreening';
+import { persistProfileMediaFromDraft } from '@/lib/profile/media/persist';
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { supabase } from '@/lib/supabase';
 import type { ProfilePreferences } from '@/types/database';
@@ -51,20 +51,22 @@ export async function saveEditProfile(args: {
   };
 
   let uploadedPhotoUrls: string[] = [];
-  let photo_urls = [...draft.remotePhotoUrls];
-  if (draft.localPhotoUris.length > 0) {
-    try {
-      uploadedPhotoUrls = await uploadNewLocalPhotos(userId, draft.localPhotoUris);
-      photo_urls = [...photo_urls, ...uploadedPhotoUrls];
-    } catch (e) {
-      return {
-        error: e instanceof Error ? e : new Error(String(e)),
-        uploadedPhotoUrls: [],
-      };
-    }
-  }
+  let photo_urls: string[] = [];
+  let primary_photo_url: string | null = null;
+  let avatar_url: string | null = null;
 
-  const avatar_url = photo_urls[0] ?? null;
+  try {
+    const persisted = await persistProfileMediaFromDraft({ userId, draft });
+    uploadedPhotoUrls = persisted.uploadedPhotoUrls;
+    photo_urls = persisted.media.photo_urls;
+    primary_photo_url = persisted.media.primary_photo_url;
+    avatar_url = persisted.media.avatar_url;
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e : new Error(String(e)),
+      uploadedPhotoUrls: [],
+    };
+  }
 
   let screeningTrust: number | undefined;
   try {
@@ -89,6 +91,7 @@ export async function saveEditProfile(args: {
       birth_date: birthIso(draft.birthDate),
       gender: draft.selfGender,
       photo_urls,
+      primary_photo_url,
       avatar_url,
       age_min: draft.ageMin,
       age_max: draft.ageMax,

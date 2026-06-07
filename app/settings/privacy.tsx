@@ -1,4 +1,4 @@
-import { Screen } from '@/components/Screen';
+import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -25,30 +25,7 @@ export default function PrivacySafetyScreen() {
   }, [load]);
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-      <View style={styles.flex}>
-        <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-          <View style={styles.topNav}>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </Pressable>
-          </View>
-
+    <SettingsStickyShell contentContainerStyle={styles.scroll}>
           <View style={styles.leadBlock}>
             <LinearGradient
               colors={[colors.primary, colors.secondary]}
@@ -146,43 +123,12 @@ export default function PrivacySafetyScreen() {
             Data usage: LinkUp uses your location for nearby plans, verification media for KYC, and messages for
             delivery. See product privacy copy in docs.
           </Text>
-        </ScrollView>
-      </View>
-    </Screen>
+    </SettingsStickyShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1, backgroundColor: 'transparent' },
-  flex: { flex: 1 },
-  scroll: { paddingBottom: spacing.xl * 2 },
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  iconPill: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  pressed: { opacity: 0.92 },
+  scroll: { paddingBottom: spacing.xl },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -83,7 +83,9 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
   async function onLogin() {
     setErr('');
     if (!isSupabaseConfigured) {
-      setErr('Configure Supabase in .env');
+      setErr(
+        'Supabase is not configured in this build. Local dev: add keys to .env. EAS: run npm run eas:env:push:preview and rebuild.'
+      );
       return;
     }
     if (!email.trim()) {
@@ -121,7 +123,9 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
   async function onSignup() {
     setErr('');
     if (!isSupabaseConfigured) {
-      setErr('Configure Supabase in .env');
+      setErr(
+        'Supabase is not configured in this build. Local dev: add keys to .env. EAS: run npm run eas:env:push:preview and rebuild.'
+      );
       return;
     }
     if (!email.trim()) {
@@ -190,7 +194,9 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
   async function onGoogle() {
     setErr('');
     if (!isSupabaseConfigured) {
-      setErr('Configure Supabase in .env');
+      setErr(
+        'Supabase is not configured in this build. Local dev: add keys to .env. EAS: run npm run eas:env:push:preview and rebuild.'
+      );
       return;
     }
     setGoogleLoading(true);

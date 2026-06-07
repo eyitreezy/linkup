@@ -12,15 +12,16 @@ export function getPaystackPublicKey(): string {
   );
 }
 
-/** Build Paystack Inline payment URL (opens in browser / WebView). MVP helper. */
+/**
+ * @deprecated Use `paystack-initialize` Edge Function only.
+ * Putting metadata in query strings can trigger Paystack WAF blocks.
+ */
 export function paystackCheckoutUrl(opts: {
   email: string;
   amountKobo: number;
   reference: string;
   callbackUrl: string;
-  metadata?: Record<string, string>;
 }): string {
   const pk = getPaystackPublicKey();
-  const meta = encodeURIComponent(JSON.stringify(opts.metadata ?? {}));
-  return `https://checkout.paystack.com/?pk=${encodeURIComponent(pk)}&email=${encodeURIComponent(opts.email)}&amount=${opts.amountKobo}&ref=${encodeURIComponent(opts.reference)}&callback_url=${encodeURIComponent(opts.callbackUrl)}&metadata=${meta}`;
+  return `https://checkout.paystack.com/?pk=${encodeURIComponent(pk)}&email=${encodeURIComponent(opts.email)}&amount=${opts.amountKobo}&ref=${encodeURIComponent(opts.reference)}&callback_url=${encodeURIComponent(opts.callbackUrl)}`;
 }

@@ -10,15 +10,16 @@ type Props = {
 
 export function EscrowStepIndicator({ activeIndex }: Props) {
   return (
-    <View style={styles.row}>
+    <View style={styles.card}>
       {STEPS.map((label, i) => {
         const done = i <= activeIndex;
+        const current = i === activeIndex + 1 && activeIndex < STEPS.length - 1;
         return (
-          <View key={label} style={styles.pillWrap}>
-            <View style={[styles.pill, done && styles.pillOn]}>
-              <Text style={[styles.pillTxt, done && styles.pillTxtOn]}>{i + 1}</Text>
+          <View key={label} style={styles.stepCol}>
+            <View style={[styles.pill, done && styles.pillOn, current && styles.pillCurrent]}>
+              <Text style={[styles.pillTxt, (done || current) && styles.pillTxtOn]}>{i + 1}</Text>
             </View>
-            <Text style={[styles.lbl, done ? styles.lblOn : styles.lblOff]} numberOfLines={1}>
+            <Text style={[styles.lbl, done ? styles.lblOn : current ? styles.lblCurrent : styles.lblOff]} numberOfLines={1}>
               {label}
             </Text>
           </View>
@@ -29,26 +30,36 @@ export function EscrowStepIndicator({ activeIndex }: Props) {
 }
 
 const styles = StyleSheet.create({
-  row: {
+  card: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
   },
-  pillWrap: { flex: 1, alignItems: 'center' },
+  stepCol: { flex: 1, alignItems: 'center' },
   pill: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.button,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   pillOn: { backgroundColor: colors.primary },
+  pillCurrent: {
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 101, 132, 0.55)',
+  },
   pillTxt: { fontSize: 13, fontWeight: '800', color: colors.textMuted },
   pillTxtOn: { color: '#fff' },
-  lbl: { fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  lbl: { fontSize: 10, fontWeight: '800', textAlign: 'center' },
   lblOn: { color: colors.text },
+  lblCurrent: { color: colors.primary },
   lblOff: { color: colors.textMuted },
 });

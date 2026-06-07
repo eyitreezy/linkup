@@ -1,34 +1,50 @@
-import * as Linking from 'expo-linking';
-import { paystackCheckoutUrl, getPaystackPublicKey } from '@/lib/paystack';
+import {
+  getPremiumPaystackCallbackUrl,
+  isAllowedPaystackCallbackUrl,
+  paystackCallbackUrlError,
+} from '@/lib/paystack/callbackUrl';
+import { invokePaystackInitialize } from '@/lib/paystack/invokePaystackInitialize';
+import { openPaystackCheckoutInBrowser } from '@/lib/paystack/openPaystackBrowser';
 import type { PremiumTier } from '@/lib/premium/catalog';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 export async function openPremiumPaystackCheckout(opts: {
   email: string;
   userId: string;
   tier: PremiumTier;
 }): Promise<{ ok: boolean; error?: string; reference: string }> {
-  const pk = getPaystackPublicKey();
-  if (!pk) return { ok: false, error: 'Paystack is not configured.', reference: '' };
-  if (!opts.email) return { ok: false, error: 'Add an email to your account.', reference: '' };
+  if (!opts.email?.trim()) {
+    return { ok: false, error: 'Add an email to your account.', reference: '' };
+  }
 
-  const reference = `linkup-premium-${opts.tier.id}-${opts.userId}-${Date.now()}`;
-  const callbackUrl = process.env.EXPO_PUBLIC_PAYSTACK_PREMIUM_CALLBACK_URL ?? Linking.createURL('/premium/success');
+  if (!isSupabaseConfigured) {
+    return {
+      ok: false,
+      error: 'Supabase is not configured. Premium checkout requires paystack-initialize on the server.',
+      reference: '',
+    };
+  }
 
-  const url = paystackCheckoutUrl({
-    email: opts.email,
-    amountKobo: opts.tier.priceKobo,
-    reference,
-    callbackUrl,
-    metadata: {
-      linkup: 'premium',
-      transaction_type: 'premium',
-      tier_id: opts.tier.id,
-      user_id: opts.userId,
-    },
+  const callbackUrl = getPremiumPaystackCallbackUrl();
+  if (!isAllowedPaystackCallbackUrl(callbackUrl)) {
+    return { ok: false, error: paystackCallbackUrlError(), reference: '' };
+  }
+
+  const init = await invokePaystackInitialize({
+    kind: 'premium',
+    email: opts.email.trim(),
+    callback_url: callbackUrl,
+    tier_id: opts.tier.id,
   });
 
-  const can = await Linking.canOpenURL(url);
-  if (!can) return { ok: false, error: 'Cannot open checkout.', reference };
-  await Linking.openURL(url);
-  return { ok: true, reference };
+  if (!init.ok) {
+    return { ok: false, error: init.error, reference: '' };
+  }
+
+  const opened = await openPaystackCheckoutInBrowser(init.data.authorization_url, callbackUrl);
+  if (!opened.ok) {
+    return { ok: false, error: opened.error, reference: init.data.reference };
+  }
+
+  return { ok: true, reference: init.data.reference };
 }

@@ -6,11 +6,13 @@ import { isUserVerified } from '@/lib/verification/access';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
+import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
 import { isOfferExpired } from '@/lib/plans/offerRules';
+import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
 import type { DbPlanOffer, DbProfile, DbUserPresence } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -46,9 +48,7 @@ type OfferCta = {
 };
 
 function planHeroUri(row: PlanFeedRow): string | null {
-  const urls = row.creatorProfile?.photo_urls;
-  if (Array.isArray(urls) && urls.length > 0) return urls[0] ?? null;
-  return row.creatorProfile?.avatar_url ?? null;
+  return resolveProfileHeroPhoto(row.creatorProfile ?? null);
 }
 
 function isProfileComplete(row: PlanFeedRow): boolean {
@@ -142,7 +142,7 @@ function PlanCardInner({
   const desc = row.description?.trim() ?? '';
   const boosted = isPlanBoostActive(row.boosted_until);
   const offerCta = useMemo(() => deriveOfferCta(userOffer ?? null, warmTone), [userOffer, warmTone]);
-  const showCreatorPresence = !!userOffer && !isOwn;
+  const showCreatorPresence = !isOwn;
   const presenceUi = useMemo(
     () =>
       showCreatorPresence
@@ -226,7 +226,7 @@ function PlanCardInner({
                 name={name}
                 size={46}
                 presence={presenceUi}
-                showDot={showCreatorPresence}
+                showDot={showCreatorPresence && !!presenceUi?.dot}
               />
             </Pressable>
             <View style={styles.datingHostMeta}>
@@ -234,6 +234,7 @@ function PlanCardInner({
                 {name}
               </Text>
               <View style={styles.datingChipRow}>
+                <HostPresenceChip presence={presenceUi} />
                 {showTrustChip ? (
                   <View style={styles.datingTrustChip}>
                     <Text style={styles.datingTrustChipTxt}>Trusted</Text>
@@ -376,7 +377,7 @@ function PlanCardInner({
             name={name}
             size={48}
             presence={presenceUi}
-            showDot={showCreatorPresence}
+            showDot={showCreatorPresence && !!presenceUi?.dot}
           />
         </Pressable>
         <View style={styles.topMeta}>
@@ -407,6 +408,7 @@ function PlanCardInner({
           ) : (
             <Text style={styles.dist}>Nearby</Text>
           )}
+          <HostPresenceChip presence={presenceUi} />
         </View>
       </View>
 

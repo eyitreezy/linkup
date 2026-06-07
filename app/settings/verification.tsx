@@ -2,7 +2,7 @@
  * Settings — verification status, explainer, and audit trail (matches create/plan-management polish).
  */
 import { Button } from '@/components/Button';
-import { Screen } from '@/components/Screen';
+import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -13,13 +13,7 @@ import { Href, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type VerificationUiStatus = 'unverified' | 'pending' | 'verified' | 'rejected';
 
@@ -146,20 +140,7 @@ export default function VerificationStatusScreen() {
   }, [loadTimeline]);
 
   return (
-    <Screen scroll={false} safeAreaEdges={['left', 'right']} safeAreaStyle={styles.screenBg}>
-      <View style={styles.root}>
-        <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.background]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+    <SettingsStickyShell contentContainerStyle={styles.scroll}>
           <View style={styles.leadRow}>
             <LinearGradient colors={vis.ringColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroRing}>
               <View style={styles.heroIconInner}>
@@ -268,19 +249,13 @@ export default function VerificationStatusScreen() {
               </View>
             )}
           </View>
-        </ScrollView>
-      </View>
-    </Screen>
+    </SettingsStickyShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screenBg: { backgroundColor: 'transparent', flex: 1 },
-  root: { flex: 1 },
   scroll: {
-    paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl * 2,
-    paddingTop: spacing.sm,
   },
   leadRow: {
     flexDirection: 'row',

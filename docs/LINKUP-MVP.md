@@ -38,7 +38,7 @@ Copy `.env.example` to `.env` at the project root. Expo reads `EXPO_PUBLIC_*` at
 
 1. User accepts offer → app inserts `escrow_transactions` (`pending_funding`).
 2. Payer opens Paystack checkout (client-side URL with public key).
-3. **Production:** webhook verifies payment and sets `funded` (see `supabase/functions/paystack-webhook/README.md`).
+3. **Production:** webhook verifies payment and sets `funded` — full guide: [PAYSTACK_SETUP.md](./PAYSTACK_SETUP.md).
 4. MVP includes **“Demo: mark as funded”** for local testing without a webhook.
 
 ## Screens (route map)

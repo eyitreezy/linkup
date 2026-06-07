@@ -7,16 +7,23 @@ import {
   Input,
   onboardingTouchableFieldStyle,
 } from '@/components/Input';
-import { PhotoUploader } from '@/components/onboarding/PhotoUploader';
+import { ProfilePhotoGallery } from '@/components/profile/ProfilePhotoGallery';
+import { ProfileVideoUploader } from '@/components/profile/ProfileVideoUploader';
+import { defaultPrimaryRef, orderPhotoUrls } from '@/lib/profile/media/photoOrder';
 import { ProfileCardPreview } from '@/components/onboarding/ProfileCardPreview';
 import { PromptSelector } from '@/components/onboarding/PromptSelector';
 import { TagSelector } from '@/components/onboarding/TagSelector';
-import { Screen } from '@/components/Screen';
+import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { INTEREST_TAGS, LANGUAGE_OPTIONS } from '@/lib/onboarding/constants';
-import { ageFromBirthDate, draftFromProfile } from '@/lib/onboarding/hydrate';
+import {
+  ageFromBirthDate,
+  draftFromProfile,
+  fetchProfileVideoDraftPatch,
+  mergeDraftAfterSave,
+} from '@/lib/onboarding/hydrate';
 import { ProfileLocationSection } from '@/components/profile/ProfileLocationSection';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { saveEditProfile } from '@/lib/profile/saveEditProfile';
@@ -34,7 +41,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -134,7 +140,7 @@ export default function EditProfileScreen() {
       return;
     }
     setSaving(true);
-    const { error } = await saveEditProfile({
+    const { error, uploadedPhotoUrls } = await saveEditProfile({
       userId: user.id,
       draft,
       existingPreferences: profile?.preferences ?? null,
@@ -160,6 +166,7 @@ export default function EditProfileScreen() {
         textSample: textSample.length ? textSample : null,
       });
       await refreshProfile();
+      setDraft((d) => mergeDraftAfterSave(d, uploadedPhotoUrls));
       setFeedback({
         variant: 'success',
         title: 'Saved',
@@ -169,9 +176,14 @@ export default function EditProfileScreen() {
   }
 
   useEffect(() => {
-    if (!profile) return;
-    setDraft(draftFromProfile(profile));
-  }, [profile?.user_id, profile?.updated_at]);
+    if (!profile?.user_id) return;
+    const base = draftFromProfile(profile);
+    setDraft(base);
+    void fetchProfileVideoDraftPatch(profile.user_id).then((patch) => {
+      if (!patch) return;
+      setDraft((d) => ({ ...d, ...patch }));
+    });
+  }, [profile?.user_id]);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -184,35 +196,7 @@ export default function EditProfileScreen() {
         message={feedback?.message ?? ''}
         primaryLabel={feedback?.variant === 'success' ? 'Done' : 'Got it'}
       />
-      <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-        <View style={styles.flex}>
-          <LinearGradient
-            colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
-            locations={[0, 0.32, 0.62, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-            pointerEvents="none"
-          />
-
-          <ScrollView
-            style={styles.flex}
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.topNav}>
-              <Pressable
-                onPress={() => router.back()}
-                style={({ pressed }) => [styles.iconPill, pressed && styles.iconPillPressed]}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Ionicons name="arrow-back" size={22} color={colors.text} />
-              </Pressable>
-            </View>
-
+      <SettingsStickyShell contentContainerStyle={styles.scroll}>
             <View style={styles.leadBlock}>
               <LinearGradient
                 colors={[colors.primary, colors.secondary]}
@@ -259,16 +243,46 @@ export default function EditProfileScreen() {
                   }}
                 />
               ) : null}
-              <Text style={styles.photoRequirementHint}>At least one photo · 18+</Text>
-              <PhotoUploader
+              <Text style={styles.photoRequirementHint}>Tap a photo to set Primary · intro video optional here</Text>
+              <ProfilePhotoGallery
                 localUris={draft.localPhotoUris}
                 remoteUrls={draft.remotePhotoUrls}
-                onChangeLocal={(uris) => setDraft((d) => ({ ...d, localPhotoUris: uris }))}
+                primaryRef={draft.primaryPhotoRef}
+                minPhotosHint={1}
+                onChangeLocal={(uris) =>
+                  setDraft((d) => ({
+                    ...d,
+                    localPhotoUris: uris,
+                    primaryPhotoRef: d.primaryPhotoRef ?? defaultPrimaryRef(d.remotePhotoUrls, uris),
+                  }))
+                }
                 onRemoveLocal={(i) =>
                   setDraft((d) => ({ ...d, localPhotoUris: d.localPhotoUris.filter((_, j) => j !== i) }))
                 }
                 onRemoveRemote={(i) =>
                   setDraft((d) => ({ ...d, remotePhotoUrls: d.remotePhotoUrls.filter((_, j) => j !== i) }))
+                }
+                onPrimaryChange={(ref) =>
+                  setDraft((d) => ({
+                    ...d,
+                    primaryPhotoRef: ref,
+                    remotePhotoUrls:
+                      ref?.kind === 'remote'
+                        ? orderPhotoUrls(d.remotePhotoUrls, ref.url)
+                        : d.remotePhotoUrls,
+                  }))
+                }
+              />
+              <ProfileVideoUploader
+                localUri={draft.localVideoUri}
+                remoteUrl={draft.remoteVideoUrl}
+                onPickLocal={(uri) => setDraft((d) => ({ ...d, localVideoUri: uri }))}
+                onRemove={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    localVideoUri: null,
+                    remoteVideoUrl: null,
+                  }))
                 }
               />
             </FormCard>
@@ -469,47 +483,14 @@ export default function EditProfileScreen() {
             {!canSave ? (
               <Text style={styles.saveHint}>Complete required fields above to enable save.</Text>
             ) : null}
-          </ScrollView>
-        </View>
-      </Screen>
+      </SettingsStickyShell>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  screenRoot: { backgroundColor: 'transparent' },
-  scroll: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl * 2,
-    paddingTop: spacing.xs,
-  },
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  iconPill: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D26',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  iconPillPressed: { opacity: 0.92 },
+  scroll: { paddingBottom: spacing.xl },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',

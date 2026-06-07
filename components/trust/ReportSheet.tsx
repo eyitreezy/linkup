@@ -18,6 +18,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -51,6 +52,9 @@ export function ReportSheet({
   title = 'Report',
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+  const sheetHeight = winH * 0.92;
+  const footerPad = Math.max(insets.bottom, spacing.md) + spacing.sm;
   const [step, setStep] = useState<Step>('reason');
   const [reason, setReason] = useState<ReportReasonCode | null>(null);
   const [note, setNote] = useState('');
@@ -96,48 +100,58 @@ export function ReportSheet({
     setStep('done');
   }, [reporterId, reportedUserId, contentType, contentId, reason, note]);
 
-  const sheetBottomPad = Math.max(insets.bottom, spacing.md);
+  const sheetTopRadius = radius.xl + 4;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <Pressable style={styles.backdrop} onPress={handleClose} accessibilityLabel="Close" />
-      <View style={[styles.sheetOuter, { paddingBottom: sheetBottomPad }]}>
-        <LinearGradient
-          colors={['#EDE8FF', '#FFFFFF', '#FFF5F8', colors.surface]}
-          locations={[0, 0.25, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={styles.handle} />
-        <View style={styles.headerBlock}>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={handleClose}>
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.backdrop} onPress={handleClose} accessibilityLabel="Close" />
+        <View style={[styles.sheetOuter, { height: sheetHeight, maxHeight: sheetHeight, borderTopLeftRadius: sheetTopRadius, borderTopRightRadius: sheetTopRadius }]}>
           <LinearGradient
-            colors={[colors.primary, colors.secondary]}
+            colors={['#EDE8FF', '#FFFFFF', '#FFF5F8', colors.surface]}
+            locations={[0, 0.25, 0.55, 1]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.leadAccent}
+            end={{ x: 1, y: 1 }}
+            style={[styles.sheetGradientBg, { borderTopLeftRadius: sheetTopRadius, borderTopRightRadius: sheetTopRadius }]}
           />
-          <View style={styles.headerTextCol}>
-            <Text style={styles.leadKicker}>Trust & safety</Text>
-            <Text style={styles.sheetTitle}>{title}</Text>
-          </View>
-          <Pressable
-            onPress={handleClose}
-            style={({ pressed }) => [styles.closePill, pressed && styles.pressed]}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <Ionicons name="close" size={22} color={colors.text} />
-          </Pressable>
-        </View>
-        <Text style={styles.trustCopy}>
-          Reports are confidential. We never share details with the other person. You’re helping keep LinkUp safer
-          for everyone.
-        </Text>
+          <View style={styles.sheetBody}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.handle} />
+              <View style={styles.headerBlock}>
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.leadAccent}
+                />
+                <View style={styles.headerTextCol}>
+                  <Text style={styles.leadKicker}>Trust & safety</Text>
+                  <Text style={styles.sheetTitle}>{title}</Text>
+                </View>
+                <Pressable
+                  onPress={handleClose}
+                  style={({ pressed }) => [styles.closePill, pressed && styles.pressed]}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </Pressable>
+              </View>
+              <Text style={styles.trustCopy}>
+                Reports are confidential. We never share details with the other person. You’re helping keep LinkUp
+                safer for everyone.
+              </Text>
+            </View>
 
         {step === 'reason' ? (
-          <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <>
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             {contentType === 'plan' && contentId ? (
               <Pressable
                 onPress={openPlanDispute}
@@ -224,7 +238,8 @@ export function ReportSheet({
                 </Pressable>
               );
             })}
-
+          </ScrollView>
+          <View style={[styles.footer, { paddingBottom: footerPad }]}>
             <Pressable
               onPress={() => setStep('note')}
               disabled={!reason}
@@ -246,14 +261,17 @@ export function ReportSheet({
                 <Ionicons name="arrow-forward" size={20} color={!reason ? 'rgba(255,255,255,0.65)' : '#FFFFFF'} />
               </LinearGradient>
             </Pressable>
-          </ScrollView>
+          </View>
+          </>
         ) : null}
 
         {step === 'note' ? (
+          <>
           <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContentPad}
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
             <View style={styles.sectionHead}>
               <View style={styles.sectionHeadRow}>
@@ -277,7 +295,8 @@ export function ReportSheet({
               placeholder="Context helps — no need to repeat chat verbatim."
             />
             {err ? <Text style={styles.err}>{err}</Text> : null}
-
+          </ScrollView>
+          <View style={[styles.footer, { paddingBottom: footerPad }]}>
             <View style={styles.dualCtaRow}>
               <Pressable
                 onPress={() => setStep('reason')}
@@ -322,10 +341,13 @@ export function ReportSheet({
                 </LinearGradient>
               </Pressable>
             </View>
-          </ScrollView>
+          </View>
+          </>
         ) : null}
 
         {step === 'done' ? (
+          <>
+          <View style={styles.doneScroll}>
           <View style={styles.doneWrap}>
             <LinearGradient
               colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
@@ -342,6 +364,9 @@ export function ReportSheet({
               Our team reviews reports carefully. We’ll take action if someone broke the rules. You won’t hear back
               for every report, but it really does help.
             </Text>
+          </View>
+          </View>
+          <View style={[styles.footer, { paddingBottom: footerPad }]}>
             <Pressable
               onPress={handleClose}
               style={({ pressed }) => [styles.ctaFullOuter, pressed && { opacity: 0.94, transform: [{ scale: 0.985 }] }]}
@@ -359,40 +384,92 @@ export function ReportSheet({
               </LinearGradient>
             </Pressable>
           </View>
+          </>
         ) : null}
 
+          </View>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(26, 29, 38, 0.45)' },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26, 29, 38, 0.52)',
+  },
   sheetOuter: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    maxHeight: '92%',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    width: '100%',
     overflow: 'hidden',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    backgroundColor: colors.surface,
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
-        shadowOffset: { width: 0, height: -8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 24,
+        shadowOffset: { width: 0, height: -10 },
+        shadowOpacity: 0.16,
+        shadowRadius: 28,
       },
-      android: { elevation: 12 },
+      android: { elevation: 16 },
     }),
+  },
+  sheetGradientBg: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  sheetBody: {
+    flex: 1,
+    minHeight: 0,
+  },
+  sheetHeader: {
+    flexShrink: 0,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  sheetScroll: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing.md,
+  },
+  scrollContent: {
+    paddingBottom: spacing.md,
+  },
+  footer: {
+    flexShrink: 0,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(108, 99, 255, 0.14)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
+  },
+  doneScroll: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
   },
   handle: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(26, 29, 38, 0.12)',
+    backgroundColor: 'rgba(108, 99, 255, 0.28)',
     marginBottom: spacing.md,
   },
   headerBlock: {
@@ -435,8 +512,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: spacing.md,
   },
-  scroll: { maxHeight: 440 },
-  scrollContentPad: { paddingBottom: spacing.md },
   sectionHead: { marginBottom: spacing.sm },
   sectionHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   sectionDot: {
@@ -542,7 +617,6 @@ const styles = StyleSheet.create({
   ctaFullOuter: {
     borderRadius: radius.button,
     overflow: 'hidden',
-    marginTop: spacing.md,
     ...Platform.select({
       ios: {
         shadowColor: '#6C63FF',
@@ -569,8 +643,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: spacing.sm,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
   },
   dualCtaFlex: { flex: 1, minWidth: 0, borderRadius: radius.button, overflow: 'hidden', alignSelf: 'stretch' },
   outlineRing: {
@@ -607,7 +679,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   submitTxt: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
-  doneWrap: { paddingVertical: spacing.lg, alignItems: 'center' },
+  doneWrap: { paddingVertical: spacing.md, alignItems: 'center' },
   doneIconRing: {
     borderRadius: 40,
     padding: 3,
@@ -633,6 +705,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
   },
 });
