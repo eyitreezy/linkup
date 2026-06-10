@@ -1,18 +1,21 @@
 /**
  * Step 1 — meet type catalog + custom type modal only.
  */
+import { GroupPlanSettingsSection } from '@/components/plans/create/GroupPlanSettingsSection';
 import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
 import { APP_CTA_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
+import { checkPermission } from '@/lib/subscription/checkPermission';
 import { inferMeetTypeIcon } from '@/lib/plans/inferMeetTypeIcon';
 import { insertUserMeetType } from '@/lib/plans/insertUserMeetType';
 import { fetchActiveMeetTypes } from '@/lib/plans/meetTypes';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbMeetType, EscrowPattern } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
+import { Href, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -75,6 +78,39 @@ export function MeetTypeSelectorSection() {
 
   const previewIcon = inferMeetTypeIcon(newTypeName);
 
+  function applyMeetType(t: DbMeetType) {
+    const isGroup = t.slug === 'group';
+    setDraft((d) => ({
+      ...d,
+      meetTypeId: t.id,
+      durationMinutes: t.default_duration_minutes,
+      escrowPattern: (t.default_pattern as EscrowPattern) ?? d.escrowPattern ?? 'A',
+      isMoodPlan: t.supports_mood ? d.isMoodPlan : false,
+      moodExpiresAt: t.supports_mood ? d.moodExpiresAt : null,
+      isGroupPlan: isGroup,
+      multiCity: isGroup ? d.multiCity : false,
+      cityIds: isGroup ? d.cityIds : [],
+    }));
+  }
+
+  async function onSelectMeetType(t: DbMeetType) {
+    if (t.slug === 'group' && user?.id) {
+      const perm = await checkPermission(user.id, 'group_plan.host');
+      if (!perm.allowed) {
+        Alert.alert(
+          'Unlock group plans',
+          'Hosting group meetups is available on Gold and above.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'View plans', onPress: () => router.push('/subscription' as Href) },
+          ]
+        );
+        return;
+      }
+    }
+    applyMeetType(t);
+  }
+
   async function onCreateMeetType() {
     const name = newTypeName.trim();
     if (!user?.id || !isSupabaseConfigured) {
@@ -120,16 +156,7 @@ export function MeetTypeSelectorSection() {
             <GradientSelectionChip
               key={t.id}
               selected={on}
-              onPress={() =>
-                setDraft((d) => ({
-                  ...d,
-                  meetTypeId: t.id,
-                  durationMinutes: t.default_duration_minutes,
-                  escrowPattern: (t.default_pattern as EscrowPattern) ?? d.escrowPattern ?? 'A',
-                  isMoodPlan: t.supports_mood ? d.isMoodPlan : false,
-                  moodExpiresAt: t.supports_mood ? d.moodExpiresAt : null,
-                }))
-              }
+              onPress={() => void onSelectMeetType(t)}
             >
               <View style={styles.typeChipInner}>
                 <Ionicons
@@ -192,6 +219,8 @@ export function MeetTypeSelectorSection() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <GroupPlanSettingsSection visible={selectedType?.slug === 'group'} />
     </View>
   );
 }

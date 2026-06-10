@@ -8,6 +8,7 @@ import { captureAuthLinkIfPresent, peekPendingAuthUrl } from '@/lib/auth/pending
 import { clearStaleAuthSession, getSessionRecoveringStale } from '@/lib/auth/sessionRecovery';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
+import { invalidatePermissionCache } from '@/lib/subscription/checkPermission';
 import type { DbProfile, DbUser } from '@/types/database';
 
 type AuthCtx = {
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: ad } = await supabase.from('admins').select('id').eq('user_id', uid).maybeSingle();
       setIsAdmin(!!ad);
       setAdminRecordId((ad?.id as string | undefined) ?? null);
+      invalidatePermissionCache();
       lastLoadedUserIdRef.current = uid;
     } catch (e) {
       if (__DEV__) {

@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbEscrowTransaction } from '@/types/database';
-import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
 import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
 
 function mergeEscrowMetadata(
@@ -34,7 +33,7 @@ export async function recordEscrowPaymentInitiated(
 }
 
 /**
- * After Paystack confirms payment, Edge Function / webhook should run this shape of update.
+ * After Flutterwave confirms payment, Edge Function / webhook should run this shape of update.
  * Demo / dev: call with a reference when webhook is not wired.
  */
 export async function markEscrowFunded(
@@ -75,7 +74,7 @@ export async function confirmMeetupComplete(
 ): Promise<{ error: string | null }> {
   const { error } = await client
     .from('plans')
-    .update({ status: 'completed' })
+    .update({ status: 'completed', completed_at: new Date().toISOString() })
     .eq('id', planId)
     .eq('status', 'active');
   if (error) return { error: error.message };
@@ -95,22 +94,13 @@ export async function releaseEscrowFunds(
   if (planStatus !== 'completed') {
     return { error: 'Confirm the meetup is complete before releasing funds.' };
   }
-  const { data: row } = await client
-    .from('escrow_transactions')
-    .select('amount_cents, status')
-    .eq('id', escrowId)
-    .maybeSingle();
-  const fee = platformFeeCentsForAmount(row?.amount_cents ?? 0);
-  const { error } = await client
-    .from('escrow_transactions')
-    .update({
-      status: 'released',
-      released_at: new Date().toISOString(),
-      platform_fee_cents: fee,
-    })
-    .eq('id', escrowId)
-    .eq('status', 'funded');
+  void planId;
+  const { data, error } = await client.rpc('release_escrow_funds', { p_escrow_id: escrowId });
   if (error) return { error: error.message };
+  const row = data as { status?: string } | null;
+  if (row?.status === 'already_released') {
+    return { error: null };
+  }
   return { error: null };
 }
 
@@ -135,6 +125,22 @@ export async function openEscrowDisputeWithTicket(
     return { error: 'A dispute is already in progress for this escrow.' };
   }
 
+  const { data: tierRow } = await client
+    .from('users')
+    .select('subscription_tier')
+    .eq('id', args.userId)
+    .maybeSingle();
+  const userTier = (tierRow?.subscription_tier as string) ?? 'FREE';
+  const queuePriority =
+    userTier === 'PLATINUM' ? 1 : userTier === 'GOLD' ? 2 : userTier === 'SILVER' ? 3 : 4;
+  const ticketPriority =
+    userTier === 'PLATINUM' ? 'urgent' : userTier === 'GOLD' ? 'high' : userTier === 'SILVER' ? 'normal' : 'low';
+  const slaHours = userTier === 'PLATINUM' ? 36 : null;
+  const slaDeadline =
+    userTier === 'PLATINUM'
+      ? new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString()
+      : null;
+
   const subject = `Escrow dispute — ${args.reasonLabel}`;
   const body =
     args.detail.trim() ||
@@ -146,7 +152,11 @@ export async function openEscrowDisputeWithTicket(
       user_id: args.userId,
       subject,
       body,
-      priority: 'high',
+      priority: ticketPriority,
+      opener_tier: userTier,
+      queue_priority: queuePriority,
+      sla_hours: slaHours,
+      sla_deadline: slaDeadline,
     })
     .select('id')
     .single();
@@ -160,6 +170,8 @@ export async function openEscrowDisputeWithTicket(
     detail: args.detail.trim() || null,
     support_ticket_id: ticket.id as string,
     status: 'open',
+    opener_tier: userTier,
+    queue_priority: queuePriority,
   });
   if (eDisp) return { error: eDisp.message };
 

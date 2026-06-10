@@ -94,7 +94,7 @@ export function PreAgreementFullscreenModal({
                   Held amount · {currencyLabel} {(escrowAmountCents / 100).toLocaleString()}
                 </Text>
                 <Text style={styles.muted}>
-                  Funds are protected with Paystack and released per plan rules after the meetup.
+                  Funds are protected with escrow and released per plan rules after the meetup.
                 </Text>
                 {(userPaysCents ?? escrowAmountCents) > 0 ? (
                   <View style={styles.nextPayCallout}>
@@ -102,7 +102,7 @@ export function PreAgreementFullscreenModal({
                     <Text style={styles.nextPayBody}>
                       The next screen opens secure payment — you&apos;ll pay{' '}
                       {currencyLabel === 'NGN' ? '₦' : `${currencyLabel} `}
-                      {((userPaysCents ?? escrowAmountCents) / 100).toLocaleString()} via Paystack. Nothing is
+                      {((userPaysCents ?? escrowAmountCents) / 100).toLocaleString()} via Flutterwave. Nothing is
                       charged on this review screen.
                     </Text>
                   </View>
@@ -138,7 +138,7 @@ export function PreAgreementFullscreenModal({
             <View style={styles.policyCallout}>
               <Ionicons name="server-outline" size={16} color={colors.primary} />
               <Text style={styles.policyCalloutTxt}>
-                Outcomes are enforced on LinkUp servers after Paystack funding — not editable in chat.
+                Outcomes are enforced on LinkUp servers after escrow funding — not editable in chat.
               </Text>
             </View>
           </Section>

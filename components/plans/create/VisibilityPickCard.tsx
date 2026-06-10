@@ -5,6 +5,7 @@ import { APP_CHIP_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -16,9 +17,10 @@ type Props = {
   icon: IconName;
   selected: boolean;
   onPress: () => void;
+  badge?: SubscriptionTier;
 };
 
-export function VisibilityPickCard({ title, description, icon, selected, onPress }: Props) {
+export function VisibilityPickCard({ title, description, icon, selected, onPress, badge }: Props) {
   const body = (
     <View style={styles.row}>
       {selected ? (
@@ -36,7 +38,14 @@ export function VisibilityPickCard({ title, description, icon, selected, onPress
         </View>
       )}
       <View style={styles.textCol}>
-        <Text style={[styles.title, selected && styles.titleOn]}>{title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.title, selected && styles.titleOn]}>{title}</Text>
+          {badge ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeTxt}>{badge}</Text>
+            </View>
+          ) : null}
+        </View>
         <Text style={styles.body}>{description}</Text>
       </View>
       <Ionicons
@@ -131,7 +140,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textCol: { flex: 1, minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   title: { fontSize: 17, fontWeight: '800', color: colors.text },
   titleOn: { color: colors.primary },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(108,99,255,0.12)',
+  },
+  badgeTxt: { fontSize: 9, fontWeight: '900', color: colors.primary },
   body: { fontSize: 14, color: colors.textMuted, marginTop: 4, lineHeight: 20 },
 });

@@ -2,8 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PremiumTier } from '@/lib/premium/catalog';
 
 /**
- * Demo / client-side fulfillment after Paystack success (dev & simulator only).
- * Production: entitlement updates must run only from `paystack-webhook-premium` after `charge.success`.
+ * Demo / client-side fulfillment (dev & simulator only).
+ * Production: subscription entitlements must run only from `flutterwave-webhook` after verified payment.
  */
 export async function applyPremiumPurchase(
   client: SupabaseClient,

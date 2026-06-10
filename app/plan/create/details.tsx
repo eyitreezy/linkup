@@ -18,8 +18,11 @@ import {
   moodNegotiationExpiresAt,
 } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow, moodPlanScheduledNow } from '@/lib/plans/moodPlanStart';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { usePermission } from '@/hooks/usePermission';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { checkPermission } from '@/lib/subscription/checkPermission';
+import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
 import { requiresVerificationGate } from '@/lib/verification/access';
@@ -35,7 +38,8 @@ const OPTIONS: {
   value: PlanVisibility;
   title: string;
   description: string;
-  icon: 'globe-outline' | 'navigate-outline' | 'people-outline';
+  icon: 'globe-outline' | 'navigate-outline' | 'people-outline' | 'diamond-outline';
+  tierBadge?: SubscriptionTier;
 }[] = [
   {
     value: 'public',
@@ -55,6 +59,13 @@ const OPTIONS: {
     description: 'Only your connections see this (once friends ship, this tightens automatically).',
     icon: 'people-outline',
   },
+  {
+    value: 'premium',
+    title: 'Gold & Platinum only',
+    description: 'Only Gold and Platinum members can discover this plan.',
+    icon: 'diamond-outline',
+    tierBadge: 'PLATINUM',
+  },
 ];
 
 export default function CreatePlanDetailsScreen() {
@@ -62,7 +73,34 @@ export default function CreatePlanDetailsScreen() {
   const { user, dbUser, isAdmin, profile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
-  const premium = isPremiumSubscriber(dbUser);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState('privacy.plan_creation');
+  const { allowed: canSpotlight } = usePermission('boost.24hr');
+
+  async function onSelectVisibility(value: PlanVisibility) {
+    if (value === 'premium' && user?.id) {
+      const perm = await checkPermission(user.id, 'privacy.plan_creation');
+      if (!perm.allowed) {
+        setUpgradeFeature('privacy.plan_creation');
+        setUpgradeOpen(true);
+        return;
+      }
+    }
+    setDraft((d) => ({ ...d, visibility: value }));
+  }
+
+  async function onSpotlightToggle(v: boolean) {
+    if (!user?.id) return;
+    if (v) {
+      const perm = await checkPermission(user.id, 'boost.24hr');
+      if (!perm.allowed) {
+        setUpgradeFeature('boost.24hr');
+        setUpgradeOpen(true);
+        return;
+      }
+    }
+    setDraft((d) => ({ ...d, spotlightBoost: v }));
+  }
 
   async function publish() {
     if (!user || !isSupabaseConfigured) return;
@@ -158,9 +196,9 @@ export default function CreatePlanDetailsScreen() {
       ? moodNegotiationExpiresAt(true, 2)?.toISOString() ?? null
       : null;
 
-    const boostHours = draft.isMoodPlan && premium ? 6 : premium && draft.spotlightBoost ? 4 : 0;
+    const boostHours = draft.isMoodPlan && canSpotlight ? 6 : canSpotlight && draft.spotlightBoost ? 4 : 0;
     const boostedUntilIso =
-      premium && draft.spotlightBoost && boostHours > 0
+      canSpotlight && draft.spotlightBoost && boostHours > 0
         ? new Date(Date.now() + boostHours * 3600 * 1000).toISOString()
         : null;
 
@@ -209,6 +247,12 @@ export default function CreatePlanDetailsScreen() {
       negotiation_expires_at: isMoodRow ? negotiationIso : null,
       spotlight_enabled: !!draft.spotlightBoost,
       boosted_until: boostedUntilIso,
+      is_group_plan: draft.isGroupPlan,
+      max_free_guests: draft.isGroupPlan ? draft.maxFreeGuests : null,
+      max_premium_guests: draft.isGroupPlan ? draft.maxPremiumGuests : null,
+      max_guests: draft.isGroupPlan ? draft.maxGuests : null,
+      multi_city: draft.isGroupPlan && draft.multiCity,
+      city_ids: draft.isGroupPlan && draft.cityIds.length ? draft.cityIds : null,
     };
 
     const { data: planIdRaw, error } = await supabase.rpc('publish_plan', { payload: insertRow });
@@ -221,7 +265,17 @@ export default function CreatePlanDetailsScreen() {
           ? (error as { details: string }).details
           : '';
       const hint = `${msg}${details ? `\n\n${details}` : ''}`;
-      if (/row-level security|violates row-level security|42501|Not allowed to publish/i.test(msg)) {
+      if (msg.includes('escrow_pattern_b_requires_silver')) {
+        Alert.alert('Silver required', 'Split escrow requires a Silver subscription or above.', [
+          { text: 'Upgrade', onPress: () => router.push('/subscription' as Href) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      } else if (msg.includes('escrow_pattern_c_requires_gold')) {
+        Alert.alert('Gold required', 'Guest-funded escrow requires a Gold subscription or above.', [
+          { text: 'Upgrade', onPress: () => router.push('/subscription' as Href) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      } else if (/row-level security|violates row-level security|42501|Not allowed to publish/i.test(msg)) {
         void refreshProfile();
         Alert.alert(
           'Cannot publish',
@@ -266,6 +320,16 @@ export default function CreatePlanDetailsScreen() {
             visible={gateOpen}
             onClose={() => setGateOpen(false)}
             verificationStatus={dbUser?.verification_status}
+          />
+          <UpgradePrompt
+            visible={upgradeOpen}
+            feature={upgradeFeature}
+            requiredTier={upgradeFeature === 'privacy.plan_creation' ? 'PLATINUM' : 'SILVER'}
+            onUpgrade={() => {
+              setUpgradeOpen(false);
+              router.push('/subscription' as Href);
+            }}
+            onDismiss={() => setUpgradeOpen(false)}
           />
           <CreatePlanStickyProgress current={2} />
           <CreatePlanWizardBack />
@@ -323,7 +387,7 @@ export default function CreatePlanDetailsScreen() {
           onApply={(patch) => setDraft((d) => ({ ...d, ...patch }))}
         />
 
-        {premium ? (
+        {canSpotlight ? (
           <LinearGradient
             colors={['#FFF9E6', '#F3EEFF']}
             start={{ x: 0, y: 0 }}
@@ -342,12 +406,12 @@ export default function CreatePlanDetailsScreen() {
             </View>
             <Switch
               value={draft.spotlightBoost}
-              onValueChange={(v) => setDraft((d) => ({ ...d, spotlightBoost: v }))}
+              onValueChange={(v) => void onSpotlightToggle(v)}
               trackColor={{ true: colors.secondary, false: '#ccc' }}
             />
           </LinearGradient>
         ) : (
-          <Pressable style={styles.premiumTease} onPress={() => router.push('/premium' as Href)}>
+          <Pressable style={styles.premiumTease} onPress={() => router.push('/subscription' as Href)}>
             <LinearGradient colors={[colors.primary, colors.secondary]} style={styles.premiumTeaseIcon}>
               <Ionicons name="diamond" size={18} color="#fff" />
             </LinearGradient>
@@ -368,7 +432,8 @@ export default function CreatePlanDetailsScreen() {
               description={opt.description}
               icon={opt.icon}
               selected={draft.visibility === opt.value}
-              onPress={() => setDraft((d) => ({ ...d, visibility: opt.value }))}
+              onPress={() => void onSelectVisibility(opt.value)}
+              badge={opt.tierBadge}
             />
           ))}
         </View>

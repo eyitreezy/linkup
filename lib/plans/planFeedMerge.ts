@@ -6,7 +6,7 @@ import type { DbMeetType, DbPlan, DbProfile } from '@/types/database';
 export type PlanRowFromDb = DbPlan & { meet_types?: DbMeetType | null };
 
 const PROFILE_FIELDS =
-  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences';
+  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, subscription_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences';
 
 type ProfileRow = Pick<
   DbProfile,
@@ -16,6 +16,7 @@ type ProfileRow = Pick<
   | 'primary_photo_url'
   | 'birth_date'
   | 'verified_badge'
+  | 'subscription_badge'
   | 'ai_trust_score'
   | 'photo_urls'
   | 'bio'
@@ -57,6 +58,8 @@ export async function fetchPlansPage(
   }
 
   const { data, error } = await q
+    .order('host_tier_rank', { ascending: false, nullsFirst: false })
+    .order('boosted_until', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .range(from, to);
 

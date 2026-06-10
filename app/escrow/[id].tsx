@@ -1,5 +1,5 @@
 /**
- * E1 — Escrow detail: Paystack funding, trust copy, timeline, release & disputes.
+ * E1 — Escrow detail: Flutterwave funding, trust copy, timeline, release & disputes.
  */
 import { EscrowConfirmModal } from '@/components/escrow/EscrowConfirmModal';
 import { EscrowCounterpartyHeader, type EscrowParty } from '@/components/escrow/EscrowCounterpartyHeader';
@@ -19,6 +19,7 @@ import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildEscrowTimeline } from '@/lib/escrow/buildEscrowTimeline';
 import { formatEscrowMoney, isMeetupWithinHours, meetupHoursUntilLabel } from '@/lib/escrow/escrowPaymentPreview';
+import { getPaymentStatusLabel, getReleaseRecipientLabel } from '@/lib/escrow/releaseCopy';
 import {
   confirmMeetupComplete,
   markEscrowFunded,
@@ -26,7 +27,7 @@ import {
   recordEscrowPaymentInitiated,
   releaseEscrowFunds,
 } from '@/lib/escrow/escrowActions';
-import { openEscrowPaystackCheckout } from '@/lib/escrow/openEscrowCheckout';
+import { openEscrowCheckout } from '@/lib/escrow/openEscrowCheckout';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -47,27 +48,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-function paymentStatusLabel(status: DbEscrowTransaction['status']): string {
-  switch (status) {
-    case 'pending_funding':
-      return 'Waiting for payment';
-    case 'funded':
-      return 'Held securely in escrow';
-    case 'active':
-      return 'Held securely in escrow';
-    case 'released':
-      return 'Released to host';
-    case 'disputed':
-      return 'On hold — dispute';
-    case 'refunded':
-      return 'Refunded';
-    case 'cancelled':
-      return 'Cancelled';
-    default:
-      return status;
-  }
-}
 
 function stepActiveIndex(escrow: DbEscrowTransaction, plan: DbPlan | null): number {
   if (escrow.status === 'released') return 3;
@@ -90,6 +70,8 @@ export default function EscrowDetailScreen() {
   const [releaseConfirmOpen, setReleaseConfirmOpen] = useState(false);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [disputeOpen, setDisputeOpen] = useState(false);
+  const [hostName, setHostName] = useState('Host');
+  const [guestName, setGuestName] = useState('Guest');
   const actionLock = useRef(false);
 
   const load = useCallback(async () => {
@@ -114,6 +96,7 @@ export default function EscrowDetailScreen() {
       .maybeSingle();
     setDispute(dRow ? (dRow as DbEscrowDispute) : null);
 
+    const partyIds = [esc.host_id, esc.guest_id].filter(Boolean) as string[];
     const cpId =
       esc.host_id && esc.guest_id
         ? user.id === esc.host_id
@@ -122,11 +105,23 @@ export default function EscrowDetailScreen() {
         : user.id === esc.payer_id
           ? esc.payee_id
           : esc.payer_id;
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('display_name, avatar_url, verified_badge')
-      .eq('user_id', cpId)
-      .maybeSingle();
+
+    const { data: profs } = partyIds.length
+      ? await supabase
+          .from('profiles')
+          .select('user_id, display_name, avatar_url, verified_badge')
+          .in('user_id', partyIds)
+      : { data: [] as { user_id: string; display_name: string | null; avatar_url: string | null; verified_badge: boolean | null }[] };
+
+    const profMap = new Map((profs ?? []).map((p) => [p.user_id as string, p]));
+    if (esc.host_id) {
+      setHostName(profMap.get(esc.host_id)?.display_name ?? 'Host');
+    }
+    if (esc.guest_id) {
+      setGuestName(profMap.get(esc.guest_id)?.display_name ?? 'Guest');
+    }
+
+    const prof = profMap.get(cpId);
     if (prof) {
       setCounterparty({
         name: prof.display_name ?? 'Member',
@@ -148,10 +143,38 @@ export default function EscrowDetailScreen() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!id || !isSupabaseConfigured) return;
+    const channel = supabase
+      .channel(`escrow:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'escrow_transactions',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          const next = payload.new as DbEscrowTransaction;
+          setEscrow((prev) => {
+            if (prev && prev.status !== 'funded' && next.status === 'funded') {
+              Alert.alert('Escrow funded', 'Payment confirmed — your plan is now active.');
+            }
+            return next;
+          });
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [id]);
+
   const timelineItems = useMemo(() => {
     if (!escrow) return [];
-    return buildEscrowTimeline(escrow, plan, dispute);
-  }, [escrow, plan, dispute]);
+    return buildEscrowTimeline(escrow, plan, dispute, { host: hostName, guest: guestName });
+  }, [escrow, plan, dispute, hostName, guestName]);
 
   const openChatWithCounterparty = useCallback(async () => {
     if (!user || !escrow) return;
@@ -213,7 +236,7 @@ export default function EscrowDetailScreen() {
         }
       }
 
-      const opened = await openEscrowPaystackCheckout({
+      const opened = await openEscrowCheckout({
         email: user.email ?? '',
         amountKobo,
         escrowId: escrow.id,
@@ -275,6 +298,12 @@ export default function EscrowDetailScreen() {
       else {
         setDisputeOpen(false);
         void load();
+        if (dbUser?.subscription_tier === 'PLATINUM') {
+          Alert.alert(
+            'Dispute submitted',
+            'As a Platinum member, your dispute will be reviewed within 36 hours.'
+          );
+        }
         router.push('/support' as Href);
       }
     });
@@ -337,7 +366,7 @@ export default function EscrowDetailScreen() {
     'Your payment is secure and stays in escrow until you confirm the meetup completed successfully.';
   const fundCtaSubtitle = patternB
     ? `Your share: ${fundConfirmAmountLabel} · guest and host pay separately on this screen`
-    : `Total held: ${formatEscrowMoney(escrow.amount_cents, escrow.currency)} via Paystack`;
+    : `Total held: ${formatEscrowMoney(escrow.amount_cents, escrow.currency)} via Flutterwave`;
 
   const disputed = escrow.status === 'disputed';
   const showWaitingFunded =
@@ -360,8 +389,8 @@ export default function EscrowDetailScreen() {
       <EscrowConfirmModal
         visible={fundConfirmOpen}
         title="Open secure checkout?"
-        message={`You'll pay ${fundConfirmAmountLabel} in Paystack. Funds stay in escrow until the meetup is confirmed or a dispute is resolved.`}
-        confirmLabel="Continue to Paystack"
+        message={`You'll pay ${fundConfirmAmountLabel} via Flutterwave. Funds stay in escrow until the meetup is confirmed or a dispute is resolved.`}
+        confirmLabel="Continue to payment"
         cancelLabel="Not now"
         onCancel={() => setFundConfirmOpen(false)}
         onConfirm={() => void onConfirmFund()}
@@ -380,7 +409,7 @@ export default function EscrowDetailScreen() {
       <EscrowConfirmModal
         visible={releaseConfirmOpen}
         title="Release funds?"
-        message="This pays out the held amount to the host. This cannot be undone from the app."
+        message={`This pays out the held amount to the ${escrow?.escrow_pattern === 'C' ? 'host' : 'guest'}. This cannot be undone from the app.`}
         confirmLabel="Release now"
         cancelLabel="Cancel"
         onCancel={() => setReleaseConfirmOpen(false)}
@@ -415,7 +444,7 @@ export default function EscrowDetailScreen() {
             </Text>
             <Text style={styles.leadSub}>
               {showFund
-                ? 'This is the payment screen — Paystack checkout opens when you tap below.'
+                ? 'This is the payment screen — Flutterwave checkout opens when you tap below.'
                 : 'Track funding, meetup, and release in one place.'}
             </Text>
           </View>
@@ -432,7 +461,7 @@ export default function EscrowDetailScreen() {
 
         {counterparty ? (
           <EscrowCounterpartyHeader
-            title={plan?.title ?? 'Paid plan'}
+            title={plan?.is_group_plan ? `${plan?.title ?? 'Paid plan'} · Group Plan` : plan?.title ?? 'Paid plan'}
             counterparty={counterparty}
             youLabel={
               patternB
@@ -492,7 +521,12 @@ export default function EscrowDetailScreen() {
         <EscrowSummaryCard
           amountLabel={amountLabel}
           currency={escrow.currency}
-          paymentStatusLabel={paymentStatusLabel(escrow.status)}
+          paymentStatusLabel={getPaymentStatusLabel(
+            escrow.status,
+            escrow.escrow_pattern,
+            hostName,
+            guestName
+          )}
           whenLabel={whenLabel}
           locationLabel={locationLabel}
           trustNote={trustNote}
@@ -513,9 +547,15 @@ export default function EscrowDetailScreen() {
 
         {showSplitWaitingOther ? (
           <View style={styles.waitSplitCard}>
-            <Ionicons name="time-outline" size={22} color={colors.primary} />
-            <Text style={styles.waitSplitTitle}>Waiting for the other person</Text>
-            <Text style={styles.waitSplitSub}>Their share is still pending. You&apos;ll both get confirmation when escrow is fully funded.</Text>
+            <View style={styles.waitSplitIcon}>
+              <Ionicons name="hourglass-outline" size={22} color={colors.primary} />
+            </View>
+            <View style={styles.waitSplitText}>
+              <Text style={styles.waitSplitTitle}>Waiting for the other person</Text>
+              <Text style={styles.waitSplitSub}>
+                Their share is still pending. You&apos;ll both get confirmation when escrow is fully funded.
+              </Text>
+            </View>
           </View>
         ) : null}
 
@@ -532,7 +572,7 @@ export default function EscrowDetailScreen() {
             />
             {__DEV__ ? (
               <Pressable style={styles.ghostBtn} onPress={() => void onDemoFunded()} disabled={busy}>
-                <Text style={styles.ghostBtnTxt}>Demo: mark funded (no Paystack)</Text>
+                <Text style={styles.ghostBtnTxt}>Demo: mark funded (no payment)</Text>
               </Pressable>
             ) : null}
           </>
@@ -580,11 +620,25 @@ export default function EscrowDetailScreen() {
           </Pressable>
         ) : null}
 
+        {escrow.status === 'released' &&
+        (escrow.metadata as Record<string, unknown> | null)?.auto_released === true ? (
+          <View style={styles.infoCard}>
+            <Ionicons name="time-outline" size={22} color={colors.primary} />
+            <Text style={styles.infoTitle}>Automatically released</Text>
+            <Text style={styles.infoSub}>
+              Funds were automatically released 24 hours after plan completion.
+            </Text>
+          </View>
+        ) : null}
+
         {escrow.status === 'released' ? (
           <View style={styles.successCard}>
             <Ionicons name="checkmark-circle" size={28} color={colors.success} />
             <Text style={styles.successTitle}>Funds released</Text>
-            <Text style={styles.successSub}>Thanks for using LinkUp escrow. Need anything else?</Text>
+            <Text style={styles.successSub}>
+              {getReleaseRecipientLabel(escrow.escrow_pattern, hostName, guestName)}. Thanks for using LinkUp
+              escrow.
+            </Text>
             <Pressable style={styles.secondaryBtn} onPress={() => router.push('/support' as Href)}>
               <Text style={styles.secondaryBtnTxt}>Contact support</Text>
             </Pressable>
@@ -691,7 +745,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(108, 99, 255, 0.14)',
     marginBottom: spacing.xl,
     ...Platform.select({
       ios: {
@@ -703,31 +757,65 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
-  infoTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
-  infoSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: spacing.sm },
+  infoTitle: { fontSize: 17, fontWeight: '900', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.2 },
+  infoSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: spacing.sm, fontWeight: '600' },
   waitSplitCard: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
     alignItems: 'flex-start',
-    backgroundColor: 'rgba(108,99,255,0.08)',
-    padding: spacing.md,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
     borderRadius: radius.xl,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.25)',
+    borderColor: 'rgba(108, 99, 255, 0.14)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.07,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
   },
-  waitSplitTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
-  waitSplitSub: { flex: 1, fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  waitSplitIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waitSplitText: { flex: 1, minWidth: 0 },
+  waitSplitTitle: { fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 4, letterSpacing: -0.2 },
+  waitSplitSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600' },
   successCard: {
     alignItems: 'center',
     backgroundColor: colors.surface,
     padding: spacing.lg,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
     marginTop: spacing.md,
     marginBottom: spacing.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#047857',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+      },
+      android: { elevation: 3 },
+    }),
   },
-  successTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
-  successSub: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: spacing.sm, lineHeight: 20 },
+  successTitle: { fontSize: 18, fontWeight: '900', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.2 },
+  successSub: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
 });

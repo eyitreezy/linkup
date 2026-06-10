@@ -11,7 +11,8 @@ import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationInbox } from '@/contexts/NotificationInboxContext';
 import { profileCompletionPercent } from '@/lib/profile/profileCompletionPercent';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { effectiveSubscriptionTier } from '@/lib/premium/access';
+import { ProfileSpotlightCard } from '@/components/profile/ProfileSpotlightCard';
 import { isUserVerified } from '@/lib/verification/access';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Href, router } from 'expo-router';
@@ -50,7 +51,8 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const verified = !!(dbUser && isUserVerified(dbUser.verification_status));
   const completion = profileCompletionPercent(profile ?? null, verified);
-  const subscriber = isPremiumSubscriber(dbUser);
+  const subscriptionTier = effectiveSubscriptionTier(dbUser);
+  const subscriber = subscriptionTier !== 'FREE';
   const premiumLabel = dbUser?.premium_until
     ? new Date(dbUser.premium_until).toLocaleDateString(undefined, { dateStyle: 'medium' })
     : null;
@@ -138,6 +140,7 @@ export default function ProfileScreen() {
                 email={user?.email}
                 verified={verified}
                 showPremium={subscriber}
+                subscriptionTier={subscriptionTier}
               />
             </View>
           </LinearGradient>
@@ -194,10 +197,12 @@ export default function ProfileScreen() {
           </LinearGradient>
 
           <PremiumCard
-            onUpgrade={() => router.push('/premium' as Href)}
+            onUpgrade={() => router.push('/subscription' as Href)}
             isSubscriber={subscriber}
             premiumUntilLabel={premiumLabel}
           />
+
+          <ProfileSpotlightCard />
 
           <SettingsSectionHeader title="Settings & account" />
           <LinearGradient

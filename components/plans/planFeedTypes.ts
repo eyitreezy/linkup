@@ -12,6 +12,7 @@ export type PlanFeedRow = DbPlan & {
     | 'primary_photo_url'
     | 'birth_date'
     | 'verified_badge'
+    | 'subscription_badge'
     | 'ai_trust_score'
     | 'photo_urls'
     | 'bio'

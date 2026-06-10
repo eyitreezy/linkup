@@ -84,3 +84,8 @@ export function moodNegotiationExpiresAt(isMood: boolean, hours: number): Date |
   d.setHours(d.getHours() + hours);
   return d;
 }
+
+/** Gold/Platinum Friday — Weekend Plan label in create wizard. */
+export function isFridayActivation(): boolean {
+  return new Date().getDay() === 5;
+}

@@ -1,19 +1,26 @@
 /**
  * Mood plan configuration — chips, window, listing TTL, live preview of discover expiry.
  */
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/Input';
 import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
 import { colors, radius, spacing } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
+import { usePermission } from '@/hooks/usePermission';
 import {
   computeMoodExpiresAt,
   computeMoodWindowBounds,
+  isFridayActivation,
   type MoodListingHours,
   type MoodWindowPreset,
 } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow } from '@/lib/plans/moodPlanStart';
+import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
 import { fetchActiveMeetTypes } from '@/lib/plans/meetTypes';
+import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
+import { Href, router } from 'expo-router';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { MotiView } from 'moti';
 import { useEffect, useMemo, useState } from 'react';
@@ -44,6 +51,28 @@ const EXPIRIES: { h: MoodListingHours; label: string }[] = [
   { h: 12, label: '12h' },
   { h: 24, label: '24h' },
 ];
+
+const WINDOW_CAP_HOURS: Record<SubscriptionTier, number> = {
+  FREE: 24,
+  SILVER: 36,
+  GOLD: 48,
+  PLATINUM: 48,
+};
+
+const REACH_LABELS: Record<SubscriptionTier, string> = {
+  FREE: 'City-wide',
+  SILVER: 'City + adjacent zones',
+  GOLD: 'Widest city reach',
+  PLATINUM: 'All active Nigerian cities',
+};
+
+/** Tier required to unlock listing hours above cap (informational). */
+function tierForListingHours(h: number): SubscriptionTier | null {
+  if (h <= 24) return null;
+  if (h <= 36) return 'SILVER';
+  if (h <= 48) return 'GOLD';
+  return 'PLATINUM';
+}
 
 function defaultCustomEnd(scheduledAt: Date | null): Date {
   const now = new Date();
@@ -77,8 +106,56 @@ function openAndroidDateTime(value: Date, minimumDate: Date | undefined, onDone:
 
 export function MoodPlanFieldsSection() {
   const { draft, setDraft } = usePlanDraft();
+  const { user } = useAuth();
+  const { effectiveTier } = usePermission('mood_plan.activate');
   const [supportsMood, setSupportsMood] = useState(false);
   const [iosCustomPick, setIosCustomPick] = useState<null | 'start' | 'end'>(null);
+  const [cooldownNotice, setCooldownNotice] = useState<{ active: boolean; hoursRemaining?: number }>({
+    active: false,
+  });
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeTier, setUpgradeTier] = useState<SubscriptionTier>('SILVER');
+
+  const windowCap = WINDOW_CAP_HOURS[effectiveTier] ?? 24;
+
+  useEffect(() => {
+    if (!draft.isMoodPlan || draft.moodListingHours <= windowCap) return;
+    const allowed = EXPIRIES.filter((e) => e.h <= windowCap).map((e) => e.h);
+    const clamped = (allowed.length ? Math.max(...allowed) : 24) as MoodListingHours;
+    setDraft((d) => (d.moodListingHours === clamped ? d : applyMoodPlanLiveNow({ ...d, moodListingHours: clamped })));
+  }, [draft.isMoodPlan, draft.moodListingHours, windowCap, setDraft]);
+
+  async function handleMoodToggle(value: boolean) {
+    if (!value) {
+      setCooldownNotice({ active: false });
+      setDraft((d) => ({ ...d, isMoodPlan: false, moodExpiresAt: null }));
+      return;
+    }
+    if (user?.id) {
+      const result = await getMoodPlanCooldown(user.id);
+      if (result.in_cooldown) {
+        setCooldownNotice({ active: true, hoursRemaining: result.hours_remaining });
+        return;
+      }
+    }
+    setCooldownNotice({ active: false });
+    setDraft((d) => {
+      const base = d.scheduledAt ? d : { ...d, scheduledAt: new Date() };
+      return applyMoodPlanLiveNow({ ...base, isMoodPlan: true, moodType: base.moodType ?? 'chill' });
+    });
+  }
+
+  function selectListingHours(h: MoodListingHours) {
+    if (h > windowCap) {
+      const need = tierForListingHours(h);
+      if (need) {
+        setUpgradeTier(need);
+        setUpgradeOpen(true);
+      }
+      return;
+    }
+    setDraft((d) => applyMoodPlanLiveNow({ ...d, moodListingHours: h }));
+  }
 
   useEffect(() => {
     void fetchActiveMeetTypes().then(({ rows }) => {
@@ -177,6 +254,30 @@ export function MoodPlanFieldsSection() {
       transition={{ type: 'timing', duration: 280 }}
       style={styles.block}
     >
+      <UpgradePrompt
+        visible={upgradeOpen}
+        feature="mood_plan.activate"
+        requiredTier={upgradeTier}
+        onUpgrade={() => {
+          setUpgradeOpen(false);
+          router.push('/subscription' as Href);
+        }}
+        onDismiss={() => setUpgradeOpen(false)}
+      />
+
+      {cooldownNotice.active ? (
+        <View style={styles.cooldownBanner}>
+          <Text style={styles.cooldownTxt}>
+            Your next Mood Plan is available in {cooldownNotice.hoursRemaining ?? '…'} hours.
+          </Text>
+          {(effectiveTier === 'FREE' || effectiveTier === 'SILVER') && (
+            <Pressable onPress={() => router.push('/subscription' as Href)}>
+              <Text style={styles.cooldownLink}>Upgrade to remove cooldown →</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : null}
+
       <View style={styles.rowBetween}>
         <View style={{ flex: 1, paddingRight: spacing.sm }}>
           <Text style={styles.sectionLabel}>Mood plan</Text>
@@ -184,21 +285,22 @@ export function MoodPlanFieldsSection() {
         </View>
         <Switch
           value={draft.isMoodPlan}
-          onValueChange={(v) => {
-            setDraft((d) => {
-              if (!v) return { ...d, isMoodPlan: false, moodExpiresAt: null };
-              const base = d.scheduledAt ? d : { ...d, scheduledAt: new Date() };
-              return {
-                ...applyMoodPlanLiveNow({ ...base, isMoodPlan: true, moodType: base.moodType ?? 'chill' }),
-              };
-            });
-          }}
+          onValueChange={(v) => void handleMoodToggle(v)}
           trackColor={{ true: colors.secondary, false: '#ccc' }}
         />
       </View>
 
       {draft.isMoodPlan ? (
         <>
+          {(effectiveTier === 'GOLD' || effectiveTier === 'PLATINUM') && isFridayActivation() ? (
+            <View style={styles.weekendChip}>
+              <Text style={styles.weekendChipTitle}>Weekend Plan</Text>
+              <Text style={styles.weekendChipSub}>
+                Activating today labels this as a Weekend Plan — visible through the weekend.
+              </Text>
+            </View>
+          ) : null}
+
           <Text style={styles.subLabel}>Mood type</Text>
           <View style={styles.chipRow}>
             {MOOD_TYPES.map((m) => (
@@ -316,15 +418,32 @@ export function MoodPlanFieldsSection() {
 
           <Text style={styles.subLabel}>Listing duration (Discover)</Text>
           <View style={styles.chipRow}>
-            {EXPIRIES.map(({ h, label }) => (
-              <GradientSelectionChip
-                key={h}
-                label={label}
-                selected={draft.moodListingHours === h}
-                onPress={() => setDraft((d) => applyMoodPlanLiveNow({ ...d, moodListingHours: h }))}
-              />
-            ))}
+            {EXPIRIES.map(({ h, label }) => {
+              const locked = h > windowCap;
+              const needTier = tierForListingHours(h);
+              return (
+                <Pressable key={h} onPress={() => selectListingHours(h)} style={styles.expiryChipWrap}>
+                  {locked ? (
+                    <View style={styles.lockedChip}>
+                      <Ionicons name="lock-closed" size={12} color={colors.textMuted} />
+                      <Text style={styles.lockedChipTxt}>{label}</Text>
+                      {needTier ? (
+                        <Text style={styles.lockedTierBadge}>{needTier}</Text>
+                      ) : null}
+                    </View>
+                  ) : (
+                    <GradientSelectionChip
+                      label={label}
+                      selected={draft.moodListingHours === h}
+                      onPress={() => selectListingHours(h)}
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
+
+          <Text style={styles.reachLabel}>Your reach: {REACH_LABELS[effectiveTier]}</Text>
 
           {bounds ? (
             <Text style={styles.meta}>
@@ -367,4 +486,39 @@ const styles = StyleSheet.create({
   datePressed: { opacity: 0.92 },
   iosDoneRow: { alignSelf: 'flex-start', marginBottom: spacing.sm },
   iosDoneTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  cooldownBanner: {
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(251, 191, 36, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  cooldownTxt: { fontSize: 13, fontWeight: '700', color: '#92400E', lineHeight: 18 },
+  cooldownLink: { fontSize: 13, fontWeight: '800', color: colors.primary, marginTop: 6 },
+  weekendChip: {
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.3)',
+  },
+  weekendChipTitle: { fontSize: 13, fontWeight: '900', color: '#B45309' },
+  weekendChipSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+  expiryChipWrap: { borderRadius: radius.button },
+  lockedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(229,231,235,0.9)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  lockedChipTxt: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  lockedTierBadge: { fontSize: 9, fontWeight: '900', color: colors.primary, marginLeft: 4 },
+  reachLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: spacing.sm },
 });

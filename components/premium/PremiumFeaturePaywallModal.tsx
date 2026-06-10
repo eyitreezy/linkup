@@ -20,10 +20,10 @@ export function PremiumFeaturePaywallModal({
   visible,
   onClose,
   onGoPremium,
-  kicker = 'LinkUp Premium',
+  kicker = 'LinkUp Membership',
   title,
   message,
-  primaryLabel = 'Go premium now',
+  primaryLabel = 'View plans',
 }: Props) {
   return (
     <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>

@@ -1,7 +1,7 @@
 import type { BudgetTier, EscrowPattern } from '@/types/database';
 import type { MoodListingHours, MoodWindowPreset } from '@/lib/plans/moodPlanComputations';
 
-export type PlanVisibility = 'public' | 'radius' | 'friends';
+export type PlanVisibility = 'public' | 'radius' | 'friends' | 'premium';
 
 export type PlanDraft = {
   title: string;
@@ -28,4 +28,11 @@ export type PlanDraft = {
   moodListingHours: MoodListingHours;
   /** Premium: start with boost-style visibility */
   spotlightBoost: boolean;
+  /** Group meet type */
+  isGroupPlan: boolean;
+  maxGuests: number;
+  maxFreeGuests: number | null;
+  maxPremiumGuests: number | null;
+  multiCity: boolean;
+  cityIds: string[];
 };

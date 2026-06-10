@@ -47,8 +47,15 @@ export type ChatBubbleMeta = {
   timeLabel: string;
   /** Single tick — message reached the thread. */
   showSent?: boolean;
-  /** Double tick — best-effort “seen” when the other person replied after this message. */
+  /** Double tick — peer read cursor passed this message. */
   showRead?: boolean;
+};
+
+export type ChatBubbleQuote = {
+  senderLabel: string;
+  preview: string;
+  isDeleted?: boolean;
+  onPress?: () => void;
 };
 
 export type ChatBubbleProps = {
@@ -61,6 +68,10 @@ export type ChatBubbleProps = {
   isDeleted?: boolean;
   /** Shown when message was edited */
   showEdited?: boolean;
+  /** Quoted message when replying */
+  quote?: ChatBubbleQuote | null;
+  /** Brief highlight when jumping to a quoted message */
+  highlighted?: boolean;
   onLongPress?: () => void;
   meta?: ChatBubbleMeta | null;
   /** Chat look (optional — defaults to app lavender theme). */
@@ -74,6 +85,8 @@ export function ChatBubble({
   legacyImageUrl,
   isDeleted,
   showEdited,
+  quote,
+  highlighted,
   onLongPress,
   meta,
   theme,
@@ -110,8 +123,34 @@ export function ChatBubble({
 
   if (!showText && !showMedia) return null;
 
+  const quoteBlock = quote ? (
+    <Pressable
+      onPress={quote.onPress}
+      disabled={!quote.onPress}
+      style={({ pressed }) => [
+        styles.quoteWrap,
+        isMine ? styles.quoteWrapMine : styles.quoteWrapThem,
+        quote.onPress && pressed && styles.quotePressed,
+      ]}
+    >
+      <View style={[styles.quoteBar, isMine ? styles.quoteBarMine : styles.quoteBarThem]} />
+      <View style={styles.quoteTextCol}>
+        <Text style={[styles.quoteSender, isMine ? styles.quoteSenderMine : styles.quoteSenderThem]}>
+          {quote.senderLabel}
+        </Text>
+        <Text
+          style={[styles.quotePreview, isMine ? styles.quotePreviewMine : styles.quotePreviewThem]}
+          numberOfLines={2}
+        >
+          {quote.isDeleted ? 'Message deleted' : quote.preview}
+        </Text>
+      </View>
+    </Pressable>
+  ) : null;
+
   const inner = (
     <>
+      {quoteBlock}
       {showMedia ? (
         <View style={styles.mediaBlock}>
           {media?.kind === 'video' && !videoErr ? (
@@ -192,7 +231,11 @@ export function ChatBubble({
     <Pressable
       onLongPress={onLongPress}
       delayLongPress={350}
-      style={[styles.wrap, isMine ? styles.wrapMine : styles.wrapThem]}
+      style={[
+        styles.wrap,
+        isMine ? styles.wrapMine : styles.wrapThem,
+        highlighted && styles.wrapHighlighted,
+      ]}
     >
       {isMine ? (
         <LinearGradient
@@ -237,6 +280,33 @@ const styles = StyleSheet.create({
   wrap: { maxWidth: BUBBLE_MAX, marginBottom: spacing.sm },
   wrapMine: { alignSelf: 'flex-end' },
   wrapThem: { alignSelf: 'flex-start' },
+  wrapHighlighted: {
+    backgroundColor: 'rgba(108, 99, 255, 0.14)',
+    borderRadius: radius.lg,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  quoteWrap: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+  },
+  quoteWrapMine: { backgroundColor: 'rgba(0,0,0,0.12)' },
+  quoteWrapThem: { backgroundColor: 'rgba(108, 99, 255, 0.08)' },
+  quotePressed: { opacity: 0.88 },
+  quoteBar: { width: 3, borderRadius: 2, alignSelf: 'stretch' },
+  quoteBarMine: { backgroundColor: 'rgba(255,255,255,0.85)' },
+  quoteBarThem: { backgroundColor: colors.primary },
+  quoteTextCol: { flex: 1, minWidth: 0 },
+  quoteSender: { fontSize: 12, fontWeight: '800', marginBottom: 2 },
+  quoteSenderMine: { color: 'rgba(255,255,255,0.92)' },
+  quoteSenderThem: { color: colors.primary },
+  quotePreview: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
+  quotePreviewMine: { color: 'rgba(255,255,255,0.82)' },
+  quotePreviewThem: { color: colors.textMuted },
   bubble: {
     borderRadius: radius.xl,
     paddingVertical: 10,

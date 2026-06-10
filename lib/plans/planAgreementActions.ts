@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { MIN_ESCROW_CENTS, MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
 import { resolveEscrowParties } from '@/lib/plans/escrowParties';
+import { checkPermission } from '@/lib/subscription/checkPermission';
 
 export type AgreementActionResult = { error: string | null; escrowId?: string };
 
@@ -38,12 +39,34 @@ export async function proceedToSecurePayment(
   if (amount < MIN_ESCROW_CENTS) {
     return { error: `Minimum escrow is ₦${MIN_ESCROW_CENTS / 100} per policy.` };
   }
-  if (amount > MAX_ESCROW_TIER1_CENTS) {
-    return { error: 'Amount exceeds Tier 1 limit — Tier 2 (BVN) required (coming soon).' };
-  }
 
   const pattern = plan.escrow_pattern;
   if (!pattern) return { error: 'Escrow pattern missing on plan.' };
+
+  const { data: authData } = await client.auth.getUser();
+  const actorId = authData.user?.id;
+  if (!actorId) return { error: 'Not signed in.' };
+
+  if (amount > MAX_ESCROW_TIER1_CENTS) {
+    const perm = await checkPermission(actorId, 'escrow.high_value');
+    if (!perm.allowed) {
+      return { error: 'high_value_requires_platinum' };
+    }
+    const { data: actorUser } = await client.from('users').select('kyc_tier').eq('id', actorId).maybeSingle();
+    if (((actorUser?.kyc_tier as number) ?? 1) < 3) {
+      return { error: 'high_value_requires_kyc_tier3' };
+    }
+    if (pattern === 'C') {
+      const { data: guestUser } = await client
+        .from('users')
+        .select('kyc_tier')
+        .eq('id', offer.bidder_id)
+        .maybeSingle();
+      if (((guestUser?.kyc_tier as number) ?? 1) < 3) {
+        return { error: 'high_value_counterparty_requires_kyc_tier3' };
+      }
+    }
+  }
 
   if (pattern === 'C') {
     const { data: hostU } = await client.from('users').select('kyc_tier').eq('id', plan.creator_id).maybeSingle();
@@ -70,11 +93,25 @@ export async function proceedToSecurePayment(
       ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
       : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: existing } = await client.from('escrow_transactions').select('id').eq('plan_id', plan.id).maybeSingle();
+  const { data: existing } = await client
+    .from('escrow_transactions')
+    .select('id')
+    .eq('plan_id', plan.id)
+    .eq('guest_id', guestId)
+    .maybeSingle();
   if (existing?.id) {
     const { error: e1 } = await client.from('plans').update({ status: 'awaiting_payment' }).eq('id', plan.id);
     if (e1) return { error: e1.message };
     return { error: null, escrowId: existing.id as string };
+  }
+
+  let groupPlanIndex: number | null = null;
+  if (plan.is_group_plan) {
+    const { count } = await client
+      .from('escrow_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('plan_id', plan.id);
+    groupPlanIndex = (count ?? 0) + 1;
   }
 
   const { data: esc, error: e2 } = await client
@@ -85,6 +122,8 @@ export async function proceedToSecurePayment(
       payee_id: payeeId,
       host_id: hostId,
       guest_id: guestId,
+      offer_id: offer.id,
+      group_plan_index: groupPlanIndex,
       escrow_pattern: pattern,
       amount_cents: amount,
       host_share_cents: hostShareCents,
@@ -92,7 +131,7 @@ export async function proceedToSecurePayment(
       funding_deadline: fundingDeadline,
       currency: plan.currency,
       status: 'pending_funding',
-      metadata: pattern === 'B' ? { legs: 'split', phase: 'awaiting_host' } : {},
+      metadata: pattern === 'B' ? { legs: 'split', phase: 'awaiting_payment' } : {},
     })
     .select('id')
     .single();

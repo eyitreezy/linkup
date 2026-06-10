@@ -1,6 +1,9 @@
 import { Button } from '@/components/Button';
+import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
 import { colors, radius, spacing } from '@/constants/theme';
 import { ESCROW_DISPUTE_REASONS } from '@/lib/escrow/disputeReasons';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -10,6 +13,8 @@ type Props = {
   onClose: () => void;
   onSubmit: (reasonId: string, reasonLabel: string, detail: string) => void;
 };
+
+const FIELD_BORDER = '#D8DCE6';
 
 export function OpenDisputeModal({ visible, loading, onClose, onSubmit }: Props) {
   const [reasonId, setReasonId] = useState<string>(ESCROW_DISPUTE_REASONS[0]?.id ?? 'other');
@@ -24,22 +29,38 @@ export function OpenDisputeModal({ visible, loading, onClose, onSubmit }: Props)
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>Open a dispute</Text>
-          <Text style={styles.sub}>
-            We&apos;ll hold funds while our team reviews. A support ticket is created automatically.
-          </Text>
+          <View style={styles.handle} />
+
+          <LinearGradient
+            colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.06)', 'transparent']}
+            style={styles.topGlow}
+          />
+
+          <View style={styles.headerRow}>
+            <View style={styles.iconWrap}>
+              <Ionicons name="alert-circle-outline" size={22} color={colors.danger} />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Open a dispute</Text>
+              <Text style={styles.sub}>
+                Funds stay on hold while our team reviews. A support ticket is created automatically.
+              </Text>
+            </View>
+          </View>
+
           <Text style={styles.label}>What happened?</Text>
           <View style={styles.chips}>
             {ESCROW_DISPUTE_REASONS.map((r) => (
-              <Pressable
+              <GradientSelectionChip
                 key={r.id}
+                label={r.label}
+                selected={reasonId === r.id}
                 onPress={() => setReasonId(r.id)}
-                style={[styles.chip, reasonId === r.id && styles.chipOn]}
-              >
-                <Text style={[styles.chipTxt, reasonId === r.id && styles.chipTxtOn]}>{r.label}</Text>
-              </Pressable>
+                compact
+              />
             ))}
           </View>
+
           <Text style={styles.label}>Tell us more (optional)</Text>
           <TextInput
             style={styles.input}
@@ -51,6 +72,7 @@ export function OpenDisputeModal({ visible, loading, onClose, onSubmit }: Props)
             onChangeText={setDetail}
             textAlignVertical="top"
           />
+
           <Button title="Submit dispute" onPress={submit} loading={loading} />
           <Button title="Cancel" variant="ghost" onPress={onClose} style={{ marginTop: spacing.sm }} />
         </Pressable>
@@ -62,7 +84,7 @@ export function OpenDisputeModal({ visible, loading, onClose, onSubmit }: Props)
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: colors.overlayDark,
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -72,30 +94,61 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xl,
     maxHeight: '88%',
+    overflow: 'hidden',
   },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  sub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, marginBottom: spacing.lg },
-  label: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.button,
-    backgroundColor: colors.background,
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  topGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
   },
-  chipOn: { backgroundColor: '#EEF2FF', borderColor: colors.primary },
-  chipTxt: { fontSize: 13, fontWeight: '600', color: colors.text },
-  chipTxtOn: { color: colors.primary },
+  headerText: { flex: 1, minWidth: 0 },
+  title: { fontSize: 22, fontWeight: '900', color: colors.text, letterSpacing: -0.3, marginBottom: 4 },
+  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 21, fontWeight: '600' },
+  label: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   input: {
     minHeight: 100,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderColor: FIELD_BORDER,
+    borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 15,
+    fontWeight: '600',
     color: colors.text,
+    backgroundColor: colors.authInputBg,
     marginBottom: spacing.lg,
   },
 });

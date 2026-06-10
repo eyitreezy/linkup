@@ -11,15 +11,8 @@ import type { DbUserPresence } from '@/types/database';
 import { Href, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { memo, useCallback } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MessagesActiveStripSkeleton } from '@/components/messages/MessagesInboxSkeleton';
 
 const AVATAR = 56;
 const RING = 3;
@@ -82,20 +75,7 @@ function PlanEngagementStripInner({ items, loading, presenceByUser }: Props) {
   const showSkeleton = !!loading && items.length === 0;
 
   if (showSkeleton) {
-    return (
-      <View style={styles.section}>
-        <View style={styles.glass}>
-          <Text style={styles.title}>Active</Text>
-          <View style={styles.skeletonRow}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.skeletonRing}>
-                <ActivityIndicator size="small" color={colors.primary} />
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
+    return <MessagesActiveStripSkeleton />;
   }
 
   if (items.length === 0) {
@@ -300,20 +280,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   emptyTxt: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
-  skeletonRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  skeletonRing: {
-    width: AVATAR + RING * 2,
-    height: AVATAR + RING * 2,
-    borderRadius: (AVATAR + RING * 2) / 2,
-    borderWidth: 2,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
 });

@@ -7,7 +7,7 @@ import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { usePermission } from '@/hooks/usePermission';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -174,7 +174,7 @@ function PremiumGateCard() {
             Premium shows everyone who viewed or saved this meetup so you know who to welcome first.
           </Text>
           <Pressable
-            onPress={() => router.push('/premium' as Href)}
+            onPress={() => router.push('/subscription' as Href)}
             style={({ pressed }) => [styles.gateCtaOuter, pressed && styles.gateCtaPressed]}
             accessibilityRole="button"
             accessibilityLabel="Upgrade to Premium"
@@ -203,7 +203,7 @@ export default function PlanInterestScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [engagementsLoading, setEngagementsLoading] = useState(true);
   const hasCachedRowsRef = useRef(false);
-  const premium = isPremiumSubscriber(dbUser);
+  const { allowed: canSeeInterest } = usePermission('plans.see_all_likes');
 
   const load = useCallback(
     async (options?: { background?: boolean }) => {
@@ -217,7 +217,7 @@ export default function PlanInterestScreen() {
       try {
         const { data: p } = await supabase.from('plans').select('*').eq('id', id).single();
         setPlan(p as DbPlan | null);
-        if (!p || (p as DbPlan).creator_id !== user?.id || !premium) {
+        if (!p || (p as DbPlan).creator_id !== user?.id || !canSeeInterest) {
           setRows([]);
           hasCachedRowsRef.current = false;
           return;
@@ -254,7 +254,7 @@ export default function PlanInterestScreen() {
         setEngagementsLoading(false);
       }
     },
-    [id, user?.id, premium]
+    [id, user?.id, canSeeInterest]
   );
 
   useFocusEffect(
@@ -310,7 +310,7 @@ export default function PlanInterestScreen() {
     );
   }
 
-  if (!premium) {
+  if (!canSeeInterest) {
     return (
       <InterestShell>
         <PlanStackScreenHeader title="Interest" barStyle={HEADER_BAR} titleStyle={styles.headerTitle} />

@@ -1,3 +1,4 @@
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,6 +8,9 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { ProfilePreferences } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { checkPermission } from '@/lib/subscription/checkPermission';
+import type { SubscriptionTier } from '@/types/database';
+import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
@@ -33,6 +37,8 @@ export default function NotificationsSettingsScreen() {
   const [showLastSeen, setShowLastSeen] = useState(v0.show_last_seen);
   const [readReceipts, setReadReceipts] = useState(v0.read_receipts);
   const [shareTyping, setShareTyping] = useState(v0.share_typing_indicator);
+  const [readReceiptsUpgradeOpen, setReadReceiptsUpgradeOpen] = useState(false);
+  const [readReceiptsUpgradeTier, setReadReceiptsUpgradeTier] = useState<SubscriptionTier>('SILVER');
 
   useEffect(() => {
     setPush(prefs.push !== false);
@@ -232,6 +238,18 @@ export default function NotificationsSettingsScreen() {
                 <PrefSwitch
                   value={readReceipts}
                   onValueChange={(v) => {
+                    if (v && user?.id) {
+                      void checkPermission(user.id, 'messaging.read_receipts').then((perm) => {
+                        if (!perm.allowed) {
+                          setReadReceiptsUpgradeTier(perm.upgradeTo ?? 'SILVER');
+                          setReadReceiptsUpgradeOpen(true);
+                          return;
+                        }
+                        setReadReceipts(true);
+                        void saveAll({ push, email, showOnline, showLastSeen, readReceipts: true, shareTyping });
+                      });
+                      return;
+                    }
                     setReadReceipts(v);
                     void saveAll({ push, email, showOnline, showLastSeen, readReceipts: v, shareTyping });
                   }}
@@ -255,9 +273,16 @@ export default function NotificationsSettingsScreen() {
             </View>
           </LinearGradient>
 
-          <Text style={styles.note}>
-            Push and email for notification events need Supabase webhooks — see docs/PUSH_VERIFY_AND_SETUP.md and docs/EMAIL_NOTIFICATIONS_SETUP.md.
-          </Text>
+      <UpgradePrompt
+        visible={readReceiptsUpgradeOpen}
+        feature="messaging.read_receipts"
+        requiredTier={readReceiptsUpgradeTier}
+        onUpgrade={() => {
+          setReadReceiptsUpgradeOpen(false);
+          router.push('/subscription' as Href);
+        }}
+        onDismiss={() => setReadReceiptsUpgradeOpen(false)}
+      />
     </SettingsStickyShell>
   );
 }
@@ -374,13 +399,4 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0 },
   label: { fontSize: 16, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
   hint: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18, fontWeight: '600' },
-  note: {
-    fontSize: 13,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    lineHeight: 20,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
 });

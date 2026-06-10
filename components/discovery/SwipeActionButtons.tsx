@@ -2,6 +2,7 @@
  * Tinder-style pass / like / info row with spring press feedback (Reanimated).
  */
 import { colors, spacing } from '@/constants/theme';
+import { SWIPE_ACTION_ROW_PAD_Y } from '@/lib/discovery/swipeLayout';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { memo } from 'react';
@@ -101,7 +102,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.lg,
-    paddingVertical: spacing.xs,
+    paddingVertical: SWIPE_ACTION_ROW_PAD_Y,
     paddingHorizontal: spacing.md,
   },
   disabled: { opacity: 0.4 },

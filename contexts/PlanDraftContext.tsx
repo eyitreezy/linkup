@@ -41,6 +41,12 @@ const emptyDraft = (): PlanDraft => ({
   moodCustomEnd: null,
   moodListingHours: 3,
   spotlightBoost: false,
+  isGroupPlan: false,
+  maxGuests: 4,
+  maxFreeGuests: null,
+  maxPremiumGuests: null,
+  multiCity: false,
+  cityIds: [],
 });
 
 type Ctx = {

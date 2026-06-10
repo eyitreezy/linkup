@@ -1,5 +1,5 @@
 /**
- * PL6a — explains what happens on the next screen (escrow / Paystack) before the user taps through.
+ * PL6a — explains what happens on the next screen (escrow / Flutterwave) before the user taps through.
  */
 import { colors, radius, spacing } from '@/constants/theme';
 import {
@@ -25,7 +25,7 @@ function bodyForVariant(preview: AgreementPaymentPreview, variant: Props['varian
   const total = formatEscrowMoney(totalCents, currency);
 
   if (variant === 'counterparty_pays') {
-    return `No charge on this screen. ${theirs} will be held in escrow on the next screen once your guest completes Paystack checkout. Total commitment: ${total}.`;
+    return `No charge on this screen. ${theirs} will be held in escrow on the next screen once your guest completes checkout. Total commitment: ${total}.`;
   }
   if (variant === 'split_you_pay') {
     return `On the next screen you'll pay ${yours} (your share of ${total}). ${theirs} is paid separately by your guest — both legs must complete before the plan goes active.`;
@@ -34,9 +34,9 @@ function bodyForVariant(preview: AgreementPaymentPreview, variant: Props['varian
     return `You've confirmed your share. We're waiting for ${theirs} from your guest on the escrow screen. Total held when complete: ${total}.`;
   }
   if (pattern === 'C') {
-    return `On the next screen you'll pay ${yours} via Paystack. Funds stay in escrow until the meetup is confirmed.`;
+    return `On the next screen you'll pay ${yours} via Flutterwave. Funds stay in escrow until the meetup is confirmed.`;
   }
-  return `On the next screen you'll pay ${yours} via Paystack. Funds stay in escrow until the meetup is confirmed — not sent directly to the other person.`;
+  return `On the next screen you'll pay ${yours} via Flutterwave. Funds stay in escrow until the meetup is confirmed — not sent directly to the other person.`;
 }
 
 export function AgreementPaymentPreviewCard({ preview, variant }: Props) {
@@ -70,7 +70,7 @@ export function AgreementPaymentPreviewCard({ preview, variant }: Props) {
       </View>
       <View style={styles.chipRow}>
         <PatternChip pattern={preview.pattern} />
-        <Text style={styles.chipMuted}>· Paystack · held in escrow</Text>
+        <Text style={styles.chipMuted}>· Flutterwave · held in escrow</Text>
       </View>
       <Text style={styles.body}>{bodyForVariant(preview, variant)}</Text>
     </View>

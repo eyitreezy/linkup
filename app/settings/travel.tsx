@@ -7,7 +7,7 @@ import { Screen } from '@/components/Screen';
 import type { LocationSuggestion } from '@/lib/location/locationGeocode';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { usePermission } from '@/hooks/usePermission';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,7 +29,7 @@ const PAYWALL_POINTS = [
 
 export default function TravelModeScreen() {
   const { user, profile, dbUser, refreshProfile } = useAuth();
-  const premium = isPremiumSubscriber(dbUser);
+  const { allowed: canTravelMode, loading: permLoading } = usePermission('discover.travel_mode');
   const tm = profile?.preferences?.travel_mode;
   const [searchQuery, setSearchQuery] = useState(tm?.label ?? '');
   const [feedback, setFeedback] = useState<TravelModeFeedback | null>(null);
@@ -94,7 +94,7 @@ export default function TravelModeScreen() {
             <View style={styles.topNavSpacer} />
           </View>
 
-          {!premium ? (
+          {!permLoading && !canTravelMode ? (
             <>
               <View style={styles.leadBlock}>
                 <LinearGradient
@@ -138,7 +138,7 @@ export default function TravelModeScreen() {
 
               <View style={styles.ctaWrap}>
                 <Pressable
-                  onPress={() => router.push('/premium' as Href)}
+                  onPress={() => router.push('/subscription' as Href)}
                   accessibilityRole="button"
                   accessibilityLabel="See Premium plans"
                   style={({ pressed }) => [styles.ctaOuter, pressed && styles.ctaPressed]}

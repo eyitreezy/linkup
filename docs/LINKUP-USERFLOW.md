@@ -27,7 +27,7 @@ This document describes **who can do what**, **in what order**, and **when verif
 2. **§2** — At-a-glance: states & principles (incl. **§2.3** status colors)  
 3. **§3** — Journey in plain language  
 4. **§4** — Verification (progressive KYC) — *single home for all KYC detail*  
-5. **§5** — Feature flows: **§5.1** auth → **§5.2** onboarding → **§5.3** tab shell → **§5.4** first session → **§5.5** homepage → **§5.6** plans → **§5.7** Messages → **§5.8** acceptance / cancel / agreement → **§5.9** escrow → **§5.10** support & disputes → **§5.11** premium / account  
+5. **§5** — Feature flows: **§5.1** auth → **§5.2** onboarding → **§5.3** tab shell → **§5.4** first session → **§5.5** Discover → **§5.6** plans → **§5.7** Messages → **§5.8** acceptance / agreement → **§5.9** escrow → **§5.10** support & disputes → **§5.11** premium / account → **§5.12** member profile  
 6. **§6** — Access rules (verified vs unverified + flowchart)  
 7. **§7** — Events & notifications  
 8. **§8** — Compliance  
@@ -44,7 +44,7 @@ The **LinkUp MVP Userflow (PDF)** uses numbered **phases** (onboarding → soft 
 |-------------------|----------------|-------------------|
 | **Phase 1** — Onboarding (5 steps) | Signup/login, profile wizard, optional AI check, then **limited access** entry | **§5.1** Auth · **§5.2** P1–P5 · then **§5.3–§5.5** (shell → first session → **homepage**) · scoring note under **§5.2** |
 | **Phase 2** — Soft KYC prompt | “Unlock more…”, Verify / Skip, badge, reminders | **§4.2** |
-| **Phase 3** — Limited app access | Browse/view plans; **no** create / negotiate / escrow | **§6.1** · **§5.5** (Plans tab = “dashboard” / homepage in MVP) |
+| **Phase 3** — Limited app access | Browse/view plans; **no** create / negotiate / escrow | **§6.1** · **§5.5** (Discover tab = homepage in MVP) |
 | **Phase 4** — Hard gate | Restricted action → “Verification required…” → Start verification | **§4.3–§4.4** |
 | **Phase 5** — KYC K1–K7 | Full verification wizard (incl. document-type step before ID) | **§4.5** |
 | **Phase 6** — Verified UX | Plans, negotiation, escrow, **premium** (paid) | **§6** · **§5.5–§5.11** (see **§5.11** for premium) |
@@ -57,7 +57,7 @@ The **LinkUp MVP Userflow (PDF)** uses numbered **phases** (onboarding → soft 
 | **Phase 13** — Premium | Boost, subscription, Paystack | **§5.11** |
 | **Phase 14** — Account management | Edit profile, logout, delete | **§5.11** |
 
-**Terminology:** PDF **“dashboard”** (limited-access / main app browsing) aligns with **Phase 3** in the table above — **main app after onboarding**; in the current MVP that maps to the **tab shell** with default **Plans** tab (**§5.3** shell, **§5.5** homepage feed), not a separate branded “Dashboard” screen unless you add one later.
+**Terminology:** PDF **“dashboard”** (limited-access / main app browsing) aligns with **Phase 3** in the table above — **main app after onboarding**; in the current MVP that maps to the **tab shell** with default **Discover** tab (**§5.3** shell, **§5.5** homepage feed), not a separate branded “Dashboard” screen unless you add one later.
 
 ---
 
@@ -78,7 +78,7 @@ The **LinkUp MVP Userflow (PDF)** uses numbered **phases** (onboarding → soft 
 
 ### 2.2 Two principles to remember
 
-1. **Onboarding is not KYC.** Finishing the 5-step profile wizard **does not** force identity verification. After **§5.2**, users enter the **main app shell** (**§5.3**); the **default first screen** is the **Plans** tab / homepage (**§5.5**).
+1. **Onboarding is not KYC.** Finishing the 5-step profile wizard **does not** force identity verification. After **§5.2**, users enter the **main app shell** (**§5.3**); the **default first screen** is the **Discover** tab / homepage (**§5.5**).
 2. **Verification is progressive.** LinkUp asks for ID/video **when the user tries something that needs trust** (plans, negotiation, escrow), or via a **gentle “Unlock more” prompt** — not as a wall immediately after onboarding.
 
 ### 2.3 Status & feedback colors (product-wide)
@@ -93,8 +93,8 @@ Aligned with common **PDF / design brief** language: use **green** for success s
 
 1. **Sign up / log in** → verify email or phone where required.  
 2. **Complete profile onboarding (5 steps)** → name, photos, bio, preferences, safety, review.  
-3. **Enter the main app (tab bar)** → default landing is the **Plans** tab (**homepage** in the MVP app). **No mandatory KYC step here.**  
-4. **Optional (same session or soon after):** **soft KYC prompt** (“Unlock more with verification”) and/or a **light nudge banner** on Plans — both dismissible; see **§4** and **§5.4** (post-onboarding entry).  
+3. **Enter the main app (tab bar)** → default landing is the **Discover** tab (**homepage** in the MVP app). **No mandatory KYC step here.**  
+4. **Optional (same session or soon after):** **soft KYC prompt** (“Unlock more with verification”) and/or a **light nudge banner** on Discover — both dismissible; see **§4** and **§5.4** (post-onboarding entry).  
 5. **When needed:** user taps **Create plan**, **send offer**, or **escrow** → if not verified, a **hard gate** appears: “Verification required to continue” → **Start verification** or **Not now**.  
 6. **KYC wizard (K1–K7)** → intro, **choose ID type**, ID capture (instructions match selection), short video, consent, “in progress”, then approved / rejected / more info.  
 7. **Verified** → user can complete the action they attempted (create plan, negotiate, fund escrow).  
@@ -222,7 +222,7 @@ Each subsection uses a **`Flow label:`** line (stable string for specs, tickets,
 **Suggested prompt pattern (repeat per flow):**  
 `[Flow label] + Purpose + Trigger + Entry point + Ordered steps + Verification note (see §4 if gated) + Exit / next screen`
 
-**Reading order (first-time path):** **§5.1** Authentication → **§5.2** Profile onboarding → **§5.3** Tab shell → **§5.4** First session on the Plans tab → **§5.5** Home / Plans feed (default homepage). Deeper flows: **§5.6** Plans (create → negotiate → PL6), **§5.7** Messages, **§5.8** acceptance / agreement / cancel, **§5.9** Escrow, **§5.10** Support & disputes, **§5.11** Premium / account.
+**Reading order (first-time path):** **§5.1** Authentication (incl. splash) → **§5.2** Profile onboarding → **§5.3** Tab shell (6 tabs) → **§5.4** First session → **§5.5** Discover feed (default homepage). Deeper flows: **§5.6** Plans, **§5.7** Messages, **§5.8** acceptance / agreement, **§5.9** Escrow, **§5.10** Support & disputes, **§5.11** Premium / account / settings, **§5.12** Member profile.
 
 Verification rules are always in **§4**; access matrix in **§6**.
 
@@ -230,18 +230,20 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 ### 5.1 Flow: Authentication & account
 
-**Flow label:** `Auth — signup, login, recovery`  
+**Flow label:** `Auth — splash, signup, login, recovery`  
 
 | ID | Screen | Primary actions | Next |
 |----|--------|-----------------|------|
-| A1 | Splash / welcome | Email, phone, Apple/Google | A2 or OAuth |
-| A2 | Signup | Credentials, ToS | A3 |
-| A3 | Verify contact | OTP | A4 |
-| A4 | Login | Credentials / magic link | **Index** → **§5.2** onboarding or **main tabs** (returning users) |
-| A5 | Forgot password | Reset email | A4 |
-| A6 | Security | 2FA, sessions | Settings |
+| A0 | **Branded splash** (`SplashGate`) | Logo, wordmark, tagline; **minimum 5s** on cold start while auth bootstraps | Native splash → custom gradient splash → fade into app |
+| A1 | Login / signup (`/(auth)`) | Email + password, **Google** sign-in | **Index** → **§5.2** or **main tabs** |
+| A2 | Signup | Credentials, account creation | Login or onboarding |
+| A3 | Forgot password | Reset email | `forgot-password-sent` → deep link → `reset-password` |
+| A4 | OAuth callback (`/auth/callback`) | Completes Google / magic-link session | **Index** → onboarding or tabs |
+| A5 | Password reset | New password after email link | Login |
 
-*OAuth may skip OTP if the provider already verified email.*
+**Routing (`app/index.tsx`):** Resolves auth deep links first; if session exists → `postAuthHref(profile)` (onboarding if `onboarding_status === 'pending'`, else tabs); else login.
+
+*Phone auth may be offered where configured. OAuth may skip separate OTP when the provider verified email.*
 
 ---
 
@@ -249,15 +251,17 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 **Flow label:** `Onboarding wizard — profile only (P1–P5)`  
 
+**Route:** `/onboarding` · **Resume:** `preferences.onboarding_step` persisted per user.
+
 | ID | Screen | Content | Next |
 |----|--------|---------|------|
-| P1 | Basics | Name, photos, age | P2 |
-| P2 | Bio & interests | Bio, tags, languages, intent | P3 |
-| P3 | Preferences | Who to meet, age range, **radius** | P4 |
-| P4 | Safety | Block import (optional), safety tips | P5 |
-| P5 | Review | Preview, publish or draft / skip | **Main tabs** → **§5.3–§5.5** — **not** forced into KYC |
+| P1 | **Basics** | Display name, birthday, **18+ confirmation**, **photo gallery** (set **primary**), **required intro video** | P2 |
+| P2 | **Story** | Bio (≤150), **interests**, **languages**, **meeting intent** (friendship / dating / activity / **networking**), **1–2 Hinge-style prompts** | P3 |
+| P3 | **Location & discovery prefs** | **Profile location** (search or current location), gender, **show me**, **age range**, **radius**, **profile visible** toggle | P4 |
+| P4 | **Safety** | Safety tip cards, optional contacts import (informational), **“I’ve read these tips”** acknowledgment | P5 |
+| P5 | **Preview** | **ProfileCardPreview** (discovery-style card); **Continue** / **Publish** completes onboarding | **Main tabs** → **§5.3–§5.5** — **not** forced into KYC |
 
-*Radius pairs with **location permission** (explain value + safety).*
+*Location on P3 pairs with **location permission** on Discover (better nearby ranking). **Initial AI-assisted screening** runs on save (non-blocking).*
 
 **Optional — initial AI-assisted checks (PDF “Initial AI check”):** During or after profile save, run **light automated screening** on bio/photos (e.g. trust score, flags for fake or policy-violating content). Outcome is **non-blocking** for entering the app unless policy escalates to review. Implementation can reuse existing profile scoring hooks; tune thresholds separately from **KYC** face-match AI (**§4.6**).
 
@@ -267,13 +271,22 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 **Flow label:** `Main app — tab shell`  
 
-**Purpose:** After **§5.2** profile onboarding is complete, the user is **not** sent to a separate “discovery” route first. They enter the **main tab navigator**.
+**Purpose:** After **§5.2** profile onboarding is complete, users enter the **main tab navigator** (`app/(tabs)/_layout.tsx`).
 
-| Element | MVP behavior (current product intent) |
-|---------|----------------------------------------|
-| Tabs | **Plans** (default) · **Messages** · **Profile** |
-| Default route on entry | **Plans** tab = first tab = **homepage** for browsing nearby plans (**§5.5**) |
-| “Home” in UX copy | Means **Plans tab / Nearby plans**, unless you later add a dedicated Home hub |
+| Tab | Route | Role |
+|-----|-------|------|
+| **Discover** (default) | `/(tabs)/index` | Swipe-first meetup feed + mood timeline (**§5.5**) |
+| **Messages** | `/(tabs)/messages` | Inbox + engagement strip (**§5.7**) |
+| **Saved** | `/(tabs)/saved` | Bookmarked plans (**Premium**) |
+| **Offers** | `/(tabs)/offers` | Sent / received negotiations |
+| **Wallet** | `/(tabs)/wallet` | Ledger balance, goodwill credits |
+| **Profile** | `/(tabs)/profile` | Identity, stats, Premium, settings hub |
+
+| Element | MVP behavior |
+|---------|----------------|
+| Default route on entry | **Discover** tab = homepage |
+| Tab bar | Icon-only (`LinkUpTabBar`); hides on scroll down in list surfaces |
+| Gating | Unauthenticated → login; `onboarding_status === 'pending'` → `/onboarding` |
 
 ---
 
@@ -281,47 +294,43 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 **Flow label:** `Post-onboarding landing — first session`  
 
-**Purpose:** Describe exactly what happens **immediately after** the user finishes the 5-step profile wizard (publish, draft complete, or skip — per product rules).
+**Trigger:** `onboarding_status` is no longer `pending`.
 
-**Trigger:** `onboarding_status` is no longer `pending` (user completed or skipped onboarding).
+**Entry point:** Cold start → **branded splash (A0, ≥5s)** → **main tabs** → **Discover** tab by default.
 
-**Entry point:** Deep link or cold start resolves to **main tabs** → **Plans tab** opens by default.
+**Ordered experience:**
 
-**Ordered experience (copy-paste friendly):**
+1. **Splash** — LinkUp logo, tagline (“Discover meetups near you. Meet with confidence.”), fade into app once splash timer + auth bootstrap complete.  
+2. User lands on **Discover** (**§5.5**).  
+3. **Location prompt** may appear (foreground permission for nearby ranking).  
+4. **Swipe deck** loads by default (or empty state + **+ Create** FAB).  
+5. **Optional, non-blocking:** **Soft KYC prompt** — Verify now / Skip for now.  
+6. **Optional:** **PlansKycBanner** for unverified users on Discover.  
+7. User may open **Filters** (distance, price, mood vibe, display mode, verified hosts, host presence).  
+8. User may switch tabs (**Messages**, **Saved**, **Offers**, **Wallet**, **Profile**) without extra gates for browsing.
 
-1. User lands on **Plans** tab (see **§5.5** — this is the homepage, after **§5.1–§5.2**).  
-2. User may grant **location** when the feed loads (better “nearby” ranking).  
-3. User sees **nearby plans list** (or empty state + “Create” CTA).  
-4. **Optional, non-blocking:** **Soft KYC prompt** (modal) if flagged for first session after onboarding — **Verify now** / **Skip for now**.  
-5. **Optional, non-blocking:** **Dismissible nudge banner** on Plans reminding unverified users they can verify to unlock plans / escrow.  
-6. User may switch to **Messages** or **Profile** at any time — no extra gate for browsing.
-
-**Exit / next:** User stays in shell; next flows are **browse plans**, **open a plan**, **create plan** (gated), **Messages** (**§5.7**), or **Profile → Verify**.
+**Exit / next:** Browse, open plan, open **member profile** (`/user/[id]`), **create plan** (gated), **Messages**, or **Profile → Verification**.
 
 ---
 
-### 5.5 Flow: Home / Plans feed (default homepage)
+### 5.5 Flow: Discover feed (default homepage)
 
-**Flow label:** `Homepage — Nearby plans (Plans tab)`  
+**Flow label:** `Homepage — Discover tab`  
 
-**Purpose:** This flow **is** the main **homepage** in the MVP — the screen users reach **after** **§5.1** Authentication and **§5.2** Profile onboarding (via **§5.3** shell and **§5.4** first session). It is **not** a separate “Discovery” chapter for a different screen. Older docs used “Discovery & location” as a bucket; here **D1 = Plans tab = homepage**.
+**Screen ID:** `D1` = **Discover** tab (`app/(tabs)/index.tsx`).
 
-**Screen ID:** `D1` = **Plans** tab (`Nearby plans` feed).
+| Step | Surface | User actions | Notes |
+|------|---------|--------------|--------|
+| 1 | **Header** | Location label (incl. **Travel mode** label for Premium), **Filters**, **Undo** (Premium, last hidden plan) | Header is minimal; no separate swipe/list toggle in header |
+| 2 | **Mood timeline** | Horizontal carousel of **mood plans** (short-lived “vibe” meetups) | Tap pill → filters standard deck; mood-only empty states when applicable |
+| 3 | **Display: Swipe** (default) | Full-height **swipe cards**; **pass / info / like** action row flush below card; **+ FAB** for create | `PlansSwipeDeck` fills space above action buttons; card opens plan on tap / info |
+| 4 | **Display: List** | Scrollable **PlanCard** rows; search bar visible | Toggle via **Filters → Display** (Swipe / List pills); persists in local storage |
+| 5 | **Filters sheet** | Distance, price range, **mood vibe**, **verified hosts only** (Premium), **host presence** (online/offline), **Display mode** | Apply persists to `preferences.feed_filters` |
+| 6 | **Plan actions** | Swipe right = interest path; swipe left = hide (Premium undo); tap card = **plan detail** | Presence chips on cards where available |
+| 7 | **Member profile** | Tap host avatar | `/user/[id]` — public profile, media gallery, message, block (**§5.12**) |
+| 8 | **Empty / KYC** | Empty state, mood-only empty, **PlansKycBanner** | Create still **hard-gated** if unverified |
 
-| Step | Screen / state | User actions | Notes |
-|------|----------------|--------------|--------|
-| 1 | Plans tab header | Read title (“Nearby plans”), tap **+ Create** | Create leads to **Flow: Plans — create…** (**§5.6**) — **hard gate** if unverified |
-| 2 | Location | Allow or deny foreground location | Improves distance filter; feed may still show plans without precise GPS |
-| 3 | Feed list | Scroll plans; tap a row | Opens **plan detail** → offers / negotiation (**§5.6**) |
-| 4 | Empty state | See copy + create CTA | Same gating rules |
-
-**Optional / future (not the default homepage path unless you build them):**
-
-| Screen ID | Name | Role |
-|-----------|------|------|
-| D2 | Map (optional) | Pins, radius ring — **separate entry** from tabs if implemented |
-| D3 | Other user profile detail | From feed / chat — badges, trust context |
-| D4 | Search (optional) | Query + filters — **separate** from default landing |
+**Search:** Available in **list mode** only (keyword filter on title, description, location).
 
 ---
 
@@ -329,14 +338,26 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 **Flow label:** `Plans — create → publish → offers → agree`  
 
-| ID | Screen | Gate |
-|----|--------|------|
-| PL1 | Create plan | **Hard gate if unverified** |
-| PL2 | Visibility | Friends / radius / public |
-| PL3 | Published | Appears on **Plans feed (D1)** (**§5.5**); stats |
-| PL4 | Plan detail — offers | List incoming offers |
-| PL5 | Negotiation / offers | **Hard gate if unverified** to **send offer**; **Open messages** bridges to **§5.7** (same 1:1 thread) |
-| PL6 | Agree | Host accepts offer → **§5.8** (agreement summary); paid amount → **§5.9** Escrow — **§4** / **§6** gates |
+**Create wizard** (`/plan/create/*`):
+
+| ID | Screen | Content | Gate |
+|----|--------|---------|------|
+| PL1a | **Meet & schedule** (`index`) | Meet type, date/time, duration; optional **mood plan** fields (vibe type, listing window) | **Hard gate if unverified** |
+| PL1b | **Commitment** (`commitment`) | Paid vs free, starting price, escrow pattern hints | Verified |
+| PL1c | **Details** (`details`) | Title, story, location, **visibility** (public / radius / friends) | Verified |
+| PL1d | **Success** (`success`) | Published confirmation; open plan | Verified |
+
+**Published plan surfaces:**
+
+| ID | Screen | Gate / notes |
+|----|--------|--------------|
+| PL2 | **Plan detail** (`/plan/[id]`) | Host actions: edit sheet, boost (Premium), interest views (Premium host), calendar add |
+| PL3 | **Negotiation** (`/plan/[id]/negotiate`) | Guest **send offer** — **hard gate if unverified**; bottom sheet + timeline; **Open chat** → **§5.7** |
+| PL4 | **Offers tab** (`/(tabs)/offers`) | Sent / received offer lists |
+| PL5 | **Agreement** (`/plan/[id]/agreement`) | Host accept → summary; free confirm or paid → **§5.9** |
+| PL6 | **Interest** (`/plan/[id]/interest`) | Premium host — who viewed/saved (**§5.11**) |
+
+*Mood plans: short window, appear in **mood timeline** on Discover. Standard plans: main swipe/list deck.*
 
 *Free / no-price paths: **§5.8** only. Paid: **§5.8** then **§5.9**.*
 
@@ -360,10 +381,10 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 | Step | Screen ID | User actions | System / product notes |
 |------|-----------|--------------|-------------------------|
-| 1 | **M1** — Inbox (`Messages` tab) | See list of conversations (peer name + last message preview); pull to refresh on focus | Rows come from `conversations` where the user is `user_a` or `user_b`. Empty state explains how to start (e.g. from a plan). |
-| 2 | **M1** | Tap a row | Navigate to **M2** thread (`/chat/[conversationId]`). |
-| 3 | **M2** — Thread | Read history (oldest → newest); type message; send | Inserts into `messages` for that `conversation_id`. May run **AI moderation** on send (**§8**); blocked/flagged copy per policy. |
-| 4 | **M2** | Attach media *(if enabled)* | Uses storage + `messages` / `media` patterns; respect moderation and size limits. |
+| 1 | **M1** — Inbox (`Messages` tab) | **Engagement strip** (active plan conversations); conversation list with presence dots; pull to refresh | Rows from `conversations`; realtime subscription refreshes inbox |
+| 2 | **M1** | Tap engagement avatar or conversation row | Navigate to **M2** thread (`/chat/[id]`). |
+| 3 | **M2** — Thread | Read history; send text; **edit / delete** own messages; attach **image / video** | AI moderation on send (**§8**); read receipts / presence where enabled |
+| 4 | **M2** | Message actions sheet | Report, copy, delete — per policy |
 | 5 | **M2** | Back | Returns to **M1**. |
 
 **MVP implementation note:** Conversations are **pair-scoped** (ordered pair of user IDs). There is **no separate `plan_id` on the thread** in the baseline schema; plan context is **UX** (user opened chat from a plan). A future iteration can add **plan-scoped threads** if product requires isolated history per plan.
@@ -387,7 +408,7 @@ Verification rules are always in **§4**; access matrix in **§6**.
 | 3 | **PL6a** | **Proceed to payment** (if paid) | Navigates to **§5.9** Escrow (one row per plan in MVP). |
 | 4 | **Cancel / withdraw** *(product-defined)* | Host or guest cancels before meet | Rules: whether escrow refunds, offer `declined` / `superseded`, plan `cancelled`—mirror your **state machine** and **§6** gating. Document edge cases in engineering specs. |
 
-**Exit / next:** Free path → Plans feed or plan detail; paid path → **§5.9**.
+**Exit / next:** Free path → Discover feed or plan detail; paid path → **§5.9**.
 
 ---
 
@@ -451,7 +472,7 @@ Industry apps combine **(A) visibility**, **(B) intent & filters**, **(C) undo /
 
 | Theme | Reference apps (typical) | LinkUp premium interpretation |
 |-------|--------------------------|----------------------------------|
-| **Boost / Spotlight** | Tinder Boost, Bumble Spotlight, Badoo “rise up” | **Time-boxed feed elevation**: subscriber’s **plan** (or profile) gets stronger **placement** in the Plans feed for N minutes / hours; optional **boost_credits** for one-off use without subscribing |
+| **Boost / Spotlight** | Tinder Boost, Bumble Spotlight, Badoo “rise up” | **Time-boxed feed elevation**: subscriber’s **plan** (or profile) gets stronger **placement** in the **Discover** feed for N minutes / hours; optional **boost_credits** for one-off use without subscribing |
 | **Unlimited or higher caps** | Tinder+ likes, Hinge Preferred daily likes | **Higher soft limits** where product uses caps (e.g. offer rounds, saved searches, pinned plans) — *messaging caps for unverified users remain a trust rule, not a paywall* (**§6**) |
 | **See who’s interested** | Tinder Gold/Likes You, Bumble Beeline, Badoo “Encounters” unlocks | **Interest surfaces**: who **saved**, **requested**, or **recently viewed** your public plans (within privacy settings); **not** a bypass for escrow or verification |
 | **Advanced filters & preferences** | Hinge / Bumble advanced filters | **Rich discovery**: distance tiers, categories, price band, time window, “verified hosts only” as a **filter** (verification still required to *host paid flow*, but premium can **prioritize** verified-only browsing) |
@@ -472,15 +493,38 @@ Industry apps combine **(A) visibility**, **(B) intent & filters**, **(C) undo /
 
 - Persist **`users.premium_until`**, **`users.boost_credits`**, and **`plans.boosted_until`** (or equivalent) server-side; **never** trust client-only flags for entitlements.
 - **Webhook / store** updates subscription state; **RLS** may read entitlements for feature flags but **must not** weaken verification gates for escrow.
-- **Paywall surfaces**: Profile, post-plan success, feed “Get seen more” card, and **pre-boost** checkout — aligned with **§5.5** homepage / **§5.6** plans.
+- **Paywall surfaces**: Profile, post-plan success, Discover filter/save/boost/travel upsells, and **pre-boost** checkout — aligned with **§5.5** Discover / **§5.6** plans.
 
 **Account management**
 
-| Action | Notes |
-|--------|--------|
-| Edit profile | From **Profile** tab; same surfaces as post-onboarding |
-| Logout | Ends session; return to auth |
-| Delete account | DSR / retention: follow **§8**; may require support or in-app flow per policy |
+| Action | Route / notes |
+|--------|----------------|
+| **Edit profile** | `/settings/edit-profile` — photos (primary order), intro video, bio, prompts, interests, languages, intent, location, preferences; **ProfileCardPreview** |
+| **Verification status** | `/settings/verification` or `/kyc` full wizard |
+| **Plan management** | `/settings/plan-management` — host’s meetups, mood shelf, drafts |
+| **Wallet & credits** | `/(tabs)/wallet` — ledger, goodwill credits |
+| **Travel mode** | `/settings/travel` — Premium temporary city |
+| **Notifications** | `/notifications` inbox; `/settings/notifications` push + presence visibility |
+| **Logout** | Profile → confirmation modal |
+| **Delete account** | `/settings/delete-account` — **§8** retention rules |
+
+---
+
+### 5.12 Flow: Member profile & presence
+
+**Flow label:** `Public member profile — trust context`  
+
+**Route:** `/user/[id]` — opened from Discover cards, list rows, chat, plan detail.
+
+| Step | Surface | Notes |
+|------|---------|--------|
+| 1 | **Media gallery** | Ordered photos + intro video (`HostMediaGallery`) |
+| 2 | **Identity** | Name, verified badge, **live presence** caption |
+| 3 | **About** | Bio |
+| 4 | **Connect** | **Message** → opens / resumes 1:1 thread |
+| 5 | **Safety** | **Block** user (hides from feed) |
+
+**Presence:** `PresenceProvider` + heartbeat; visibility prefs in **Notifications & visibility** settings. Host **online / offline** filter on Discover (Premium-adjacent filters).
 
 ---
 
@@ -490,8 +534,11 @@ Industry apps combine **(A) visibility**, **(B) intent & filters**, **(C) undo /
 
 | Capability | Unverified (after onboarding) | Verified |
 |------------|-------------------------------|----------|
-| Use **Plans** tab / browse feed | Yes | Yes |
-| Profile | Yes | Yes |
+| Use **Discover** tab / browse feed (swipe + list) | Yes | Yes |
+| View **member profiles** | Yes (public profiles) | Yes |
+| **Saved** tab | Premium only | Premium only |
+| **Wallet** tab | Yes | Yes |
+| Profile & **edit profile** | Yes | Yes |
 | Messaging | Per trust caps (e.g. requests / limits) | Full (per policy) |
 | **Create plan** | **No — hard gate** | Yes |
 | **Negotiate (gated flows)** | **No — hard gate** | Yes |
@@ -590,17 +637,22 @@ sequenceDiagram
 
 | Area | Screens / surfaces |
 |------|---------------------|
-| Auth | Welcome, signup, OTP, login, reset, security |
-| Onboarding | P1–P5 |
-| KYC | Soft prompt, hard gate, K1–K7 |
-| Profile | Edit, **unverified badge**, link to verification |
-| Plans homepage | Plans tab (Nearby plans); optional: map, search, other profiles |
-| Plans | Create (gated), detail, negotiate (gated); agreement **§5.8** |
-| Escrow | **§5.9** — funding, detail, release, dispute |
-| Chat | **§5.7** — Messages tab (inbox), thread, media, moderation |
-| Support | **§5.10** — tickets, dispute intake |
-| Premium | **§5.11** — paywall, manage |
-| Admin | Verification, moderation, disputes, audit |
+| **Cold start** | Branded splash (`SplashGate`, 5s min), native splash handoff |
+| **Auth** | Login, signup, Google OAuth, forgot/reset password, `/auth/callback` |
+| **Onboarding** | P1–P5 (photos + primary, intro video, location, prompts, preview) |
+| **KYC** | Soft prompt, hard gate, K1–K7 (`/kyc`, `/settings/verification`) |
+| **Discover** | Swipe deck + action buttons, mood timeline, filter sheet, list mode, search |
+| **Member profile** | `/user/[id]` — gallery, presence, message, block |
+| **Plans** | Create wizard (meet → commitment → details → success), detail, negotiate, agreement, interest |
+| **Offers** | Sent / received tab |
+| **Saved** | Premium bookmarks tab |
+| **Escrow** | **§5.9** — `/escrow/[id]`, Paystack checkout |
+| **Wallet** | Ledger + goodwill credits tab |
+| **Chat** | **§5.7** — inbox, engagement strip, thread, media, moderation |
+| **Profile & settings** | Profile hub, edit profile, plan management, travel, privacy, notifications |
+| **Support** | **§5.10** — `/support`, `/disputes`, `/dispute/[planId]` |
+| **Premium** | **§5.11** — `/premium`, checkout, success |
+| **Admin** | `/admin` — verification queue, moderation, disputes |
 
 ### 10.2 Editing & delivery tips
 
@@ -618,7 +670,9 @@ sequenceDiagram
 
 Verification should feel **trustworthy**, **light on data**, **non-intrusive** (soft + hard only where needed), and **easy to complete** (clear steps, resume, friendly retries).
 
-**PDF alignment:** The same intent as the PDF closing section — **lower onboarding friction**, **higher KYC completion**, **stronger trust**, **payment/compliance readiness**, and **low-bandwidth-friendly** capture (short video, compression) — is reflected in **§4**, **§5.1–§5.5** (auth through default Plans homepage), and **§6**.
+**PDF alignment:** The same intent as the PDF closing section — **lower onboarding friction**, **higher KYC completion**, **stronger trust**, **payment/compliance readiness**, and **low-bandwidth-friendly** capture (short video, compression) — is reflected in **§4**, **§5.1–§5.5** (auth through default Discover homepage), and **§6**.
+
+**Last updated:** Reflects branded cold-start splash, six-tab shell (Discover / Messages / Saved / Offers / Wallet / Profile), swipe-first Discover with filter sheet, mood timeline, member profiles, plan create wizard, wallet ledger, and edit-profile preview parity.
 
 ---
 

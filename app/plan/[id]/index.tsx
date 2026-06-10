@@ -9,20 +9,24 @@ import { PlanReportFlagButton, PlanStackScreenHeader } from '@/components/naviga
 import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
 import { ReportSheet } from '@/components/trust/ReportSheet';
 import { VerificationBadge } from '@/components/trust/VerificationBadge';
-import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { addPlanToDeviceCalendar, planCanAddToCalendar } from '@/lib/plans/addPlanToDeviceCalendar';
 import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanner';
-import { PlanBoostActiveModal } from '@/components/plans/PlanBoostActiveModal';
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
 import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngagement';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
+import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
+import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { peekPlanDetailSeed, setPlanDetailSeed } from '@/lib/plans/planDetailSeed';
-import { boostEligibilityFromUser, activatePlanBoost } from '@/lib/premium/boostPlan';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { extendMoodPlan } from '@/lib/plans/moodPlanCooldown';
+import { usePermission } from '@/hooks/usePermission';
+import { checkPermission } from '@/lib/subscription/checkPermission';
+import type { SubscriptionTier } from '@/types/database';
 import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
@@ -32,7 +36,7 @@ import type { DbPlan, DbPlanOffer, OfferStatus } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -165,14 +169,22 @@ export default function PlanOverviewScreen() {
   const [calendarBusy, setCalendarBusy] = useState(false);
   const [reportPlanOpen, setReportPlanOpen] = useState(false);
   const [completionSelfAcked, setCompletionSelfAcked] = useState(false);
-  const [boostConfirmOpen, setBoostConfirmOpen] = useState(false);
-  const [boostActiveOpen, setBoostActiveOpen] = useState(false);
-  const boostPendingRef = useRef<{ premiumSubscriber: boolean; credits: number } | null>(null);
+  const [extendBusy, setExtendBusy] = useState(false);
   const [feedback, setFeedback] = useState<{
     variant: AppFeedbackVariant;
     title: string;
     message: string;
   } | null>(null);
+  const [saveUpgradeOpen, setSaveUpgradeOpen] = useState(false);
+  const [saveUpgradeTier, setSaveUpgradeTier] = useState<SubscriptionTier>('SILVER');
+
+  const isCreatorEarly = !!(plan && user?.id && plan.creator_id === user.id);
+  const { allowed: canSeeInterest } = usePermission('plans.see_all_likes', {
+    skip: !isCreatorEarly,
+  });
+  const { allowed: canExtendMood } = usePermission('mood_plan.extend', {
+    skip: !plan?.is_mood_plan,
+  });
 
   const showFeedback = useCallback(
     (variant: AppFeedbackVariant, title: string, message: string) => {
@@ -340,7 +352,6 @@ export default function PlanOverviewScreen() {
   const moodShelfCopy = planExpiryReason(plan);
   const when = formatPlanWhen(plan);
   const price = formatPlanPrice(plan);
-  const subscriber = isPremiumSubscriber(dbUser);
   const boosted =
     plan.boosted_until != null && new Date(plan.boosted_until).getTime() > Date.now();
   const canCalendar = planCanAddToCalendar(plan);
@@ -375,8 +386,10 @@ export default function PlanOverviewScreen() {
 
   async function toggleSave() {
     if (!user?.id || !plan) return;
-    if (!subscriber) {
-      router.push('/premium' as Href);
+    const perm = await checkPermission(user.id, 'plans.bookmark');
+    if (!perm.allowed) {
+      setSaveUpgradeTier(perm.upgradeTo ?? 'SILVER');
+      setSaveUpgradeOpen(true);
       return;
     }
     const next = !saved;
@@ -385,45 +398,26 @@ export default function PlanOverviewScreen() {
     else setSaved(next);
   }
 
-  function onBoost() {
-    if (!user?.id || !isCreator || moodClosed || !plan) return;
-    const { canBoost, premiumSubscriber, credits } = boostEligibilityFromUser(dbUser);
-    if (!canBoost) {
-      router.push('/premium' as Href);
+  async function onExtendMoodPlan() {
+    if (!user?.id || !plan?.id || extendBusy) return;
+    setExtendBusy(true);
+    const result = await extendMoodPlan(plan.id, user.id);
+    setExtendBusy(false);
+    if (!result.extended) {
+      showFeedback('warning', 'Extend', result.reason ?? 'Could not extend this plan.');
       return;
     }
-    if (boosted && plan.boosted_until) {
-      setBoostActiveOpen(true);
-      return;
-    }
-    boostPendingRef.current = { premiumSubscriber, credits };
-    setBoostConfirmOpen(true);
-  }
-
-  async function onBoostConfirm() {
-    const pending = boostPendingRef.current;
-    if (!pending) return;
-    setBoostConfirmOpen(false);
-    await runBoost(pending.premiumSubscriber, pending.credits);
-  }
-
-  async function runBoost(premiumSubscriber: boolean, credits: number) {
-    const p = plan;
-    if (!user?.id || !p) return;
-    setBusyBoost(true);
-    const { error } = await activatePlanBoost(supabase, {
-      planId: p.id,
-      creatorId: user.id,
-      boostCredits: credits,
-      premiumSubscriber,
-    });
-    setBusyBoost(false);
-    if (error) showFeedback('error', 'Boost', error);
-    else {
-      await refreshProfile();
-      void load();
-      showFeedback('success', 'Boosted', 'Your plan is highlighted in Discover for about 2 hours.');
-    }
+    showFeedback(
+      'success',
+      'Extended',
+      result.new_expires_at
+        ? `Plan extended until ${new Date(result.new_expires_at).toLocaleString(undefined, {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          })}`
+        : 'Plan extended by 24 hours.'
+    );
+    void load();
   }
 
   async function onConfirmAttendance() {
@@ -479,27 +473,16 @@ export default function PlanOverviewScreen() {
         onClose={() => setGateOpen(false)}
         verificationStatus={dbUser?.verification_status}
       />
-      <AppConfirmModal
-        visible={boostConfirmOpen}
-        onClose={() => setBoostConfirmOpen(false)}
-        kicker="Visibility"
-        title="Boost this plan?"
-        message="Your plan will be highlighted in the feed for about 2 hours — more eyes on your meetup while the boost lasts."
-        iconVariant="boost"
-        primaryLabel="Boost plan"
-        onPrimary={onBoostConfirm}
-        busyOn="primary"
-        secondaryLabel="Not now"
-        actionsLayout="row"
+      <UpgradePrompt
+        visible={saveUpgradeOpen}
+        feature="plans.bookmark"
+        requiredTier={saveUpgradeTier}
+        onUpgrade={() => {
+          setSaveUpgradeOpen(false);
+          router.push('/subscription' as Href);
+        }}
+        onDismiss={() => setSaveUpgradeOpen(false)}
       />
-      {plan.boosted_until ? (
-        <PlanBoostActiveModal
-          visible={boostActiveOpen}
-          boostedUntilIso={plan.boosted_until}
-          planTitle={plan.title}
-          onClose={() => setBoostActiveOpen(false)}
-        />
-      ) : null}
       <AppFeedbackModal
         visible={feedback != null}
         onClose={() => setFeedback(null)}
@@ -525,6 +508,11 @@ export default function PlanOverviewScreen() {
         <View style={styles.heroInner}>
           <View style={styles.titleRow}>
             <Text style={styles.title}>{plan.title}</Text>
+            {plan.is_group_plan ? (
+              <View style={styles.groupPill}>
+                <Text style={styles.groupPillTxt}>Group</Text>
+              </View>
+            ) : null}
             {boosted ? (
               <LinearGradient
                 colors={[colors.secondary, '#ff8ba0']}
@@ -580,6 +568,33 @@ export default function PlanOverviewScreen() {
           </LinearGradient>
         </View>
       </View>
+
+      {isCreator && plan.is_mood_plan && !moodClosed && (plan.status === 'negotiating' || plan.status === 'agreed') ? (
+        <Pressable
+          onPress={() => void onExtendMoodPlan()}
+          disabled={
+            extendBusy ||
+            !canExtendMood ||
+            (plan.extension_count ?? 0) >= 1 && plan.host_tier !== 'PLATINUM'
+          }
+          style={({ pressed }) => [styles.extendBtn, pressed && { opacity: 0.92 }]}
+        >
+          <Text style={styles.extendBtnTxt}>
+            {extendBusy
+              ? 'Extending…'
+              : !canExtendMood
+                ? 'Extend (Gold+)'
+                : (plan.extension_count ?? 0) >= 1 && plan.host_tier !== 'PLATINUM'
+                  ? 'Extension used'
+                  : 'Extend plan'}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      <PlanGroupGuestsPanel plan={plan} hostUserId={plan.creator_id} currentUserId={user?.id} />
+      {isCreator && user?.id ? (
+        <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={user.id} />
+      ) : null}
 
       <LinearGradient
         colors={[colors.primary, colors.secondary]}
@@ -718,47 +733,21 @@ export default function PlanOverviewScreen() {
 
       {isCreator ? (
         <View style={styles.rowBtns}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void onBoost()}
-            disabled={busyBoost || moodClosed}
-            style={({ pressed }) => [
-              styles.creatorActionFlex,
-              (busyBoost || moodClosed) && styles.creatorActionDisabled,
-              pressed && !busyBoost && !moodClosed && { opacity: 0.92 },
-            ]}
-          >
-            <LinearGradient
-              colors={
-                busyBoost || moodClosed
-                  ? [colors.border, colors.border]
-                  : [colors.primary, colors.secondary]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.creatorRowPrimaryGrad}
-            >
-              {busyBoost ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text
-                  style={[
-                    styles.creatorRowPrimaryTxt,
-                    moodClosed && styles.creatorRowPrimaryTxtMuted,
-                  ]}
-                  numberOfLines={1}
-                >
-                  Boost plan
-                </Text>
-              )}
-            </LinearGradient>
-          </Pressable>
+          <PlanBoostControls
+            planId={plan.id}
+            creatorId={plan.creator_id}
+            dbUser={dbUser}
+            boosted={boosted}
+            moodClosed={moodClosed}
+            onBoosted={() => void load()}
+            onShowFeedback={(title, message) => showFeedback('success', title, message)}
+          />
           <Pressable
             accessibilityRole="button"
             onPress={() =>
-              subscriber
+              canSeeInterest
                 ? router.push(`/plan/${id}/interest` as Href)
-                : router.push('/premium' as Href)
+                : router.push('/subscription' as Href)
             }
             style={({ pressed }) => [styles.creatorActionFlex, pressed && { opacity: 0.92 }]}
           >
@@ -770,7 +759,7 @@ export default function PlanOverviewScreen() {
             >
               <View style={styles.creatorOutlineInner}>
                 <Text style={styles.dualSaveLabel} numberOfLines={2} adjustsFontSizeToFit>
-                  {subscriber ? 'Who is interested?' : 'Interest (Premium)'}
+                  {canSeeInterest ? 'Who is interested?' : 'Interest (Gold+)'}
                 </Text>
               </View>
             </LinearGradient>
@@ -1083,6 +1072,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
   },
   boostPillTxt: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  groupPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(108,99,255,0.15)',
+  },
+  groupPillTxt: { fontSize: 11, fontWeight: '900', color: colors.primary },
+  extendBtn: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    paddingVertical: 12,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+    alignItems: 'center',
+  },
+  extendBtnTxt: { fontSize: 14, fontWeight: '800', color: '#B45309' },
   desc: { fontSize: 15, color: colors.textMuted, marginTop: 10, lineHeight: 22 },
   metaBlock: { marginTop: spacing.md, gap: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 10 },

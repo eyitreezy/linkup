@@ -1,11 +1,10 @@
 import {
-  getEscrowPaystackCallbackUrl,
-  isAllowedPaystackCallbackUrl,
-  paystackCallbackUrlError,
-} from '@/lib/paystack/callbackUrl';
-import { invokePaystackInitialize } from '@/lib/paystack/invokePaystackInitialize';
-import { openPaystackCheckoutInBrowser } from '@/lib/paystack/openPaystackBrowser';
-import { isSupabaseConfigured } from '@/lib/supabase';
+  flutterwaveCallbackUrlError,
+  getEscrowCallbackUrl,
+  isAllowedFlutterwaveCallbackUrl,
+} from '@/lib/flutterwave/callbackUrl';
+import { openFlutterwaveCheckoutInBrowser } from '@/lib/flutterwave/openFlutterwaveBrowser';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 export type OpenEscrowCheckoutArgs = {
   email: string;
@@ -16,8 +15,8 @@ export type OpenEscrowCheckoutArgs = {
   escrowLeg?: 'host' | 'guest';
 };
 
-/** Opens Paystack checkout via server initialize (required — no legacy URL fallback). */
-export async function openEscrowPaystackCheckout(args: OpenEscrowCheckoutArgs): Promise<{
+/** Opens Flutterwave checkout via server initialize (required — no client-side amount). */
+export async function openEscrowCheckout(args: OpenEscrowCheckoutArgs): Promise<{
   ok: boolean;
   error?: string;
   reference: string;
@@ -30,43 +29,46 @@ export async function openEscrowPaystackCheckout(args: OpenEscrowCheckoutArgs): 
   if (!isSupabaseConfigured) {
     return {
       ok: false,
-      error: 'Supabase is not configured. Escrow checkout requires paystack-initialize on the server.',
+      error: 'Supabase is not configured. Escrow checkout requires create-escrow-payment on the server.',
       reference: '',
     };
   }
 
-  const callbackUrl = getEscrowPaystackCallbackUrl(args.escrowId);
-  if (!isAllowedPaystackCallbackUrl(callbackUrl)) {
-    return { ok: false, error: paystackCallbackUrlError(), reference: '' };
+  const callbackUrl = getEscrowCallbackUrl(args.escrowId);
+  if (!isAllowedFlutterwaveCallbackUrl(callbackUrl)) {
+    return { ok: false, error: flutterwaveCallbackUrlError(), reference: '' };
   }
 
-  const init = await invokePaystackInitialize({
-    kind: 'escrow',
-    email: args.email.trim(),
-    amount_kobo: args.amountKobo,
-    callback_url: callbackUrl,
-    escrow_id: args.escrowId,
-    plan_id: args.planId,
-    escrow_leg: args.escrowLeg,
+  const { data, error } = await supabase.functions.invoke('create-escrow-payment', {
+    body: {
+      escrow_id: args.escrowId,
+      plan_id: args.planId,
+      escrow_leg: args.escrowLeg,
+    },
   });
 
-  if (!init.ok) {
-    return { ok: false, error: init.error, reference: '' };
+  if (error) {
+    return { ok: false, error: error.message, reference: '' };
   }
 
-  const opened = await openPaystackCheckoutInBrowser(init.data.authorization_url, callbackUrl);
+  const row = data as { payment_link?: string; tx_ref?: string; error?: string } | null;
+  if (!row?.payment_link || !row.tx_ref) {
+    return { ok: false, error: row?.error ?? 'Could not start escrow checkout.', reference: '' };
+  }
+
+  const opened = await openFlutterwaveCheckoutInBrowser(row.payment_link, callbackUrl);
   if (!opened.ok) {
     return {
       ok: false,
       error: opened.error,
-      reference: init.data.reference,
-      url: init.data.authorization_url,
+      reference: row.tx_ref,
+      url: row.payment_link,
     };
   }
 
   return {
     ok: true,
-    reference: init.data.reference,
-    url: init.data.authorization_url,
+    reference: row.tx_ref,
+    url: row.payment_link,
   };
 }

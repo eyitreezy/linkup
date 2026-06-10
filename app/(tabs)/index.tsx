@@ -15,6 +15,9 @@ import { PlansFab } from '@/components/plans/PlansFab';
 import { PlansFeedSkeleton } from '@/components/plans/PlansFeedSkeleton';
 import { PlansKycBanner } from '@/components/plans/PlansKycBanner';
 import { PlansLocationPrompt } from '@/components/plans/PlansLocationPrompt';
+import { SilverTrialWelcomeModal } from '@/components/subscription/SilverTrialWelcomeModal';
+import { TrialBanner } from '@/components/TrialBanner';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PremiumFeaturePaywallModal } from '@/components/premium/PremiumFeaturePaywallModal';
 import { PlansSearchBar } from '@/components/plans/PlansSearchBar';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -22,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { parseStoredFeedFilters } from '@/lib/discovery/parseStoredFeedFilters';
+import { swipeFabBottomOffset } from '@/lib/discovery/swipeLayout';
 import { filterPlansByMood, type DiscoveryMood } from '@/lib/discovery/moodFilter';
 import { distanceKm } from '@/lib/location';
 import { fetchLatestBidderOffersByPlanIds } from '@/lib/plans/fetchLatestBidderOffersByPlans';
@@ -31,11 +35,14 @@ import {
   mergePlansWithProfiles,
   type PlanRowFromDb,
 } from '@/lib/plans/planFeedMerge';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
+import { moodReachVisibleToViewer } from '@/lib/plans/moodReachFilter';
 import { prefetchPlanDetail, seedPlanDetailFromFeed } from '@/lib/plans/planDetailSeed';
 import { derivePresenceUi, hostPresenceMatchesFilter, resolveHostPresenceKind } from '@/lib/presence/derivePresenceUi';
 import { fetchPresenceMap } from '@/lib/presence/presenceHeartbeat';
-import { isPremiumSubscriber } from '@/lib/premium/access';
+import { usePermission } from '@/hooks/usePermission';
+import { hasActiveSilverTrial } from '@/lib/subscription/effectiveTier';
+import type { SubscriptionTier } from '@/types/database';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { isUserVerified, requiresVerificationGate } from '@/lib/verification/access';
 import type { DbPlanOffer, DbProfile, DbUserPresence } from '@/types/database';
@@ -52,7 +59,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -122,8 +128,6 @@ export default function PlansScreen() {
   useShowTabBarOnFocus();
   const tabBarScroll = useTabBarScrollProps();
   const tabBarInset = useTabBarVisibilityOptional()?.tabBarInset ?? DEFAULT_TAB_BAR_INSET;
-  /** Pass / like / info row (~68px buttons + vertical padding). */
-  const swipeActionsClearance = 88;
   const { user, profile, dbUser } = useAuth();
   const [rows, setRows] = useState<PlanFeedRow[]>([]);
   const [perm, setPerm] = useState<Location.PermissionStatus | null>(null);
@@ -146,14 +150,17 @@ export default function PlansScreen() {
   const radiusKm = profile?.radius_km ? Number(profile.radius_km) : 50;
   const userLat = coords?.lat ?? profile?.latitude ?? null;
   const userLng = coords?.lng ?? profile?.longitude ?? null;
-  const subscriber = isPremiumSubscriber(dbUser);
+  const { allowed: canAdvancedFilters } = usePermission('discover.advanced_filters');
+  const { allowed: canTravelMode } = usePermission('discover.travel_mode');
+  const { allowed: canUndoSwipe } = usePermission('discover.undo_swipe');
+  const canDismissSwipe = canUndoSwipe;
   const travel = profile?.preferences?.travel_mode ?? null;
   const effectiveLat =
-    subscriber && travel?.latitude != null ? travel.latitude : userLat;
+    canTravelMode && travel?.latitude != null ? travel.latitude : userLat;
   const effectiveLng =
-    subscriber && travel?.longitude != null ? travel.longitude : userLng;
+    canTravelMode && travel?.longitude != null ? travel.longitude : userLng;
   const headerLocationLabel =
-    subscriber && travel?.label ? `${travel.label} · Travel` : cityLabel;
+    canTravelMode && travel?.label ? `${travel.label} · Travel` : cityLabel;
 
   const [feedFilter, setFeedFilter] = useState<FeedFilterState>({
     maxDistanceKm: radiusKm,
@@ -165,6 +172,11 @@ export default function PlansScreen() {
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [travelPaywallOpen, setTravelPaywallOpen] = useState(false);
+  const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState('discover.travel_mode');
+  const [upgradeTier, setUpgradeTier] = useState<SubscriptionTier>('GOLD');
+  const [silverWelcomeOpen, setSilverWelcomeOpen] = useState(false);
   const [hiddenPlanIds, setHiddenPlanIds] = useState<string[]>([]);
   const [lastHiddenId, setLastHiddenId] = useState<string | null>(null);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
@@ -230,6 +242,12 @@ export default function PlansScreen() {
       if (hidden.has(row.id)) return false;
       if (blocked.has(row.creator_id)) return false;
       if (user?.id && row.creator_id === user.id) return true;
+      if (
+        row.is_mood_plan &&
+        !moodReachVisibleToViewer(row, user?.id ?? null, effectiveLat, effectiveLng, maxKm)
+      ) {
+        return false;
+      }
       if (feedFilter.clientFiltersActive) {
         if (feedFilter.verifiedHostsOnly && !row.creatorProfile?.verified_badge) return false;
         const price = row.starting_price_cents;
@@ -642,14 +660,16 @@ export default function PlansScreen() {
 
   const dismissRow = useCallback(
     (id: string) => {
-      if (!subscriber) {
-        router.push('/premium' as Href);
+      if (!canUndoSwipe) {
+        setUpgradeFeature('discover.undo_swipe');
+        setUpgradeTier('GOLD');
+        setUpgradeOpen(true);
         return;
       }
       setHiddenPlanIds((prev) => [...prev, id]);
       setLastHiddenId(id);
     },
-    [subscriber]
+    [canUndoSwipe]
   );
 
   function undoHide() {
@@ -659,21 +679,37 @@ export default function PlansScreen() {
   }
 
   const onPressDiscoverLocation = useCallback(() => {
-    if (subscriber) {
+    if (canTravelMode) {
       router.push('/settings/travel' as Href);
       return;
     }
-    setTravelPaywallOpen(true);
-  }, [subscriber]);
+    setUpgradeFeature('discover.travel_mode');
+    setUpgradeTier('GOLD');
+    setUpgradeOpen(true);
+  }, [canTravelMode]);
 
   const onGoPremiumFromTravelPaywall = useCallback(() => {
     setTravelPaywallOpen(false);
-    router.push('/premium' as Href);
+    router.push('/subscription' as Href);
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || !dbUser?.silver_trial_activated_at || !hasActiveSilverTrial(dbUser)) return;
+    const key = `silver_trial_welcome_seen_${user.id}`;
+    void AsyncStorage.getItem(key).then((seen) => {
+      if (!seen) setSilverWelcomeOpen(true);
+    });
+  }, [user?.id, dbUser?.silver_trial_activated_at, dbUser?.silver_trial_expires_at]);
 
   const feedBanner = useMemo(
     () => (
       <>
+        <TrialBanner
+          dbUser={dbUser}
+          dismissed={trialBannerDismissed}
+          onDismiss={() => setTrialBannerDismissed(true)}
+          onUpgrade={() => router.push('/subscription' as Href)}
+        />
         {unverified ? <PlansKycBanner visible /> : null}
         {showLocPrompt ? (
           <PlansLocationPrompt
@@ -692,7 +728,7 @@ export default function PlansScreen() {
         <MoodTimelineCarousel rows={moodTimelineRows} onOpenPlan={openPlanFromFeed} />
       </>
     ),
-    [unverified, showLocPrompt, error, onAllowLocation, retryLoad, moodTimelineRows, openPlanFromFeed]
+    [unverified, showLocPrompt, error, onAllowLocation, retryLoad, moodTimelineRows, openPlanFromFeed, dbUser, trialBannerDismissed]
   );
 
   const searchActive = debouncedSearchQuery.trim().length > 0;
@@ -711,12 +747,12 @@ export default function PlansScreen() {
 
   const onSwipePass = useCallback(
     (row: PlanFeedRow) => {
-      if (subscriber) {
+      if (canDismissSwipe) {
         setHiddenPlanIds((prev) => [...prev, row.id]);
         setLastHiddenId(row.id);
       }
     },
-    [subscriber]
+    [canDismissSwipe]
   );
 
   const listEmpty =
@@ -763,7 +799,7 @@ export default function PlansScreen() {
         userOffer={bidderOffersByPlan[item.id]}
         viewerProfile={profile}
         creatorPresence={presenceByUser[item.creator_id] ?? null}
-        subscriber={subscriber}
+        subscriber={canDismissSwipe}
         onOpenPlan={openPlanFromFeed}
         onOfferRow={onPressOffer}
         onDismissRow={dismissRow}
@@ -775,7 +811,7 @@ export default function PlansScreen() {
       bidderOffersByPlan,
       profile,
       presenceByUser,
-      subscriber,
+      canDismissSwipe,
       openPlanFromFeed,
       onPressOffer,
       dismissRow,
@@ -783,17 +819,6 @@ export default function PlansScreen() {
   );
 
   const showSwipe = feedMode === 'swipe' && !error;
-
-  const { height: winH } = useWindowDimensions();
-  const hasMoodLane = moodTimelineRows.length > 0;
-  const swipeDeckMinHeight = useMemo(() => {
-    const moodLaneH = hasMoodLane ? 76 : 0;
-    const headerH = 52;
-    const actionsH = 76;
-    const buffer = 16;
-    const overhead = headerH + moodLaneH + actionsH + swipeActionsClearance + tabBarInset + buffer;
-    return Math.max(440, Math.round(winH - overhead));
-  }, [winH, hasMoodLane, tabBarInset, swipeActionsClearance]);
 
   useEffect(() => {
     if (!showSwipe || !hasMore || loadingMore || initialLoading || error) return;
@@ -834,14 +859,14 @@ export default function PlansScreen() {
         <PlansFilterSheet
           visible
           onClose={() => setFilterOpen(false)}
-          isPremium={subscriber}
+          isPremium={canAdvancedFilters}
           initial={feedFilter}
           discoveryMood={discoveryMood}
           feedMode={feedMode}
           baseRadiusKm={radiusKm}
           onUpgrade={() => {
             setFilterOpen(false);
-            router.push('/premium' as Href);
+            router.push('/subscription' as Href);
           }}
           onApply={(next, nextMood, nextFeedMode) => {
             setFeedFilter(next);
@@ -882,14 +907,33 @@ export default function PlansScreen() {
         onGoPremium={onGoPremiumFromTravelPaywall}
         kicker="Travel mode"
         title="Explore anywhere"
-        message="Subscribe to Premium to browse meetups as if you were in another city. Your home base stays saved — turn travel mode off anytime."
+        message="Upgrade to Gold to browse meetups as if you were in another city. Your home base stays saved — turn travel mode off anytime."
       />
       <NearbyPlansHeader
         locationLabel={headerLocationLabel}
         onPressLocation={onPressDiscoverLocation}
         onPressFilter={() => setFilterOpen(true)}
-        showUndo={subscriber && !!lastHiddenId}
+        showUndo={canUndoSwipe && !!lastHiddenId}
         onUndoLastHide={undoHide}
+      />
+      <UpgradePrompt
+        visible={upgradeOpen}
+        feature={upgradeFeature}
+        requiredTier={upgradeTier}
+        onUpgrade={() => {
+          setUpgradeOpen(false);
+          router.push('/subscription' as Href);
+        }}
+        onDismiss={() => setUpgradeOpen(false)}
+      />
+      <SilverTrialWelcomeModal
+        visible={silverWelcomeOpen}
+        onContinue={() => {
+          setSilverWelcomeOpen(false);
+          if (user?.id) {
+            void AsyncStorage.setItem(`silver_trial_welcome_seen_${user.id}`, '1');
+          }
+        }}
       />
       {feedMode === 'list' ? (
         <PlansSearchBar
@@ -918,7 +962,7 @@ export default function PlansScreen() {
               listEmpty
             )
           ) : (
-            <>
+            <View style={styles.swipeStage}>
               <View style={styles.swipeDeckZone}>
                 <PlansSwipeDeck
                   ref={swipeDeckRef}
@@ -930,7 +974,7 @@ export default function PlansScreen() {
                   onSwipeRight={onSwipeInterested}
                   onSwipeLeft={onSwipePass}
                   onPressCard={(row) => openPlanFromFeed(row)}
-                  minDeckHeight={swipeDeckMinHeight}
+                  layoutMode="fill"
                 />
               </View>
               <View style={[styles.swipeActionsZone, { paddingBottom: tabBarInset + spacing.xs }]}>
@@ -943,7 +987,7 @@ export default function PlansScreen() {
                   }}
                 />
               </View>
-            </>
+            </View>
           )}
           {loadingMore ? (
             <ActivityIndicator style={styles.footerSpinner} color={colors.primary} />
@@ -980,7 +1024,7 @@ export default function PlansScreen() {
         onPress={goCreatePlan}
         bottomOffset={
           showSwipe && !initialLoading && (standardDiscoverRows.length > 0 || moodTimelineRows.length > 0)
-            ? tabBarInset + swipeActionsClearance + spacing.sm
+            ? swipeFabBottomOffset(tabBarInset)
             : tabBarInset + spacing.md
         }
         includeSafeAreaInset={false}
@@ -994,17 +1038,20 @@ const styles = StyleSheet.create({
   gradientBg: { ...StyleSheet.absoluteFillObject },
   swipeColumn: { flex: 1, minHeight: 0 },
   swipeFeedStrip: { flexShrink: 0, flexGrow: 0 },
-  swipeDeckZone: {
-    flexGrow: 1,
-    flexShrink: 1,
+  swipeStage: {
+    flex: 1,
     minHeight: 0,
-    justifyContent: 'flex-start',
+    justifyContent: 'flex-end',
+  },
+  swipeDeckZone: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'flex-end',
   },
   swipeActionsZone: {
-    flexGrow: 0,
     flexShrink: 0,
     justifyContent: 'center',
-    paddingTop: spacing.xs,
+    alignItems: 'center',
   },
   list: { flex: 1, backgroundColor: 'transparent' },
   listContentPremium: { paddingBottom: 120, flexGrow: 1, paddingTop: spacing.xs },

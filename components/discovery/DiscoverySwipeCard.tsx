@@ -1,6 +1,7 @@
 /**
  * Full-bleed discovery card — profile-first, fast scanning.
  */
+import { TierBadge } from '@/components/TierBadge';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
@@ -156,6 +157,9 @@ function DiscoverySwipeCardInner({ row, distanceKm, presence, onPress }: Props) 
             {name}
             {age != null ? <Text style={styles.age}> · {age}</Text> : null}
           </Text>
+          {row.creatorProfile?.subscription_badge ? (
+            <TierBadge tier={row.creatorProfile.subscription_badge} compact />
+          ) : null}
           <HostPresenceChip presence={presence ?? null} variant="onDark" />
         </View>
         <Text style={styles.dist} numberOfLines={1}>

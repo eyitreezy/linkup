@@ -1,4 +1,4 @@
-/** Demo premium tiers — prices in Paystack minor units (kobo for NGN). */
+/** Legacy demo premium tiers — superseded by /subscription Flutterwave tiers. */
 
 export type PremiumTierId = 'weekly' | 'monthly' | 'quarterly';
 

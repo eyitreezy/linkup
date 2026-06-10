@@ -1,6 +1,7 @@
 /**
- * Lightweight last-read timestamps for unread dots (client-only; replace with server read receipts later).
+ * Last-read timestamps for unread dots — local cache + server read cursor.
  */
+import { markConversationRead } from '@/lib/messaging/conversationReads';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = '@linkup/inbox_last_read_v1';
@@ -16,8 +17,16 @@ export async function getLastReadMap(): Promise<Record<string, string>> {
   }
 }
 
-export async function setConversationLastRead(conversationId: string, iso: string): Promise<void> {
+export async function setConversationLastRead(
+  conversationId: string,
+  iso: string,
+  messageId?: string | null
+): Promise<void> {
   const map = await getLastReadMap();
-  map[conversationId] = iso;
-  await AsyncStorage.setItem(KEY, JSON.stringify(map));
+  const prev = map[conversationId];
+  if (!prev || new Date(iso) > new Date(prev)) {
+    map[conversationId] = iso;
+    await AsyncStorage.setItem(KEY, JSON.stringify(map));
+  }
+  void markConversationRead(conversationId, messageId ?? null);
 }

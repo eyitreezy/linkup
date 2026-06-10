@@ -1,4 +1,6 @@
+import { TierBadge } from '@/components/TierBadge';
 import { PremiumBadge } from '@/components/profile/PremiumBadge';
+import type { SubscriptionTier } from '@/types/database';
 import { colors, radius, spacing } from '@/constants/theme';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +15,7 @@ type Props = {
   /** Presence / visibility summary for own profile. */
   activityHint?: string | null;
   showPremium?: boolean;
+  subscriptionTier?: SubscriptionTier;
   /** Opens notifications & visibility (optional). */
   onPressVisibilityHint?: () => void;
 };
@@ -26,6 +29,7 @@ export function ProfileUserHeader({
   verified,
   activityHint,
   showPremium,
+  subscriptionTier = 'FREE',
   onPressVisibilityHint,
 }: Props) {
   return (
@@ -49,6 +53,12 @@ export function ProfileUserHeader({
         <Text style={styles.name} numberOfLines={2}>
           {name}
         </Text>
+
+        {subscriptionTier !== 'FREE' ? (
+          <View style={styles.tierRow}>
+            <TierBadge tier={subscriptionTier} />
+          </View>
+        ) : null}
 
         {email ? (
           <View style={styles.emailRow}>
@@ -146,6 +156,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.45,
     lineHeight: 30,
   },
+  tierRow: { marginTop: 6, marginBottom: 2 },
   emailRow: {
     flexDirection: 'row',
     alignItems: 'center',

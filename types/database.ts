@@ -107,18 +107,31 @@ export interface DbUserPresence {
 }
 
 export type SubscriptionStatus = 'none' | 'active' | 'expired';
+export type SubscriptionTier = 'FREE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+export type BillingCycle = 'monthly' | 'annual';
 
 export interface DbUser {
   id: string;
   email: string | null;
   account_status: AccountStatus;
   verification_status: UserVerification;
-  /** 1 = standard KYC; 2 = enhanced (e.g. BVN) for Pattern C / high limits */
-  kyc_tier?: 1 | 2;
+  /** 0 = none; 1 = Tier 1 KYC; 2/3 reserved for future phases */
+  kyc_tier?: 0 | 1 | 2 | 3;
   premium_until: string | null;
   /** Present after migration `20240415000000_premium_engagement_blocks`; treat missing as `none`. */
   subscription_status?: SubscriptionStatus;
   boost_credits: number;
+  /** Flutterwave subscription tier — separate from KYC tier */
+  subscription_tier?: SubscriptionTier;
+  billing_cycle?: BillingCycle | null;
+  subscription_expires_at?: string | null;
+  flutterwave_customer_id?: string | null;
+  flutterwave_subscription_code?: string | null;
+  silver_trial_activated_at?: string | null;
+  silver_trial_expires_at?: string | null;
+  gold_trial_activated_at?: string | null;
+  gold_trial_expires_at?: string | null;
+  has_been_silver_subscriber?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -149,6 +162,9 @@ export interface DbProfile {
   ai_trust_score: number | null;
   /** Public “verified host” flag; kept in sync with `users.verification_status` via DB trigger — prefer updating the request/user row, not this field directly. */
   verified_badge: boolean;
+  /** Public subscription badge — synced from users tier/trials via DB trigger */
+  subscription_badge?: 'SILVER' | 'GOLD' | 'PLATINUM' | null;
+  spotlight_until?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -184,7 +200,7 @@ export interface DbPlan {
   starting_price_cents: number | null;
   currency: string;
   status: PlanStatus;
-  visibility: 'public' | 'radius' | 'friends';
+  visibility: 'public' | 'radius' | 'friends' | 'premium';
   /** Hidden from discovery feeds when moderation escalates */
   is_suppressed?: boolean;
   boosted_until: string | null;
@@ -221,6 +237,18 @@ export interface DbPlan {
   negotiation_expires_at?: string | null;
   spotlight_enabled?: boolean;
   duration_minutes: number | null;
+  is_group_plan?: boolean;
+  max_free_guests?: number | null;
+  max_premium_guests?: number | null;
+  max_guests?: number | null;
+  multi_city?: boolean;
+  city_ids?: string[] | null;
+  mood_reach?: 'city' | 'city_adjacent' | 'city_widest' | 'all_cities' | null;
+  extension_count?: number;
+  is_weekend_plan?: boolean;
+  host_tier?: string | null;
+  host_tier_rank?: number;
+  completed_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -329,6 +357,8 @@ export interface DbReport {
 export interface DbEscrowTransaction {
   id: string;
   plan_id: string;
+  offer_id?: string | null;
+  group_plan_index?: number | null;
   payer_id: string;
   payee_id: string;
   host_id: string | null;

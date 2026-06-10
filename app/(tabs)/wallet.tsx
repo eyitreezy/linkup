@@ -2,6 +2,7 @@
  * Hybrid MVP wallet — ledger + goodwill; premium dating-app visuals (trust + monetization).
  */
 import { Screen } from '@/components/Screen';
+import { WalletSkeleton } from '@/components/wallet/WalletSkeleton';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -10,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
-import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -138,7 +139,7 @@ export default function WalletScreen() {
           }
         >
           {loading ? (
-            <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} size="large" />
+            <WalletSkeleton />
           ) : (
             <>
               <LinearGradient

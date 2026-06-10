@@ -7,8 +7,7 @@ import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { colors, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { Dimensions, Platform, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   interpolate,
@@ -21,6 +20,7 @@ import Animated, {
 const W = Dimensions.get('window').width;
 const SWIPE_THRESHOLD = 110;
 const TILT_DEG = 12;
+const MIN_DECK_HEIGHT = 420;
 
 export type PlansSwipeDeckRef = {
   swipeLeft: () => void;
@@ -36,7 +36,9 @@ type Props = {
   onSwipeLeft: (row: PlanFeedRow) => void;
   onPressCard: (row: PlanFeedRow) => void;
   presenceForRow: (row: PlanFeedRow) => PresenceUi | null;
-  /** Tall deck target — parent accounts for mood lane + chrome. */
+  /** Fill the parent deck zone (discover swipe stage above action buttons). */
+  layoutMode?: 'fill' | 'fixed';
+  /** Used only when `layoutMode` is `fixed`. */
   minDeckHeight?: number;
 };
 
@@ -50,16 +52,15 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
     onSwipeLeft,
     onPressCard,
     presenceForRow,
+    layoutMode = 'fill',
     minDeckHeight,
   },
   ref
 ) {
-  const { height: winH } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const deckHeight = Math.max(
-    minDeckHeight ?? 0,
-    Math.round(Math.max(440, Math.min(winH * 0.68, winH - insets.top - insets.bottom - 200)))
-  );
+  const fillParent = layoutMode === 'fill';
+  const deckHeight = fillParent
+    ? undefined
+    : Math.max(minDeckHeight ?? 0, MIN_DECK_HEIGHT);
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -146,17 +147,23 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
 
   if (!top) {
     return (
-      <View style={styles.done}>
-        <Text style={styles.doneEmoji}>✨</Text>
-        <Text style={styles.doneTitle}>You’re all caught up</Text>
-        <Text style={styles.doneSub}>Open filters to switch views or pull to refresh for more meetup ideas nearby.</Text>
+      <View style={[styles.wrap, fillParent && styles.wrapFill, styles.doneWrap]}>
+        <View style={styles.done}>
+          <Text style={styles.doneEmoji}>✨</Text>
+          <Text style={styles.doneTitle}>You’re all caught up</Text>
+          <Text style={styles.doneSub}>Open filters to switch views or pull to refresh for more meetup ideas nearby.</Text>
+        </View>
       </View>
     );
   }
 
+  const stackStyle = fillParent
+    ? styles.cardStackFill
+    : [styles.cardStack, { height: deckHeight, minHeight: deckHeight }];
+
   return (
-    <View style={styles.wrap}>
-      <View style={[styles.cardStack, { height: deckHeight, minHeight: deckHeight }]}>
+    <View style={[styles.wrap, fillParent && styles.wrapFill]}>
+      <View style={stackStyle}>
         {next ? (
           <View style={[styles.cardFace, styles.cardBehind]} pointerEvents="none">
             <DiscoverySwipeCard
@@ -203,9 +210,23 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: spacing.xs,
   },
+  wrapFill: {
+    flex: 1,
+    paddingBottom: 0,
+    justifyContent: 'flex-end',
+  },
+  doneWrap: {
+    justifyContent: 'center',
+  },
   cardStack: {
     position: 'relative',
     width: '100%',
+  },
+  cardStackFill: {
+    position: 'relative',
+    width: '100%',
+    flex: 1,
+    minHeight: MIN_DECK_HEIGHT,
   },
   cardFace: {
     ...StyleSheet.absoluteFillObject,

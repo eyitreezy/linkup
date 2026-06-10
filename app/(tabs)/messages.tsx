@@ -4,6 +4,7 @@
 import { PlanEngagementStrip } from '@/components/discovery/PlanEngagementStrip';
 import { ConversationCard } from '@/components/messages/ConversationCard';
 import { MessagesEmptyState } from '@/components/messages/MessagesEmptyState';
+import { MessagesInboxSkeleton } from '@/components/messages/MessagesInboxSkeleton';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 type InboxRow = {
@@ -260,8 +261,11 @@ export default function MessagesInboxScreen() {
 
   const unreadTotal = useMemo(() => rows.filter((r) => r.unread).length, [rows]);
 
-  const listHeader = useMemo(
-    () => (
+  const inboxLoading = !inboxReady;
+
+  const listHeader = useMemo(() => {
+    if (inboxLoading) return null;
+    return (
       <View style={styles.listHeader}>
         <PlanEngagementStrip
           items={engagementItems}
@@ -283,9 +287,8 @@ export default function MessagesInboxScreen() {
           </View>
         ) : null}
       </View>
-    ),
-    [engagementItems, engagementLoading, engagementPresence, rows.length]
-  );
+    );
+  }, [engagementItems, engagementLoading, engagementPresence, inboxLoading, rows.length]);
 
   return (
     <Screen
@@ -329,7 +332,7 @@ export default function MessagesInboxScreen() {
       </View>
 
       <Animated.FlatList
-        data={rows}
+        data={inboxLoading ? [] : rows}
         keyExtractor={(r) => r.id}
         style={styles.listFlex}
         contentContainerStyle={styles.listContent}
@@ -348,10 +351,8 @@ export default function MessagesInboxScreen() {
           />
         }
         ListEmptyComponent={
-          !inboxReady ? (
-            <View style={styles.emptyLoading}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+          inboxLoading ? (
+            <MessagesInboxSkeleton />
           ) : (
             <MessagesEmptyState onBrowsePlansPress={() => router.push('/(tabs)' as Href)} />
           )
@@ -463,5 +464,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
-  emptyLoading: { paddingTop: spacing.xl * 2, alignItems: 'center' },
 });

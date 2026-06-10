@@ -1,6 +1,7 @@
 /**
  * Public member profile — opened from plan feed avatars (inbox-grade shell).
  */
+import { TierBadge } from '@/components/TierBadge';
 import { Screen } from '@/components/Screen';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -242,6 +243,11 @@ export default function PublicUserScreen() {
               <Text style={styles.leadTitle} numberOfLines={2}>
                 {name}
               </Text>
+              {profile.subscription_badge ? (
+                <View style={styles.tierBadgeRow}>
+                  <TierBadge tier={profile.subscription_badge} />
+                </View>
+              ) : null}
               <Text style={styles.leadSub}>
                 {isSelf
                   ? 'This is how others see your public profile on LinkUp.'
@@ -431,6 +437,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     lineHeight: 34,
   },
+  tierBadgeRow: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   leadSub: {
     fontSize: 15,
     color: colors.textMuted,

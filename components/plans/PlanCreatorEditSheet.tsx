@@ -5,6 +5,7 @@
 import { Button } from '@/components/Button';
 import { Input, authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/Input';
 import { EscrowTrustExplainerCard } from '@/components/plans/create/EscrowTrustExplainerCard';
+import { FundingPatternCard } from '@/components/plans/create/FundingPatternCard';
 import { PlanLocationSection } from '@/components/plans/create/PlanLocationSection';
 import { VisibilityPickCard } from '@/components/plans/create/VisibilityPickCard';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
@@ -21,6 +22,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -74,10 +76,18 @@ const VISIBILITY_OPTIONS: {
   },
 ];
 
-const ESCROW_PATTERNS: { id: EscrowPattern; label: string; sub: string }[] = [
-  { id: 'A', label: 'Host funds', sub: 'You back the invite' },
-  { id: 'B', label: 'Split', sub: 'Both contribute' },
-  { id: 'C', label: 'Guest funds', sub: 'Tier 2 KYC' },
+type IconName = ComponentProps<typeof Ionicons>['name'];
+
+const ESCROW_PATTERNS: {
+  id: EscrowPattern;
+  label: string;
+  sub: string;
+  icon: IconName;
+  tierBadge?: 'SILVER' | 'GOLD';
+}[] = [
+  { id: 'A', label: 'Host funds', sub: 'You back the invite', icon: 'wallet-outline' },
+  { id: 'B', label: 'Split', sub: 'Both contribute equally', icon: 'git-branch-outline', tierBadge: 'SILVER' },
+  { id: 'C', label: 'Guest funds', sub: 'Tier 2 KYC required', icon: 'person-outline', tierBadge: 'GOLD' },
 ];
 
 function priceHint(ngn: number): string {
@@ -87,30 +97,6 @@ function priceHint(ngn: number): string {
   if (ngn < 8000) return 'Coffee & chill plans often land ₦5k–₦12k.';
   if (ngn < 25000) return 'Dinner meetups usually range ₦8k–₦25k.';
   return 'Premium social plans often start ₦10k+ — make sure the story matches the ask.';
-}
-
-function EscrowPatternChip({
-  label,
-  sub,
-  selected,
-  onPress,
-}: {
-  label: string;
-  sub: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.escrowPatternChip, selected && styles.escrowPatternChipOn]}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-    >
-      <Text style={[styles.escrowPatternLabel, selected && styles.escrowPatternLabelOn]}>{label}</Text>
-      <Text style={[styles.escrowPatternSub, selected && styles.escrowPatternSubOn]}>{sub}</Text>
-    </Pressable>
-  );
 }
 
 type Props = {
@@ -577,12 +563,15 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
                     {isPaid ? (
                       <>
                         <Text style={styles.paidSectionLabel}>Who funds commitment?</Text>
-                        <View style={styles.patternRow}>
+                        <Text style={styles.paidHint}>Choose how escrow is funded before your meetup.</Text>
+                        <View style={styles.patternList}>
                           {ESCROW_PATTERNS.map((p) => (
-                            <EscrowPatternChip
+                            <FundingPatternCard
                               key={p.id}
-                              label={p.label}
-                              sub={p.sub}
+                              title={p.label}
+                              description={p.sub}
+                              icon={p.icon}
+                              tierBadge={p.tierBadge}
                               selected={escrowPattern === p.id}
                               onPress={() => setEscrowPattern(p.id)}
                             />
@@ -897,25 +886,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   paidSectionLabel: { fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  paidHint: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
-  patternRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
-  escrowPatternChip: {
-    flexGrow: 1,
-    minWidth: '30%',
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-  },
-  escrowPatternChipOn: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(108,99,255,0.12)',
-  },
-  escrowPatternLabel: { fontWeight: '800', color: colors.text, fontSize: 13 },
-  escrowPatternLabelOn: { color: colors.primary },
-  escrowPatternSub: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  escrowPatternSubOn: { color: colors.text },
+  paidHint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600' },
+  patternList: { gap: spacing.sm, marginBottom: spacing.sm, marginTop: spacing.sm },
   splitBlock: { marginBottom: spacing.md },
   slider: { width: '100%', height: 40 },
   hintCard: {

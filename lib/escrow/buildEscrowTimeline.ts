@@ -1,3 +1,4 @@
+import { getReleaseRecipientLabel } from '@/lib/escrow/releaseCopy';
 import type { DbEscrowDispute, DbEscrowTransaction, DbPlan } from '@/types/database';
 
 export type EscrowTimelineTone = 'done' | 'current' | 'pending' | 'warn';
@@ -19,8 +20,12 @@ function isoOrNull(v: unknown): string | null {
 export function buildEscrowTimeline(
   escrow: DbEscrowTransaction,
   plan: DbPlan | null,
-  dispute: DbEscrowDispute | null
+  dispute: DbEscrowDispute | null,
+  names?: { host?: string; guest?: string }
 ): EscrowTimelineItem[] {
+  const hostName = names?.host ?? 'host';
+  const guestName = names?.guest ?? 'guest';
+  const releaseSubtitle = getReleaseRecipientLabel(escrow.escrow_pattern, hostName, guestName);
   const meta = (escrow.metadata ?? {}) as Record<string, unknown>;
   const paymentInit = isoOrNull(meta.payment_initiated_at);
   const chargeConfirmed = isoOrNull(meta.charge_confirmed_at);
@@ -54,7 +59,7 @@ export function buildEscrowTimeline(
     {
       key: 'pay_confirmed',
       title: 'Payment confirmed',
-      subtitle: escrow.paystack_reference ? `Reference · ${escrow.paystack_reference}` : 'Funds held in escrow.',
+      subtitle: escrow.paystack_reference ? `Payment ref · ${escrow.paystack_reference}` : 'Funds held in escrow.',
       at: paymentConfirmedAt,
       tone: paid ? 'done' : 'pending',
     },
@@ -74,7 +79,7 @@ export function buildEscrowTimeline(
     {
       key: 'release',
       title: 'Funds released',
-      subtitle: 'Released to the host after confirmation.',
+      subtitle: `${releaseSubtitle} after confirmation.`,
       at: escrow.released_at,
       tone:
         escrow.status === 'released'

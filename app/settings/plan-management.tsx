@@ -1,6 +1,10 @@
 /**
  * Creator hub — plans you’ve shared (all, active, mood, expired, drafts, archived).
  */
+import {
+  PlanManagementHeroSkeleton,
+  PlanManagementListSkeleton,
+} from '@/components/plans/PlanManagementSkeleton';
 import { PlanShelfActionConfirmModal } from '@/components/plans/PlanShelfActionConfirmModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { PlanCreatorEditSheet } from '@/components/plans/PlanCreatorEditSheet';
@@ -17,7 +21,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   RefreshControl,
@@ -170,9 +173,12 @@ export default function PlanManagementScreen() {
   const userLat = profile?.latitude ?? null;
   const userLng = profile?.longitude ?? null;
 
-  const load = useCallback(async () => {
-    if (!user?.id || !isSupabaseConfigured) return;
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!user?.id || !isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+    if (!opts?.silent) setLoading(true);
     const { data, error } = await supabase
       .from('plans')
       .select('*, meet_types(*)')
@@ -220,7 +226,7 @@ export default function PlanManagementScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    await load({ silent: true });
     setRefreshing(false);
   }, [load]);
 
@@ -358,10 +364,16 @@ export default function PlanManagementScreen() {
                   <Text style={styles.heroLiveTxt}>Synced</Text>
                 </View>
               </View>
-              <Text style={styles.heroStat}>{plans.length}</Text>
-              <Text style={styles.heroHint}>
-                {activeLivingCount} live in discovery flow · filters below slice this total without hiding the rest.
-              </Text>
+              {loading ? (
+                <PlanManagementHeroSkeleton />
+              ) : (
+                <>
+                  <Text style={styles.heroStat}>{plans.length}</Text>
+                  <Text style={styles.heroHint}>
+                    {activeLivingCount} live in discovery flow · filters below slice this total without hiding the rest.
+                  </Text>
+                </>
+              )}
             </View>
           </LinearGradient>
 
@@ -412,7 +424,7 @@ export default function PlanManagementScreen() {
           </View>
 
           {loading ? (
-            <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} size="large" />
+            <PlanManagementListSkeleton />
           ) : filtered.length === 0 ? (
             <View style={styles.emptyCard}>
               <LinearGradient

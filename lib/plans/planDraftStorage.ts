@@ -31,6 +31,12 @@ type Serialized = {
   moodCustomEnd: string | null;
   moodListingHours: MoodListingHours;
   spotlightBoost: boolean;
+  isGroupPlan: boolean;
+  maxGuests: number;
+  maxFreeGuests: number | null;
+  maxPremiumGuests: number | null;
+  multiCity: boolean;
+  cityIds: string[];
 };
 
 export function serializePlanDraft(d: PlanDraft): string {
@@ -57,6 +63,12 @@ export function serializePlanDraft(d: PlanDraft): string {
     moodCustomEnd: d.moodCustomEnd?.toISOString() ?? null,
     moodListingHours: d.moodListingHours,
     spotlightBoost: d.spotlightBoost,
+    isGroupPlan: d.isGroupPlan,
+    maxGuests: d.maxGuests,
+    maxFreeGuests: d.maxFreeGuests,
+    maxPremiumGuests: d.maxPremiumGuests,
+    multiCity: d.multiCity,
+    cityIds: d.cityIds,
   };
   return JSON.stringify(payload);
 }
@@ -87,6 +99,12 @@ export function deserializePlanDraft(raw: string): PlanDraft | null {
       moodCustomEnd: p.moodCustomEnd ? new Date(p.moodCustomEnd) : null,
       moodListingHours: (p.moodListingHours as MoodListingHours) ?? 3,
       spotlightBoost: !!p.spotlightBoost,
+      isGroupPlan: !!p.isGroupPlan,
+      maxGuests: p.maxGuests ?? 4,
+      maxFreeGuests: p.maxFreeGuests ?? null,
+      maxPremiumGuests: p.maxPremiumGuests ?? null,
+      multiCity: !!p.multiCity,
+      cityIds: Array.isArray(p.cityIds) ? p.cityIds : [],
     };
   } catch {
     return null;

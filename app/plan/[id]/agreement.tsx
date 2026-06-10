@@ -7,11 +7,14 @@ import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgree
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
 import { PreAgreementFullscreenModal } from '@/components/plans/agreement/PreAgreementFullscreenModal';
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
+import { GroupEscrowStatusCard } from '@/components/plans/agreement/GroupEscrowStatusCard';
 import { AgreementPaymentPreviewCard } from '@/components/plans/agreement/AgreementPaymentPreviewCard';
+import { HighValueEscrowNoticeCard } from '@/components/plans/agreement/HighValueEscrowNoticeCard';
 import { MeetupFundingReminderBanner } from '@/components/plans/agreement/MeetupFundingReminderBanner';
 import { PlanSummaryCard } from '@/components/plans/agreement/PlanSummaryCard';
 import { DiscoveryGradientBg } from '@/components/ui/DiscoveryGradientBg';
 import { Screen } from '@/components/Screen';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -22,6 +25,7 @@ import {
   getAgreementPaymentPreview,
   isMeetupWithinHours,
 } from '@/lib/escrow/escrowPaymentPreview';
+import { MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { goToDiscoveryFeed } from '@/lib/navigation/goToDiscoveryFeed';
@@ -102,6 +106,8 @@ export default function PlanAgreementScreen() {
     title: string;
     message: string;
   } | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [counterpartyKycTier, setCounterpartyKycTier] = useState<number | null>(null);
 
   function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
     setFeedback({ variant, title, message });
@@ -139,7 +145,7 @@ export default function PlanAgreementScreen() {
 
       const bidderId = off?.bidder_id ?? pl.creator_id;
 
-      const [{ data: hp }, { data: bp }, { data: confRows }] = await Promise.all([
+      const [{ data: hp }, { data: bp }, { data: confRows }, { data: guestUser }] = await Promise.all([
         supabase
           .from('profiles')
           .select('user_id, display_name, avatar_url, verified_badge')
@@ -151,6 +157,7 @@ export default function PlanAgreementScreen() {
           .eq('user_id', bidderId)
           .maybeSingle(),
         supabase.from('agreement_confirmations').select('user_id').eq('plan_id', pl.id),
+        supabase.from('users').select('kyc_tier').eq('id', bidderId).maybeSingle(),
       ]);
 
       setConfirmationUserIds((confRows ?? []).map((r) => r.user_id as string));
@@ -174,10 +181,19 @@ export default function PlanAgreementScreen() {
           verified: !!bp.verified_badge,
         });
       } else setGuestParty(null);
+      setCounterpartyKycTier((guestUser?.kyc_tier as number | undefined) ?? null);
     } finally {
       setLoadDone(true);
     }
   }, [id]);
+
+  function onHighValueAction() {
+    if (dbUser?.subscription_tier !== 'PLATINUM') {
+      setUpgradeOpen(true);
+      return;
+    }
+    router.push('/kyc' as Href);
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -296,6 +312,17 @@ export default function PlanAgreementScreen() {
   const awaitingPay = planRow.status === 'awaiting_payment';
   const needsConfirm = planRow.status === 'agreed';
 
+  const escrowCents = paymentRequired
+    ? (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? null)
+    : null;
+  const isHighValue = escrowCents != null && escrowCents > MAX_ESCROW_TIER1_CENTS;
+  const highValuePlatinum = dbUser?.subscription_tier === 'PLATINUM';
+  const highValueTier3 = (dbUser?.kyc_tier ?? 1) >= 3;
+  const highValueCounterpartyOk =
+    planRow.escrow_pattern !== 'C' || (counterpartyKycTier ?? 1) >= 3;
+  const highValueReady = !isHighValue || (highValuePlatinum && highValueTier3 && highValueCounterpartyOk);
+  const payerBlockedByHighValue = isHighValue && isBidder && !highValueReady;
+
   async function runConfirmFree() {
     if (busy) return;
     if (requiresVerificationGate(dbUser?.verification_status)) {
@@ -322,6 +349,26 @@ export default function PlanAgreementScreen() {
     const res = await proceedToSecurePayment(supabase, planRow, offerRow);
     setBusy(false);
     if (res.error) {
+      if (res.error === 'high_value_requires_platinum') {
+        setUpgradeOpen(true);
+        return;
+      }
+      if (res.error === 'high_value_requires_kyc_tier3') {
+        showFeedback(
+          'error',
+          'Identity Tier 3 required',
+          'Escrow above ₦5,000,000 requires advanced identity verification (Tier 3). This is available to Platinum members.'
+        );
+        return;
+      }
+      if (res.error === 'high_value_counterparty_requires_kyc_tier3') {
+        showFeedback(
+          'error',
+          'Counterparty verification required',
+          'Your counterparty also needs Tier 3 verification for this amount.'
+        );
+        return;
+      }
       showFeedback('error', 'Payment setup failed', res.error);
       return;
     }
@@ -411,9 +458,9 @@ export default function PlanAgreementScreen() {
     primaryDisabled = false;
   } else if (awaitingPay) {
     if (isBidder) {
-      primaryLabel = 'Continue to secure payment';
-      onPrimary = () => void runProceedPayment();
-      primaryDisabled = busy;
+      primaryLabel = payerBlockedByHighValue ? 'Complete high-value requirements' : 'Continue to secure payment';
+      onPrimary = () => (payerBlockedByHighValue ? onHighValueAction() : void runProceedPayment());
+      primaryDisabled = busy && !payerBlockedByHighValue;
     } else {
       primaryLabel = 'Waiting for secure payment';
       onPrimary = () => {};
@@ -442,9 +489,9 @@ export default function PlanAgreementScreen() {
       onPrimary = () => void runConfirmFree();
       primaryDisabled = busy;
     } else if (isBidder) {
-      primaryLabel = 'Proceed to secure payment';
-      onPrimary = () => void runProceedPayment();
-      primaryDisabled = busy;
+      primaryLabel = payerBlockedByHighValue ? 'Complete high-value requirements' : 'Proceed to secure payment';
+      onPrimary = () => (payerBlockedByHighValue ? onHighValueAction() : void runProceedPayment());
+      primaryDisabled = busy && !payerBlockedByHighValue;
     } else {
       primaryLabel = 'Waiting for guest payment';
       onPrimary = () => {};
@@ -455,9 +502,6 @@ export default function PlanAgreementScreen() {
   const showCancelPlan = needsConfirm || awaitingPay;
   const counterpartDisplay = isHost ? guestParty?.name ?? 'Guest' : hostParty?.name ?? 'Host';
   const inlineMessageAndView = showMessageCta && primaryLabel === 'View plan';
-  const escrowCents = paymentRequired
-    ? (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? null)
-    : null;
 
   const paymentPreview =
     paymentRequired && escrowCents != null && escrowCents > 0
@@ -493,6 +537,19 @@ export default function PlanAgreementScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <DiscoveryGradientBg />
+        <UpgradePrompt
+          visible={upgradeOpen}
+          feature="escrow.high_value"
+          requiredTier="PLATINUM"
+          icon="diamond-outline"
+          title="High-value escrow"
+          message="Commitments above ₦5,000,000 require Platinum membership and Tier 3 identity verification before secure payment."
+          onUpgrade={() => {
+            setUpgradeOpen(false);
+            router.push('/subscription' as Href);
+          }}
+          onDismiss={() => setUpgradeOpen(false)}
+        />
         <VerificationHardGateModal
           visible={gateOpen}
           onClose={() => setGateOpen(false)}
@@ -589,6 +646,20 @@ export default function PlanAgreementScreen() {
               }
             />
           ) : null}
+
+          {isHighValue && paymentRequired && (needsConfirm || awaitingPay) && escrowCents != null ? (
+            <HighValueEscrowNoticeCard
+              amountCents={escrowCents}
+              currency={planRow.currency ?? 'NGN'}
+              escrowPattern={planRow.escrow_pattern}
+              userTier={dbUser?.subscription_tier}
+              userKycTier={dbUser?.kyc_tier}
+              counterpartyKycTier={counterpartyKycTier}
+              onUpgrade={onHighValueAction}
+            />
+          ) : null}
+
+          {plan.is_group_plan && plan.is_paid ? <GroupEscrowStatusCard plan={plan} /> : null}
 
           {paymentPreview && paymentPreviewVariant ? (
             <AgreementPaymentPreviewCard preview={paymentPreview} variant={paymentPreviewVariant} />

@@ -3,6 +3,7 @@
  */
 import { ChatQuickActionsBar } from '@/components/messages/ChatQuickActionsBar';
 import { MessageInput, type MessageInputThreadLook } from '@/components/messages/MessageInput';
+import { ReplyPreviewBar } from '@/components/messages/ReplyPreviewBar';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,8 @@ type Props = {
   onOffer: () => void;
   onPlace: () => void;
   placeBusy?: boolean;
+  replyTo?: { senderLabel: string; preview: string } | null;
+  onCancelReply?: () => void;
 };
 
 export function ChatComposer({
@@ -39,6 +42,8 @@ export function ChatComposer({
   onOffer,
   onPlace,
   placeBusy,
+  replyTo,
+  onCancelReply,
 }: Props) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const iconColor = threadLook?.attachIcon ?? preset.composerAttachIcon;
@@ -47,6 +52,13 @@ export function ChatComposer({
 
   return (
     <View>
+      {replyTo && onCancelReply ? (
+        <ReplyPreviewBar
+          senderLabel={replyTo.senderLabel}
+          preview={replyTo.preview}
+          onCancel={onCancelReply}
+        />
+      ) : null}
       {toolsOpen ? (
         <ChatQuickActionsBar
           preset={preset}

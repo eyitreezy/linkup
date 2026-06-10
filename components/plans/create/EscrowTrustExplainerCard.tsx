@@ -20,7 +20,7 @@ export function EscrowTrustExplainerCard() {
         </View>
       </View>
       <Text style={styles.body}>
-        Funds stay with Paystack until the meetup completes. Cancellation rules are fixed at agreement and enforced on
+        Funds stay in escrow until the meetup completes. Cancellation rules are fixed at agreement and enforced on
         our servers — not negotiated in chat.
       </Text>
       <CancellationPolicyRows rows={COMMITMENT_CANCELLATION_POLICY_ROWS} dense />

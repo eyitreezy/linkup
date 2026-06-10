@@ -22,12 +22,13 @@ import { TYPING_STALE_MS } from '@/lib/presence/presenceConstants';
 import { getVisibilityPrefs, typingVisibleToViewer } from '@/lib/presence/visibilityPrefs';
 import { moderateMessageText } from '@/lib/ai';
 import {
-  CHAT_MESSAGE_COLUMNS,
   CHAT_PAGE_SIZE,
   fetchMessagesOlderThan,
   messageDisplayText,
   mimeToMediaKind,
+  normalizeChatMessageRow,
   parseLegacyImageBody,
+  runMessageSelect,
   type ChatMessageRow,
   type ChatMediaRow,
 } from '@/lib/messaging/chatQueries';
@@ -540,21 +541,24 @@ export default function ChatThreadScreen() {
       created_at: new Date().toISOString(),
       edited_at: null,
       deleted_at: null,
+      reply_to_message_id: null,
     };
     setMessages((p) => [...p, optimistic]);
     setText('');
     setSending(true);
 
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_id: user.id,
-        text: body,
-        moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-      })
-      .select(CHAT_MESSAGE_COLUMNS)
-      .single();
+    const { data, error } = await runMessageSelect((cols) =>
+      supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: user.id,
+          text: body,
+          moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
+        })
+        .select(cols)
+        .single()
+    );
 
     setSending(false);
 
@@ -564,15 +568,17 @@ export default function ChatThreadScreen() {
       return;
     }
 
+    const sentRow = normalizeChatMessageRow(data as Record<string, unknown>);
+
     void persistModerationAfterSend({
       contentType: 'message',
-      contentId: (data as ChatMessageRow).id,
+      contentId: sentRow.id,
       textSample: body,
     });
 
     setMessages((p) => {
       const without = p.filter((m) => m.tempKey !== tempKey);
-      const row = data as ChatMessageRow;
+      const row = sentRow;
       if (without.some((m) => m.id === row.id)) return without;
       return [...without, row];
     });
@@ -606,29 +612,32 @@ export default function ChatThreadScreen() {
         setMessages((p) => p.filter((m) => m.tempKey !== tempKey));
         return;
       }
-      const { data, error } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: user.id,
-          text: snippet,
-          moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-        })
-        .select(CHAT_MESSAGE_COLUMNS)
-        .single();
+      const { data, error } = await runMessageSelect((cols) =>
+        supabase
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: user.id,
+            text: snippet,
+            moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
+          })
+          .select(cols)
+          .single()
+      );
       if (error) {
         setMessages((p) => p.map((m) => (m.tempKey === tempKey ? { ...m, sendFailed: true } : m)));
         Alert.alert('Could not send', error.message);
         return;
       }
+      const sentRow = normalizeChatMessageRow(data as Record<string, unknown>);
       void persistModerationAfterSend({
         contentType: 'message',
-        contentId: (data as ChatMessageRow).id,
+        contentId: sentRow.id,
         textSample: snippet,
       });
       setMessages((p) => {
         const without = p.filter((m) => m.tempKey !== tempKey);
-        const row = data as ChatMessageRow;
+        const row = sentRow;
         if (without.some((m) => m.id === row.id)) return without;
         return [...without, row];
       });
@@ -637,23 +646,25 @@ export default function ChatThreadScreen() {
   );
 
   const softDeleteForEveryone = useCallback(async (messageId: string) => {
-    const { data, error } = await supabase
-      .from('messages')
-      .update({
-        deleted_at: new Date().toISOString(),
-        text: null,
-        body: null,
-        media_id: null,
-      })
-      .eq('id', messageId)
-      .select(CHAT_MESSAGE_COLUMNS)
-      .single();
+    const { data, error } = await runMessageSelect((cols) =>
+      supabase
+        .from('messages')
+        .update({
+          deleted_at: new Date().toISOString(),
+          text: null,
+          body: null,
+          media_id: null,
+        })
+        .eq('id', messageId)
+        .select(cols)
+        .single()
+    );
     if (error) {
       Alert.alert('Could not delete', error.message);
       return;
     }
     if (data) {
-      const row = data as ChatMessageRow;
+      const row = normalizeChatMessageRow(data as Record<string, unknown>);
       setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
       setMediaById((p) => {
         if (!p[messageId]) return p;
@@ -681,16 +692,18 @@ export default function ChatThreadScreen() {
     if (mod.status === 'flagged') {
       Alert.alert('Heads up', 'This message may be reviewed under our safety policies.');
     }
-    const { data, error } = await supabase
-      .from('messages')
-      .update({
-        text: body,
-        edited_at: new Date().toISOString(),
-        moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-      })
-      .eq('id', editModal.messageId)
-      .select(CHAT_MESSAGE_COLUMNS)
-      .single();
+    const { data, error } = await runMessageSelect((cols) =>
+      supabase
+        .from('messages')
+        .update({
+          text: body,
+          edited_at: new Date().toISOString(),
+          moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
+        })
+        .eq('id', editModal.messageId)
+        .select(cols)
+        .single()
+    );
     if (error) {
       Alert.alert('Could not update', error.message);
       return;
@@ -702,7 +715,7 @@ export default function ChatThreadScreen() {
         contentId: editModal.messageId,
         textSample: body,
       });
-      const row = data as ChatMessageRow;
+      const row = normalizeChatMessageRow(data as Record<string, unknown>);
       setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
     }
   }, [editModal, user, conversationId, assertOutgoingContactAllowed]);
@@ -808,23 +821,26 @@ export default function ChatThreadScreen() {
         const ok = await assertOutgoingContactAllowed(caption);
         if (!ok) return;
       }
-      const { data: inserted, error: insErr } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: user.id,
-          text: caption,
-          moderation_status: 'pending',
-        })
-        .select(CHAT_MESSAGE_COLUMNS)
-        .single();
+      const { data: inserted, error: insErr } = await runMessageSelect((cols) =>
+        supabase
+          .from('messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: user.id,
+            text: caption,
+            moderation_status: 'pending',
+          })
+          .select(cols)
+          .single()
+      );
 
       if (insErr || !inserted) {
         Alert.alert('Error', insErr?.message ?? 'Could not create message');
         return;
       }
 
-      const msgId = inserted.id;
+      const insertedRow = normalizeChatMessageRow(inserted as Record<string, unknown>);
+      const msgId = insertedRow.id;
       const path = `${user.id}/${msgId}-${Date.now()}.${ext}`;
       const bytes = await readLocalAssetAsUint8Array(uploadUri);
       const { error: upErr } = await supabase.storage.from('chat-media').upload(path, bytes, {
@@ -869,7 +885,7 @@ export default function ChatThreadScreen() {
         return;
       }
 
-      const finalized: ChatMessageRow = { ...(inserted as ChatMessageRow), media_id: medRow.id };
+      const finalized: ChatMessageRow = { ...insertedRow, media_id: medRow.id };
 
       setMediaById((p) => ({
         ...p,
