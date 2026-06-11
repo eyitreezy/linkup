@@ -6,7 +6,6 @@ import { CreatePlanStickyProgress } from '@/components/plans/create/CreatePlanPr
 import { CreatePlanWizardBack } from '@/components/plans/create/CreatePlanWizardBack';
 import { CreatePlanWizardFooter } from '@/components/plans/create/CreatePlanWizardFooter';
 import { MeetTypeSelectorSection } from '@/components/plans/create/MeetTypeSelectorSection';
-import { MoodPlanFieldsSection } from '@/components/plans/create/MoodPlanFieldsSection';
 import { authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/Input';
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
@@ -271,7 +270,6 @@ export default function CreatePlanStepMeetScreen() {
             </>
           )}
 
-          <MoodPlanFieldsSection />
           </ScrollView>
           <CreatePlanWizardFooter onPress={onContinue} disabled={!stepValid} />
         </View>

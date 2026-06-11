@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { OfferListCard } from '@/components/offers/OfferListCard';
 import { OffersSegmentedControl, type OffersSegment } from '@/components/offers/OffersSegmentedControl';
+import { EngagementCarousel } from '@/components/plans/EngagementCarousel';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +15,7 @@ import {
   fetchSentOffers,
   type OfferDashboardRow,
 } from '@/lib/plans/fetchOffersDashboard';
+import { fetchFeedEngagementCarousel, type EngagementCarouselItem } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { isOfferExpired } from '@/lib/plans/offerRules';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
@@ -55,6 +57,8 @@ export default function OffersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
+  const [engagementItems, setEngagementItems] = useState<EngagementCarouselItem[]>([]);
+  const [engagementLoading, setEngagementLoading] = useState(false);
   const loadBothRef = useRef<() => Promise<void>>(async () => {});
 
   const loadBoth = useCallback(async () => {
@@ -79,9 +83,27 @@ export default function OffersScreen() {
 
   loadBothRef.current = loadBoth;
 
+  const loadEngagement = useCallback(async () => {
+    if (!user?.id || !isSupabaseConfigured) {
+      setEngagementItems([]);
+      setEngagementLoading(false);
+      return;
+    }
+    setEngagementLoading(true);
+    try {
+      const data = await fetchFeedEngagementCarousel(user.id);
+      setEngagementItems(data);
+    } catch {
+      setEngagementItems([]);
+    } finally {
+      setEngagementLoading(false);
+    }
+  }, [user?.id]);
+
   useFocusEffect(
     useCallback(() => {
       void loadBothRef.current();
+      void loadEngagement();
       if (!user?.id || !isSupabaseConfigured) return () => {};
       let debounce: ReturnType<typeof setTimeout> | undefined;
       const ch = supabase
@@ -99,17 +121,17 @@ export default function OffersScreen() {
         if (debounce) clearTimeout(debounce);
         void supabase.removeChannel(ch);
       };
-    }, [user?.id])
+    }, [user?.id, loadEngagement])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadBothRef.current();
+      await Promise.all([loadBothRef.current(), loadEngagement()]);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [loadEngagement]);
 
   const list = segment === 'sent' ? sent : received;
 
@@ -200,6 +222,8 @@ export default function OffersScreen() {
             </View>
           ) : null}
         </View>
+
+        <EngagementCarousel items={engagementItems} loading={engagementLoading} />
 
         <OffersSegmentedControl
           value={segment}

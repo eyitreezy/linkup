@@ -144,6 +144,14 @@ type Props = {
   cardW: number;
   index: number;
   onOpenPlan: (row: PlanFeedRow) => void;
+  currentUserId?: string;
+};
+
+const REACH_LABELS: Record<string, string> = {
+  city: 'City-wide',
+  city_adjacent: 'City + nearby',
+  city_widest: 'Widest reach',
+  all_cities: 'All cities',
 };
 
 export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
@@ -151,12 +159,16 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
   cardW,
   index,
   onOpenPlan,
+  currentUserId,
 }: Props) {
   const { width: winW } = useWindowDimensions();
   const meta = useMemo(() => moodDiscoverMeta(row), [row]);
   const name = row.creatorProfile?.display_name?.trim() || 'Host';
   const avatar = row.creatorProfile?.avatar_url;
   const isLive = useMoodWindowLive(row.mood_expires_at);
+  const isOwnPlan = !!(currentUserId && row.creator_id === currentUserId);
+  const reachLabel =
+    isOwnPlan && row.mood_reach ? REACH_LABELS[row.mood_reach] ?? row.mood_reach : null;
 
   const [hovered, setHovered] = useState(false);
   const [chevronOpen, setChevronOpen] = useState(false);
@@ -250,6 +262,14 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
                     <Text style={styles.pillHost} numberOfLines={1}>
                       {name}
                     </Text>
+                    {reachLabel ? (
+                      <View style={styles.reachRow}>
+                        <Ionicons name="globe-outline" size={10} color={colors.textMuted} />
+                        <Text style={styles.reachLabel} numberOfLines={1}>
+                          {reachLabel}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               ) : (
@@ -414,6 +434,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: -0.12,
   },
+  reachRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  reachLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
   chevronSpin: {
     alignItems: 'center',
     justifyContent: 'center',

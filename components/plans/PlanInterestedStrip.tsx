@@ -6,6 +6,7 @@ import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { colors, radius, spacing } from '@/constants/theme';
 import { usePermission } from '@/hooks/usePermission';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
+import { fetchIncognitoUserIds } from '@/lib/plans/incognitoEngagement';
 import { supabase } from '@/lib/supabase';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -52,10 +53,18 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       return;
     }
 
+    const incognitoIds = await fetchIncognitoUserIds(userIds);
+    const visibleIds = userIds.filter((uid) => !incognitoIds.has(uid));
+    if (visibleIds.length === 0) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('user_id, display_name, avatar_url')
-      .in('user_id', userIds);
+      .in('user_id', visibleIds);
 
     setRows((profiles ?? []) as EngRow[]);
     setLoading(false);

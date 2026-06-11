@@ -14,6 +14,7 @@ type Props = {
   onPressFilter: () => void;
   showUndo?: boolean;
   onUndoLastHide?: () => void;
+  isIncognitoActive?: boolean;
 };
 
 export function NearbyPlansHeader({
@@ -22,33 +23,42 @@ export function NearbyPlansHeader({
   onPressFilter,
   showUndo,
   onUndoLastHide,
+  isIncognitoActive,
 }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.leadCol}>
-        <Pressable
-          onPress={onPressLocation}
-          disabled={!onPressLocation}
-          style={({ pressed }) => [
-            styles.locPillOuter,
-            onPressLocation && pressed && styles.locPillPressed,
-          ]}
-          hitSlop={6}
-          accessibilityRole={onPressLocation ? 'button' : undefined}
-          accessibilityLabel={onPressLocation ? `Location: ${locationLabel}. Open travel mode` : undefined}
-        >
-          <LinearGradient
-            colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.1)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.locPill}
+        <View style={styles.locRow}>
+          <Pressable
+            onPress={onPressLocation}
+            disabled={!onPressLocation}
+            style={({ pressed }) => [
+              styles.locPillOuter,
+              onPressLocation && pressed && styles.locPillPressed,
+            ]}
+            hitSlop={6}
+            accessibilityRole={onPressLocation ? 'button' : undefined}
+            accessibilityLabel={onPressLocation ? `Location: ${locationLabel}. Open travel mode` : undefined}
           >
-            <Ionicons name="location-outline" size={16} color={colors.primary} />
-            <Text style={styles.locTxt} numberOfLines={1}>
-              {locationLabel}
-            </Text>
-          </LinearGradient>
-        </Pressable>
+            <LinearGradient
+              colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.1)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.locPill}
+            >
+              <Ionicons name="location-outline" size={16} color={colors.primary} />
+              <Text style={styles.locTxt} numberOfLines={1}>
+                {locationLabel}
+              </Text>
+            </LinearGradient>
+          </Pressable>
+          {isIncognitoActive ? (
+            <View style={styles.incognitoChip}>
+              <Ionicons name="eye-off-outline" size={12} color={colors.textMuted} />
+              <Text style={styles.incognitoLabel}>Incognito</Text>
+            </View>
+          ) : null}
+        </View>
         {showUndo && onUndoLastHide ? (
           <Pressable
             onPress={onUndoLastHide}
@@ -91,6 +101,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   leadCol: { flex: 1, minWidth: 0, gap: spacing.xs },
+  locRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs },
   locPillOuter: {
     alignSelf: 'flex-start',
     maxWidth: '100%',
@@ -109,6 +120,18 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(108,99,255,0.18)',
   },
   locTxt: { fontSize: 13, fontWeight: '700', color: colors.primary, flexShrink: 1 },
+  incognitoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(108,99,255,0.18)',
+    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+  },
+  incognitoLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
   undoChip: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,

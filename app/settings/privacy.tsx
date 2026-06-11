@@ -1,18 +1,35 @@
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { checkPermission, invalidatePermissionCache } from '@/lib/subscription/checkPermission';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Href, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 type BlockRow = { blocked_id: string; created_at: string };
 
+function PrefSwitch({ value, onValueChange }: { value: boolean; onValueChange: (v: boolean) => void }) {
+  return (
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: 'rgba(26, 29, 38, 0.14)', true: colors.primary }}
+      thumbColor={Platform.OS === 'android' ? (value ? '#5EEAD4' : '#F3F4F6') : undefined}
+      ios_backgroundColor="rgba(26, 29, 38, 0.14)"
+    />
+  );
+}
+
 export default function PrivacySafetyScreen() {
-  const { user } = useAuth();
+  const { user, profile, dbUser, refreshProfile } = useAuth();
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  const [isPlatinum, setIsPlatinum] = useState(false);
+  const [incognitoEnabled, setIncognitoEnabled] = useState(false);
+  const [profileViewPrivacyEnabled, setProfileViewPrivacyEnabled] = useState(false);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!user || !isSupabaseConfigured) return;
@@ -23,6 +40,50 @@ export default function PrivacySafetyScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setIncognitoEnabled(!!profile?.incognito_browse_enabled);
+    setProfileViewPrivacyEnabled(!!profile?.profile_view_privacy_enabled);
+  }, [profile?.incognito_browse_enabled, profile?.profile_view_privacy_enabled]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setIsPlatinum(false);
+      return;
+    }
+    void checkPermission(user.id, 'privacy.incognito_browse').then((r) => {
+      setIsPlatinum(r.effectiveTier === 'PLATINUM');
+    });
+  }, [user?.id, dbUser?.subscription_tier]);
+
+  const savePrivacyToggle = useCallback(
+    async (next: { incognito?: boolean; profileViewPrivacy?: boolean }) => {
+      if (!user || !isSupabaseConfigured || privacyBusy) return;
+      setPrivacyBusy(true);
+      const incognito =
+        next.incognito !== undefined ? next.incognito : incognitoEnabled;
+      const profileViewPrivacy =
+        next.profileViewPrivacy !== undefined ? next.profileViewPrivacy : profileViewPrivacyEnabled;
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          incognito_browse_enabled: incognito,
+          profile_view_privacy_enabled: profileViewPrivacy,
+        })
+        .eq('user_id', user.id);
+      setPrivacyBusy(false);
+      if (error) return;
+      invalidatePermissionCache();
+      await refreshProfile();
+    },
+    [
+      user,
+      privacyBusy,
+      incognitoEnabled,
+      profileViewPrivacyEnabled,
+      refreshProfile,
+    ]
+  );
 
   return (
     <SettingsStickyShell contentContainerStyle={styles.scroll}>
@@ -59,6 +120,62 @@ export default function PrivacySafetyScreen() {
               <Text style={styles.helpCtaTxt}>Help & support</Text>
             </LinearGradient>
           </Pressable>
+
+          {isPlatinum ? (
+            <>
+              <View style={styles.sectionHead}>
+                <View style={styles.sectionHeadRow}>
+                  <View style={styles.sectionAccentDot} />
+                  <Text style={styles.blockedSectionHeading}>Platinum privacy</Text>
+                </View>
+                <LinearGradient
+                  colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sectionRule}
+                />
+              </View>
+              <LinearGradient
+                colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.cardOuter}
+              >
+                <View style={styles.cardInner}>
+                  <View style={styles.prefRow}>
+                    <View style={styles.prefTextCol}>
+                      <Text style={styles.prefLabel}>Incognito browsing</Text>
+                      <Text style={styles.prefSub}>
+                        Browse plans and profiles without appearing in view logs.
+                      </Text>
+                    </View>
+                    <PrefSwitch
+                      value={incognitoEnabled}
+                      onValueChange={(v) => {
+                        setIncognitoEnabled(v);
+                        void savePrivacyToggle({ incognito: v });
+                      }}
+                    />
+                  </View>
+                  <View style={[styles.prefRow, styles.prefRowBorder]}>
+                    <View style={styles.prefTextCol}>
+                      <Text style={styles.prefLabel}>Profile view privacy</Text>
+                      <Text style={styles.prefSub}>
+                        Control whether others see that you viewed their profile.
+                      </Text>
+                    </View>
+                    <PrefSwitch
+                      value={profileViewPrivacyEnabled}
+                      onValueChange={(v) => {
+                        setProfileViewPrivacyEnabled(v);
+                        void savePrivacyToggle({ profileViewPrivacy: v });
+                      }}
+                    />
+                  </View>
+                </View>
+              </LinearGradient>
+            </>
+          ) : null}
 
           <View style={styles.sectionHead}>
             <View style={styles.sectionHeadRow}>
@@ -307,6 +424,23 @@ const styles = StyleSheet.create({
   blockId: { fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
   blockHint: { fontSize: 12, color: colors.textMuted, marginTop: 2, fontWeight: '600' },
   blockDate: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  prefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  prefRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(26, 29, 38, 0.08)',
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
+  },
+  prefTextCol: { flex: 1, minWidth: 0 },
+  prefLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
+  prefSub: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginTop: 4 },
   note: {
     fontSize: 13,
     color: colors.textMuted,

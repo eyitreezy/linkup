@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
+import { fetchIncognitoUserIds } from '@/lib/plans/incognitoEngagement';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -229,16 +230,19 @@ export default function PlanInterestScreen() {
           .order('created_at', { ascending: false });
         const list = eng ?? [];
         const userIds = [...new Set(list.map((e) => e.user_id as string))];
+        const incognitoIds = await fetchIncognitoUserIds(userIds);
+        const visibleEngagements = list.filter((e) => !incognitoIds.has(e.user_id as string));
         let profs: { user_id: string; display_name: string | null; avatar_url: string | null }[] = [];
-        if (userIds.length > 0) {
+        const visibleIds = [...new Set(visibleEngagements.map((e) => e.user_id as string))];
+        if (visibleIds.length > 0) {
           const { data } = await supabase
             .from('profiles')
             .select('user_id, display_name, avatar_url')
-            .in('user_id', userIds);
+            .in('user_id', visibleIds);
           profs = (data ?? []) as typeof profs;
         }
         const pmap = new Map(profs.map((pr) => [pr.user_id, pr]));
-        const nextRows = list.map((e) => {
+        const nextRows = visibleEngagements.map((e) => {
           const pr = pmap.get(e.user_id as string);
           return {
             user_id: e.user_id as string,

@@ -159,6 +159,10 @@ export interface DbProfile {
   /** City / area label from onboarding location search or GPS. */
   location_label: string | null;
   is_profile_public: boolean;
+  /** Platinum — skip plan view engagement logs when true. */
+  incognito_browse_enabled?: boolean;
+  /** Platinum — skip profile_views insert when true. */
+  profile_view_privacy_enabled?: boolean;
   ai_trust_score: number | null;
   /** Public “verified host” flag; kept in sync with `users.verification_status` via DB trigger — prefer updating the request/user row, not this field directly. */
   verified_badge: boolean;
@@ -264,6 +268,11 @@ export interface DbMessage {
   media_id: string | null;
   moderation_status: ModerationStatus;
   created_at: string;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+  reply_to_message_id?: string | null;
+  is_forwarded?: boolean;
+  forwarded_from_message_id?: string | null;
 }
 
 export interface DbPlanOffer {

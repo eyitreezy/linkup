@@ -32,9 +32,16 @@ import { fetchLatestBidderOffersByPlanIds } from '@/lib/plans/fetchLatestBidderO
 import {
   fetchPlansPage,
   fetchProfilesForCreators,
+  filterPremiumVisibilityPlans,
   mergePlansWithProfiles,
   type PlanRowFromDb,
 } from '@/lib/plans/planFeedMerge';
+import { rankDiscoveryPlans } from '@/lib/plans/feedRanking';
+import {
+  fetchHiddenPlanIds,
+  persistHiddenPlan,
+  removeHiddenPlan,
+} from '@/lib/plans/hiddenPlans';
 import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
 import { moodReachVisibleToViewer } from '@/lib/plans/moodReachFilter';
 import { prefetchPlanDetail, seedPlanDetailFromFeed } from '@/lib/plans/planDetailSeed';
@@ -65,6 +72,7 @@ import Animated from 'react-native-reanimated';
 
 const PAGE_SIZE = 12;
 const FEED_MODE_STORAGE_KEY = 'linkup_discovery_feed_mode';
+const LOCATION_PROMPT_DISMISSED_KEY = 'linkup_location_prompt_dismissed';
 
 function dedupePlans(existing: PlanRowFromDb[], incoming: PlanRowFromDb[]): PlanRowFromDb[] {
   const m = new Map(existing.map((p) => [p.id, p]));
@@ -191,6 +199,22 @@ export default function PlansScreen() {
   const swipeDeckRef = useRef<PlansSwipeDeckRef>(null);
 
   const unverified = !!(dbUser && !isUserVerified(dbUser.verification_status));
+  const viewerTier = (dbUser?.subscription_tier ?? 'FREE') as SubscriptionTier;
+  const isIncognitoActive =
+    viewerTier === 'PLATINUM' && !!profile?.incognito_browse_enabled;
+
+  useEffect(() => {
+    void AsyncStorage.getItem(LOCATION_PROMPT_DISMISSED_KEY).then((v) => {
+      if (v === 'true') setLocPromptDismissed(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || !canUndoSwipe) return;
+    void fetchHiddenPlanIds(user.id).then((ids) => {
+      if (ids.length > 0) setHiddenPlanIds(ids);
+    });
+  }, [user?.id, canUndoSwipe]);
 
   useEffect(() => {
     void AsyncStorage.getItem(FEED_MODE_STORAGE_KEY).then((raw) => {
@@ -270,40 +294,12 @@ export default function PlansScreen() {
       return true;
     });
 
-    const nowMs = Date.now();
-    const isBoosted = (p: PlanFeedRow) =>
-      !!(p.boosted_until && new Date(p.boosted_until).getTime() > nowMs);
-    const moodDeadline = (p: PlanFeedRow) =>
-      p.is_mood_plan && p.mood_expires_at ? new Date(p.mood_expires_at).getTime() : Infinity;
+    merged = filterPremiumVisibilityPlans(merged, viewerTier);
 
-    if (effectiveLat != null && effectiveLng != null) {
-      merged = [...merged].sort((a, b) => {
-        if (a.is_mood_plan !== b.is_mood_plan) return a.is_mood_plan ? -1 : 1;
-        if (a.is_mood_plan && b.is_mood_plan) {
-          const ma = moodDeadline(a);
-          const mb = moodDeadline(b);
-          if (ma !== mb) return ma - mb;
-        }
-        const ba = isBoosted(a) ? 1 : 0;
-        const bb = isBoosted(b) ? 1 : 0;
-        if (ba !== bb) return bb - ba;
-        if (a.latitude == null || a.longitude == null) return 1;
-        if (b.latitude == null || b.longitude == null) return -1;
-        const da = distanceKm(effectiveLat, effectiveLng, a.latitude, a.longitude);
-        const db = distanceKm(effectiveLat, effectiveLng, b.latitude, b.longitude);
-        return da - db;
-      });
-    } else {
-      merged = [...merged].sort((a, b) => {
-        if (a.is_mood_plan !== b.is_mood_plan) return a.is_mood_plan ? -1 : 1;
-        if (a.is_mood_plan && b.is_mood_plan) {
-          const ma = moodDeadline(a);
-          const mb = moodDeadline(b);
-          if (ma !== mb) return ma - mb;
-        }
-        return Number(isBoosted(b)) - Number(isBoosted(a));
-      });
-    }
+    merged = rankDiscoveryPlans(merged, {
+      effectiveLat,
+      effectiveLng,
+    });
     setRows(merged);
   }, [
     user?.id,
@@ -313,6 +309,7 @@ export default function PlansScreen() {
     feedFilter,
     hiddenPlanIds,
     blockedIds,
+    viewerTier,
   ]);
 
   const rebuildRowsRef = useRef(rebuildRows);
@@ -543,18 +540,18 @@ export default function PlansScreen() {
         (payload) => {
           const row = payload.new as {
             id?: string;
+            status?: string;
             is_suppressed?: boolean;
             archived_at?: string | null;
           };
           if (row?.id) {
-            const hid = row.is_suppressed === true || (row.archived_at != null && row.archived_at !== '');
+            const hid =
+              row.is_suppressed === true ||
+              (row.archived_at != null && row.archived_at !== '') ||
+              (row.status != null &&
+                ['agreed', 'active', 'completed', 'cancelled'].includes(row.status));
             if (hid) {
               accRef.current = accRef.current.filter((p) => p.id !== row.id);
-            } else {
-              const idx = accRef.current.findIndex((p) => p.id === row.id);
-              if (idx >= 0) {
-                accRef.current[idx] = { ...accRef.current[idx], ...row };
-              }
             }
           }
           if (feedReloadTimerRef.current) clearTimeout(feedReloadTimerRef.current);
@@ -634,7 +631,11 @@ export default function PlansScreen() {
   const onAllowLocation = useCallback(async () => {
     const r = await Location.requestForegroundPermissionsAsync();
     setPerm(r.status);
-    if (r.status === 'granted') await syncLocation();
+    if (r.status === 'granted') {
+      await AsyncStorage.removeItem(LOCATION_PROMPT_DISMISSED_KEY);
+      setLocPromptDismissed(false);
+      await syncLocation();
+    }
   }, [syncLocation]);
 
   const retryLoad = useCallback(async () => {
@@ -668,13 +669,15 @@ export default function PlansScreen() {
       }
       setHiddenPlanIds((prev) => [...prev, id]);
       setLastHiddenId(id);
+      if (user?.id) persistHiddenPlan(user.id, id);
     },
-    [canUndoSwipe]
+    [canUndoSwipe, user?.id]
   );
 
   function undoHide() {
     if (!lastHiddenId) return;
     setHiddenPlanIds((prev) => prev.filter((x) => x !== lastHiddenId));
+    if (user?.id) removeHiddenPlan(user.id, lastHiddenId);
     setLastHiddenId(null);
   }
 
@@ -714,7 +717,10 @@ export default function PlansScreen() {
         {showLocPrompt ? (
           <PlansLocationPrompt
             onAllow={onAllowLocation}
-            onNotNow={() => setLocPromptDismissed(true)}
+            onNotNow={() => {
+              setLocPromptDismissed(true);
+              void AsyncStorage.setItem(LOCATION_PROMPT_DISMISSED_KEY, 'true');
+            }}
           />
         ) : null}
         {error ? (
@@ -725,7 +731,11 @@ export default function PlansScreen() {
             </Text>
           </View>
         ) : null}
-        <MoodTimelineCarousel rows={moodTimelineRows} onOpenPlan={openPlanFromFeed} />
+        <MoodTimelineCarousel
+          rows={moodTimelineRows}
+          onOpenPlan={openPlanFromFeed}
+          currentUserId={user?.id}
+        />
       </>
     ),
     [unverified, showLocPrompt, error, onAllowLocation, retryLoad, moodTimelineRows, openPlanFromFeed, dbUser, trialBannerDismissed]
@@ -750,9 +760,10 @@ export default function PlansScreen() {
       if (canDismissSwipe) {
         setHiddenPlanIds((prev) => [...prev, row.id]);
         setLastHiddenId(row.id);
+        if (user?.id) persistHiddenPlan(user.id, row.id);
       }
     },
-    [canDismissSwipe]
+    [canDismissSwipe, user?.id]
   );
 
   const listEmpty =
@@ -915,6 +926,7 @@ export default function PlansScreen() {
         onPressFilter={() => setFilterOpen(true)}
         showUndo={canUndoSwipe && !!lastHiddenId}
         onUndoLastHide={undoHide}
+        isIncognitoActive={isIncognitoActive}
       />
       <UpgradePrompt
         visible={upgradeOpen}

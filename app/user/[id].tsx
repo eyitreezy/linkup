@@ -9,6 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { HostMediaGallery } from '@/components/plans/HostMediaGallery';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
+import {
+  fetchViewerPrivacyPrefs,
+  shouldSkipProfileViewRecording,
+} from '@/lib/plans/incognitoEngagement';
 import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
 import { buildHostMediaSequence } from '@/lib/profile/media/buildHostMediaSequence';
 import { fetchProfileVideo, type ProfileVideoRecord } from '@/lib/profile/media/profileVideo';
@@ -93,7 +97,11 @@ export default function PublicUserScreen() {
 
   useEffect(() => {
     if (!id || !isSupabaseConfigured || !user?.id || user.id === id || !profile || profile.is_profile_public === false) return;
-    void supabase.from('profile_views').insert({ viewer_id: user.id, viewed_user_id: id });
+    void (async () => {
+      const prefs = await fetchViewerPrivacyPrefs(supabase, user.id);
+      if (shouldSkipProfileViewRecording(prefs)) return;
+      await supabase.from('profile_views').insert({ viewer_id: user.id, viewed_user_id: id });
+    })();
   }, [id, user?.id, profile?.user_id, profile?.is_profile_public]);
 
   useEffect(() => {

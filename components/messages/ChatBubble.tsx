@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 function ChatBubbleVideo({
@@ -70,6 +71,8 @@ export type ChatBubbleProps = {
   showEdited?: boolean;
   /** Quoted message when replying */
   quote?: ChatBubbleQuote | null;
+  /** Forwarded message indicator */
+  forwarded?: boolean;
   /** Brief highlight when jumping to a quoted message */
   highlighted?: boolean;
   onLongPress?: () => void;
@@ -86,6 +89,7 @@ export function ChatBubble({
   isDeleted,
   showEdited,
   quote,
+  forwarded,
   highlighted,
   onLongPress,
   meta,
@@ -148,8 +152,23 @@ export function ChatBubble({
     </Pressable>
   ) : null;
 
+  const forwardedLabel = forwarded ? (
+    <View style={styles.forwardedRow}>
+      <Ionicons
+        name="arrow-redo"
+        size={12}
+        color={isMine ? 'rgba(255,255,255,0.82)' : colors.textMuted}
+        style={styles.forwardedIcon}
+      />
+      <Text style={[styles.forwardedText, isMine ? styles.forwardedTextMine : styles.forwardedTextThem]}>
+        Forwarded
+      </Text>
+    </View>
+  ) : null;
+
   const inner = (
     <>
+      {forwardedLabel}
       {quoteBlock}
       {showMedia ? (
         <View style={styles.mediaBlock}>
@@ -307,6 +326,11 @@ const styles = StyleSheet.create({
   quotePreview: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
   quotePreviewMine: { color: 'rgba(255,255,255,0.82)' },
   quotePreviewThem: { color: colors.textMuted },
+  forwardedRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 4 },
+  forwardedIcon: { marginTop: 1 },
+  forwardedText: { fontSize: 11, fontWeight: '800', fontStyle: 'italic', letterSpacing: 0.2 },
+  forwardedTextMine: { color: 'rgba(255,255,255,0.82)' },
+  forwardedTextThem: { color: colors.textMuted },
   bubble: {
     borderRadius: radius.xl,
     paddingVertical: 10,

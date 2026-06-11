@@ -17,7 +17,6 @@ import {
 } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow } from '@/lib/plans/moodPlanStart';
 import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
-import { fetchActiveMeetTypes } from '@/lib/plans/meetTypes';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
@@ -104,11 +103,12 @@ function openAndroidDateTime(value: Date, minimumDate: Date | undefined, onDone:
   });
 }
 
-export function MoodPlanFieldsSection() {
+type Props = { visible: boolean };
+
+export function MoodPlanFieldsSection({ visible }: Props) {
   const { draft, setDraft } = usePlanDraft();
   const { user } = useAuth();
-  const { effectiveTier } = usePermission('mood_plan.activate');
-  const [supportsMood, setSupportsMood] = useState(false);
+  const { effectiveTier } = usePermission('mood_plan.activate', { skip: !visible });
   const [iosCustomPick, setIosCustomPick] = useState<null | 'start' | 'end'>(null);
   const [cooldownNotice, setCooldownNotice] = useState<{ active: boolean; hoursRemaining?: number }>({
     active: false,
@@ -156,13 +156,6 @@ export function MoodPlanFieldsSection() {
     }
     setDraft((d) => applyMoodPlanLiveNow({ ...d, moodListingHours: h }));
   }
-
-  useEffect(() => {
-    void fetchActiveMeetTypes().then(({ rows }) => {
-      const t = rows.find((r) => r.id === draft.meetTypeId);
-      setSupportsMood(!!t?.supports_mood);
-    });
-  }, [draft.meetTypeId]);
 
   const previewExpiry = useMemo(() => {
     if (!draft.isMoodPlan || !draft.scheduledAt) return null;
@@ -245,7 +238,7 @@ export function MoodPlanFieldsSection() {
     setIosCustomPick('end');
   }
 
-  if (!supportsMood) return null;
+  if (!visible) return null;
 
   return (
     <MotiView

@@ -10,13 +10,20 @@ export const CHAT_MESSAGE_COLUMNS_BASE =
 export const CHAT_MESSAGE_COLUMNS_WITH_REPLY =
   `${CHAT_MESSAGE_COLUMNS_BASE}, reply_to_message_id` as const;
 
-/** @deprecated Use `chatMessageSelectColumns()` — auto-falls back when reply column missing. */
-export const CHAT_MESSAGE_COLUMNS = CHAT_MESSAGE_COLUMNS_WITH_REPLY;
+/** Includes forward metadata when migration `20260620000001_chat_forward_pin` is applied. */
+export const CHAT_MESSAGE_COLUMNS_FULL =
+  `${CHAT_MESSAGE_COLUMNS_WITH_REPLY}, is_forwarded, forwarded_from_message_id` as const;
+
+/** @deprecated Use `chatMessageSelectColumns()` — auto-falls back when columns missing. */
+export const CHAT_MESSAGE_COLUMNS = CHAT_MESSAGE_COLUMNS_FULL;
 
 let replyColumnSupported: boolean | null = null;
+let forwardColumnSupported: boolean | null = null;
 
 export function chatMessageSelectColumns(): string {
-  return replyColumnSupported === false ? CHAT_MESSAGE_COLUMNS_BASE : CHAT_MESSAGE_COLUMNS_WITH_REPLY;
+  if (replyColumnSupported === false) return CHAT_MESSAGE_COLUMNS_BASE;
+  if (forwardColumnSupported === false) return CHAT_MESSAGE_COLUMNS_WITH_REPLY;
+  return CHAT_MESSAGE_COLUMNS_FULL;
 }
 
 export function isMissingColumnError(error: { code?: string } | null | undefined): boolean {
@@ -25,6 +32,22 @@ export function isMissingColumnError(error: { code?: string } | null | undefined
 
 export function markReplyColumnUnsupported(): void {
   replyColumnSupported = false;
+}
+
+export function markForwardColumnUnsupported(): void {
+  forwardColumnSupported = false;
+}
+
+function downgradeMessageColumns(cols: string): string {
+  if (cols === CHAT_MESSAGE_COLUMNS_FULL) {
+    markForwardColumnUnsupported();
+    return CHAT_MESSAGE_COLUMNS_WITH_REPLY;
+  }
+  if (cols === CHAT_MESSAGE_COLUMNS_WITH_REPLY) {
+    markReplyColumnUnsupported();
+    return CHAT_MESSAGE_COLUMNS_BASE;
+  }
+  return cols;
 }
 
 export function normalizeChatMessageRow(row: Record<string, unknown>): ChatMessageRow {
@@ -38,6 +61,9 @@ export function normalizeChatMessageRow(row: Record<string, unknown>): ChatMessa
     edited_at: (row.edited_at as string | null) ?? null,
     deleted_at: (row.deleted_at as string | null) ?? null,
     reply_to_message_id: (row.reply_to_message_id as string | null | undefined) ?? null,
+    is_forwarded: (row.is_forwarded as boolean | undefined) ?? false,
+    forwarded_from_message_id:
+      (row.forwarded_from_message_id as string | null | undefined) ?? null,
   };
 }
 
@@ -50,9 +76,11 @@ export async function runMessageSelect<T>(
 ): Promise<{ data: T | null; error: { code?: string; message?: string } | null }> {
   let cols = chatMessageSelectColumns();
   let result = await run(cols);
-  if (isMissingColumnError(result.error)) {
-    markReplyColumnUnsupported();
-    result = await run(chatMessageSelectColumns());
+  while (isMissingColumnError(result.error)) {
+    const next = downgradeMessageColumns(cols);
+    if (next === cols) break;
+    cols = next;
+    result = await run(cols);
   }
   return result;
 }
@@ -69,6 +97,8 @@ export type ChatMessageRow = {
   edited_at: string | null;
   deleted_at: string | null;
   reply_to_message_id: string | null;
+  is_forwarded: boolean;
+  forwarded_from_message_id: string | null;
 };
 
 export type ReplyQuotePreview = {
@@ -79,20 +109,37 @@ export type ReplyQuotePreview = {
   isDeleted: boolean;
 };
 
-export function replyPreviewForMessage(
+/** Resolve the quoted parent for a reply message from the loaded thread. */
+export function resolveReplyQuote(
   m: ChatMessageRow,
-  senderLabel: string,
-  hasMedia?: boolean
+  byId: Map<string, ChatMessageRow>,
+  peerName: string,
+  myUserId: string,
+  hasMediaFor: (messageId: string) => boolean
 ): ReplyQuotePreview | null {
   if (!m.reply_to_message_id) return null;
-  const text = messageDisplayText(m)?.trim();
-  return {
-    messageId: m.reply_to_message_id,
-    senderId: m.sender_id,
-    senderLabel,
-    preview: text || (hasMedia ? 'Attachment' : 'Message'),
-    isDeleted: false,
-  };
+  const parent = byId.get(m.reply_to_message_id);
+  if (!parent) {
+    return {
+      messageId: m.reply_to_message_id,
+      senderId: '',
+      senderLabel: 'Message',
+      preview: 'Original message',
+      isDeleted: false,
+    };
+  }
+  return buildReplyQuoteFromTarget(parent, peerName, myUserId, hasMediaFor(parent.id));
+}
+
+/** Clipboard-friendly text for copy action. */
+export function messageCopyText(
+  m: ChatMessageRow,
+  opts?: { hasMedia?: boolean; mediaKind?: 'image' | 'video' | null }
+): string {
+  const text = messageDisplayText(m)?.trim() ?? '';
+  if (text) return text;
+  if (opts?.hasMedia) return opts.mediaKind === 'video' ? 'Video' : 'Photo';
+  return '';
 }
 
 export function buildReplyQuoteFromTarget(
@@ -157,9 +204,10 @@ export async function fetchMessagesOlderThan(
 
   let cols = chatMessageSelectColumns();
   let { data, error } = await runFetch(cols);
-  if (isMissingColumnError(error)) {
-    markReplyColumnUnsupported();
-    cols = chatMessageSelectColumns();
+  while (isMissingColumnError(error)) {
+    const next = downgradeMessageColumns(cols);
+    if (next === cols) break;
+    cols = next;
     ({ data, error } = await runFetch(cols));
   }
   if (error) throw error;

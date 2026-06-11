@@ -1,6 +1,7 @@
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
+import { fetchConnectedCreatorIds } from '@/lib/plans/discoverConnections';
 import { supabase } from '@/lib/supabase';
-import type { DbMeetType, DbPlan, DbProfile } from '@/types/database';
+import type { DbMeetType, DbPlan, DbProfile, SubscriptionTier } from '@/types/database';
 
 /** Row returned by `plans` select with embedded `meet_types`. */
 export type PlanRowFromDb = DbPlan & { meet_types?: DbMeetType | null };
@@ -24,6 +25,15 @@ type ProfileRow = Pick<
   | 'preferences'
 >;
 
+/** Defence-in-depth when RLS does not filter premium visibility rows. */
+export function filterPremiumVisibilityPlans(
+  rows: PlanFeedRow[],
+  viewerTier: SubscriptionTier
+): PlanFeedRow[] {
+  if (viewerTier === 'GOLD' || viewerTier === 'PLATINUM') return rows;
+  return rows.filter((row) => row.visibility !== 'premium');
+}
+
 export async function fetchPlansPage(
   from: number,
   to: number,
@@ -42,6 +52,15 @@ export async function fetchPlansPage(
     ? `is_expired.eq.false,creator_id.eq.${viewerUserId}`
     : `is_expired.eq.false`;
 
+  let connectedCreatorIds: string[] = [];
+  if (viewerUserId) {
+    try {
+      connectedCreatorIds = await fetchConnectedCreatorIds(viewerUserId);
+    } catch {
+      connectedCreatorIds = [];
+    }
+  }
+
   let q = supabase
     .from('plans')
     .select('*, meet_types(*)')
@@ -52,7 +71,13 @@ export async function fetchPlansPage(
     .or(notExpiredOr);
 
   if (viewerUserId) {
-    q = q.or(`visibility.eq.public,visibility.eq.radius,creator_id.eq.${viewerUserId}`);
+    const visParts = ['visibility.eq.public', 'visibility.eq.radius', `creator_id.eq.${viewerUserId}`];
+    if (connectedCreatorIds.length > 0) {
+      visParts.push(
+        `and(visibility.eq.friends,creator_id.in.(${connectedCreatorIds.join(',')}))`
+      );
+    }
+    q = q.or(visParts.join(','));
   } else {
     q = q.in('visibility', ['public', 'radius']);
   }

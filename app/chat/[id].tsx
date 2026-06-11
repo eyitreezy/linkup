@@ -9,6 +9,8 @@ import {
   type MessageActionItem,
 } from '@/components/messages/MessageActionsSheet';
 import { ChatComposer } from '@/components/messages/ChatComposer';
+import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
+import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
 import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -24,14 +26,35 @@ import { moderateMessageText } from '@/lib/ai';
 import {
   CHAT_PAGE_SIZE,
   fetchMessagesOlderThan,
+  buildReplyQuoteFromTarget,
+  messageCopyText,
   messageDisplayText,
   mimeToMediaKind,
   normalizeChatMessageRow,
   parseLegacyImageBody,
+  resolveReplyQuote,
   runMessageSelect,
   type ChatMessageRow,
   type ChatMediaRow,
+  type ReplyQuotePreview,
 } from '@/lib/messaging/chatQueries';
+import {
+  fetchConversationPin,
+  pinConversationMessage,
+  unpinConversationMessage,
+  type ConversationPinState,
+} from '@/lib/messaging/conversationPin';
+import { fetchForwardTargets, type ForwardTarget } from '@/lib/messaging/fetchForwardTargets';
+import { forwardMessage } from '@/lib/messaging/forwardMessage';
+import { buildMessageActions, messageActionMediaMeta } from '@/lib/messaging/buildMessageActions';
+import { deleteMessageForEveryone } from '@/lib/messaging/deleteMessage';
+import { editMessage } from '@/lib/messaging/editMessage';
+import {
+  fetchHiddenMessageIdsForConversation,
+  filterMessagesHiddenForUser,
+  hideMessageForMe,
+} from '@/lib/messaging/messageDeletions';
+import { subscribeConversationRealtime } from '@/lib/messaging/subscribeConversationRealtime';
 import { fetchActiveMeetupWithPeer, type LinkedMeetup } from '@/lib/messaging/fetchActiveMeetupWithPeer';
 import {
   detectOffPlatformContact,
@@ -89,15 +112,6 @@ import type { DbUserPresence, ProfilePreferences } from '@/types/database';
 
 const MAX_VIDEO_BYTES = 14 * 1024 * 1024;
 
-/** WhatsApp-style edit window */
-const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
-/** Longer window for delete-for-everyone */
-const MESSAGE_DELETE_FOR_EVERYONE_MS = 48 * 60 * 60 * 1000;
-
-function withinMsSince(iso: string, ms: number): boolean {
-  return Date.now() - new Date(iso).getTime() <= ms;
-}
-
 function shortTimeLabel(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -137,6 +151,22 @@ export default function ChatThreadScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [editModal, setEditModal] = useState<EditModalState>(null);
   const [messageActionItems, setMessageActionItems] = useState<MessageActionItem[] | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyQuotePreview | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [pinState, setPinState] = useState<ConversationPinState>({
+    pinnedMessageId: null,
+    pinnedAt: null,
+    pinnedBy: null,
+  });
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [forwardSource, setForwardSource] = useState<UiMessage | null>(null);
+  const [forwardTargets, setForwardTargets] = useState<ForwardTarget[]>([]);
+  const [forwardLoading, setForwardLoading] = useState(false);
+  const [forwardBusyId, setForwardBusyId] = useState<string | null>(null);
+  const [copyAck, setCopyAck] = useState(false);
+  const [hiddenForMeIds, setHiddenForMeIds] = useState<Set<string>>(() => new Set());
+  const pinStateRef = useRef(pinState);
+  pinStateRef.current = pinState;
   const [reportOpen, setReportOpen] = useState(false);
   const [safetySheetOpen, setSafetySheetOpen] = useState(false);
   const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
@@ -182,6 +212,38 @@ export default function ChatThreadScreen() {
   const showTypingIndicator = peerTyping && typingVisibleToViewer(profile, peer?.preferences);
 
   const readReceiptsOn = getVisibilityPrefs(profile).read_receipts;
+
+  const messagesById = useMemo(() => {
+    const map = new Map<string, ChatMessageRow>();
+    for (const m of messages) {
+      if (!m.tempKey) map.set(m.id, m);
+    }
+    return map;
+  }, [messages]);
+
+  const hasMediaForMessage = useCallback(
+    (messageId: string) => {
+      if (mediaById[messageId]) return true;
+      const m = messagesById.get(messageId);
+      if (!m) return false;
+      return !!parseLegacyImageBody(messageDisplayText(m));
+    },
+    [mediaById, messagesById]
+  );
+
+  const scrollToMessage = useCallback(
+    (messageId: string) => {
+      const idx = messages.findIndex((m) => m.id === messageId);
+      if (idx < 0) {
+        Alert.alert('Message not loaded', 'Scroll up to load older messages, then try again.');
+        return;
+      }
+      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId((cur) => (cur === messageId ? null : cur)), 2200);
+    },
+    [messages]
+  );
 
   /** Approximate “read” when the peer has any later message (common 1:1 heuristic; no server read cursor). */
   const approxReadByMessageId = useMemo(() => {
@@ -250,15 +312,24 @@ export default function ChatThreadScreen() {
     setLoading(true);
     setHasMore(true);
     try {
-      const { messages: chunk, mediaByMessageId } = await fetchMessagesOlderThan(conversationId, undefined, CHAT_PAGE_SIZE);
-      setMessages(chunk);
+      const hidden =
+        user?.id ? await fetchHiddenMessageIdsForConversation(user.id, conversationId) : [];
+      const hiddenSet = new Set(hidden);
+      setHiddenForMeIds(hiddenSet);
+
+      const { messages: chunk, mediaByMessageId } = await fetchMessagesOlderThan(
+        conversationId,
+        undefined,
+        CHAT_PAGE_SIZE
+      );
+      setMessages(filterMessagesHiddenForUser(chunk, hiddenSet));
       setMediaById(mediaByMessageId);
       await hydrateSigned(mediaByMessageId);
       setHasMore(chunk.length >= CHAT_PAGE_SIZE);
     } finally {
       setLoading(false);
     }
-  }, [conversationId, hydrateSigned]);
+  }, [conversationId, hydrateSigned, user?.id]);
 
   const loadOlder = useCallback(async () => {
     if (!conversationId || !hasMore || loadingMore || messages.length === 0) return;
@@ -280,17 +351,18 @@ export default function ChatThreadScreen() {
       setMessages((prev) => {
         const merged = [...older, ...prev];
         const seen = new Set<string>();
-        return merged.filter((m) => {
+        const deduped = merged.filter((m) => {
           if (seen.has(m.id)) return false;
           seen.add(m.id);
           return true;
         });
+        return filterMessagesHiddenForUser(deduped, hiddenForMeIds);
       });
       if (older.length < CHAT_PAGE_SIZE) setHasMore(false);
     } finally {
       setLoadingMore(false);
     }
-  }, [conversationId, hasMore, loadingMore, messages, hydrateSigned]);
+  }, [conversationId, hasMore, loadingMore, messages, hydrateSigned, hiddenForMeIds]);
 
   useEffect(() => {
     void loadInitial();
@@ -358,6 +430,14 @@ export default function ChatThreadScreen() {
 
   useEffect(() => {
     if (!conversationId || !isSupabaseConfigured) return;
+    void fetchConversationPin(conversationId).then(setPinState);
+    return subscribeConversationRealtime(conversationId, {
+      onPinChange: setPinState,
+    });
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || !isSupabaseConfigured) return;
 
     return subscribeThreadMessagesRealtime(conversationId, {
       onInsert: async (row) => {
@@ -397,30 +477,36 @@ export default function ChatThreadScreen() {
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
       },
       onUpdate: async (row) => {
-        setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
-        if (row.deleted_at || !row.media_id) {
+        const normalized = normalizeChatMessageRow(row as unknown as Record<string, unknown>);
+        setMessages((prev) => prev.map((m) => (m.id === normalized.id ? { ...m, ...normalized } : m)));
+        if (normalized.deleted_at && pinStateRef.current.pinnedMessageId === normalized.id) {
+          void unpinConversationMessage(conversationId).then((r) => {
+            if (r.ok) setPinState({ pinnedMessageId: null, pinnedAt: null, pinnedBy: null });
+          });
+        }
+        if (normalized.deleted_at || !normalized.media_id) {
           setMediaById((p) => {
-            if (!p[row.id]) return p;
+            if (!p[normalized.id]) return p;
             const next = { ...p };
-            delete next[row.id];
+            delete next[normalized.id];
             return next;
           });
         }
-        if (!row.media_id) return;
+        if (!normalized.media_id) return;
         const { data: byFk } = await supabase
           .from('media')
           .select('parent_id, mime_type, storage_bucket, storage_path')
-          .eq('id', row.media_id)
+          .eq('id', normalized.media_id)
           .maybeSingle();
         if (byFk) {
           const r: ChatMediaRow = {
-            parent_id: row.id,
+            parent_id: normalized.id,
             mime_type: byFk.mime_type as string | null,
             storage_bucket: byFk.storage_bucket as string,
             storage_path: byFk.storage_path as string,
           };
-          setMediaById((p) => ({ ...p, [row.id]: r }));
-          await hydrateSignedRef.current({ [row.id]: r });
+          setMediaById((p) => ({ ...p, [normalized.id]: r }));
+          await hydrateSignedRef.current({ [normalized.id]: r });
         }
       },
       onDelete: (id) => {
@@ -530,6 +616,7 @@ export default function ChatThreadScreen() {
       Alert.alert('Heads up', 'This message may be reviewed under our safety policies.');
     }
 
+    const replyId = replyTarget?.messageId ?? null;
     const tempKey = `temp-${Date.now()}`;
     const optimistic: UiMessage = {
       id: tempKey,
@@ -541,34 +628,40 @@ export default function ChatThreadScreen() {
       created_at: new Date().toISOString(),
       edited_at: null,
       deleted_at: null,
-      reply_to_message_id: null,
+      reply_to_message_id: replyId,
+      is_forwarded: false,
+      forwarded_from_message_id: null,
     };
     setMessages((p) => [...p, optimistic]);
     setText('');
+    setReplyTarget(null);
     setSending(true);
+
+    const insertPayload: Record<string, unknown> = {
+      conversation_id: conversationId,
+      sender_id: user.id,
+      text: body,
+      moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
+    };
+    if (replyId) insertPayload.reply_to_message_id = replyId;
 
     const { data, error } = await runMessageSelect((cols) =>
       supabase
         .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: user.id,
-          text: body,
-          moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-        })
+        .insert(insertPayload)
         .select(cols)
         .single()
     );
 
     setSending(false);
 
-    if (error) {
+    if (error || !data) {
       setMessages((p) => p.map((m) => (m.tempKey === tempKey ? { ...m, sendFailed: true } : m)));
-      Alert.alert('Could not send', error.message);
+      Alert.alert('Could not send', error?.message ?? 'Could not send message');
       return;
     }
 
-    const sentRow = normalizeChatMessageRow(data as Record<string, unknown>);
+    const sentRow = normalizeChatMessageRow(data as unknown as Record<string, unknown>);
 
     void persistModerationAfterSend({
       contentType: 'message',
@@ -593,6 +686,7 @@ export default function ChatThreadScreen() {
     clearTyping,
     dbUser?.account_status,
     assertOutgoingContactAllowed,
+    replyTarget?.messageId,
   ]);
 
   const retryOptimistic = useCallback(
@@ -612,24 +706,23 @@ export default function ChatThreadScreen() {
         setMessages((p) => p.filter((m) => m.tempKey !== tempKey));
         return;
       }
+      const insertPayload: Record<string, unknown> = {
+        conversation_id: conversationId,
+        sender_id: user.id,
+        text: snippet,
+        moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
+      };
+      if (msg.reply_to_message_id) insertPayload.reply_to_message_id = msg.reply_to_message_id;
+
       const { data, error } = await runMessageSelect((cols) =>
-        supabase
-          .from('messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: user.id,
-            text: snippet,
-            moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-          })
-          .select(cols)
-          .single()
+        supabase.from('messages').insert(insertPayload).select(cols).single()
       );
-      if (error) {
+      if (error || !data) {
         setMessages((p) => p.map((m) => (m.tempKey === tempKey ? { ...m, sendFailed: true } : m)));
-        Alert.alert('Could not send', error.message);
+        Alert.alert('Could not send', error?.message ?? 'Could not send message');
         return;
       }
-      const sentRow = normalizeChatMessageRow(data as Record<string, unknown>);
+      const sentRow = normalizeChatMessageRow(data as unknown as Record<string, unknown>);
       void persistModerationAfterSend({
         contentType: 'message',
         contentId: sentRow.id,
@@ -645,35 +738,39 @@ export default function ChatThreadScreen() {
     [messages, user, conversationId, assertOutgoingContactAllowed]
   );
 
-  const softDeleteForEveryone = useCallback(async (messageId: string) => {
-    const { data, error } = await runMessageSelect((cols) =>
-      supabase
-        .from('messages')
-        .update({
-          deleted_at: new Date().toISOString(),
-          text: null,
-          body: null,
-          media_id: null,
-        })
-        .eq('id', messageId)
-        .select(cols)
-        .single()
-    );
-    if (error) {
-      Alert.alert('Could not delete', error.message);
-      return;
-    }
-    if (data) {
-      const row = normalizeChatMessageRow(data as Record<string, unknown>);
-      setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+  const runDeleteForMe = useCallback(
+    async (m: UiMessage) => {
+      if (!user?.id || !conversationId) return;
+      const result = await hideMessageForMe(user.id, m.id, conversationId);
+      if (!result.ok) {
+        Alert.alert('Could not delete', result.error);
+        return;
+      }
+      setHiddenForMeIds((prev) => new Set([...prev, m.id]));
+      setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    },
+    [user?.id, conversationId]
+  );
+
+  const runDeleteForEveryone = useCallback(
+    async (m: UiMessage) => {
+      if (!user?.id) return;
+      const result = await deleteMessageForEveryone(supabase, m, user.id);
+      if (!result.ok) {
+        Alert.alert('Could not delete', result.error);
+        return;
+      }
+      const row = result.row;
+      setMessages((prev) => prev.map((x) => (x.id === row.id ? { ...x, ...row } : x)));
       setMediaById((p) => {
-        if (!p[messageId]) return p;
+        if (!p[m.id]) return p;
         const next = { ...p };
-        delete next[messageId];
+        delete next[m.id];
         return next;
       });
-    }
-  }, []);
+    },
+    [user?.id]
+  );
 
   const saveEditedMessage = useCallback(async () => {
     if (!editModal || !user || !conversationId) return;
@@ -692,73 +789,180 @@ export default function ChatThreadScreen() {
     if (mod.status === 'flagged') {
       Alert.alert('Heads up', 'This message may be reviewed under our safety policies.');
     }
-    const { data, error } = await runMessageSelect((cols) =>
-      supabase
-        .from('messages')
-        .update({
-          text: body,
-          edited_at: new Date().toISOString(),
-          moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-        })
-        .eq('id', editModal.messageId)
-        .select(cols)
-        .single()
+    const source = messages.find((m) => m.id === editModal.messageId);
+    if (!source) {
+      Alert.alert('Could not update', 'Message not found.');
+      setEditModal(null);
+      return;
+    }
+    const result = await editMessage(
+      supabase,
+      source,
+      user.id,
+      body,
+      mod.status === 'flagged' ? 'flagged' : 'clean'
     );
-    if (error) {
-      Alert.alert('Could not update', error.message);
+    if (!result.ok) {
+      if (result.code !== 'unchanged') {
+        Alert.alert('Could not update', result.error);
+      }
+      if (result.code === 'unchanged' || result.code === 'window_expired') {
+        setEditModal(null);
+      }
       return;
     }
     setEditModal(null);
-    if (data) {
-      void persistModerationAfterSend({
-        contentType: 'message',
-        contentId: editModal.messageId,
-        textSample: body,
+    void persistModerationAfterSend({
+      contentType: 'message',
+      contentId: editModal.messageId,
+      textSample: body,
+    });
+    setMessages((prev) => prev.map((m) => (m.id === result.row.id ? { ...m, ...result.row } : m)));
+  }, [editModal, user, conversationId, messages, assertOutgoingContactAllowed]);
+
+  const openForwardSheet = useCallback(
+    async (m: UiMessage) => {
+      if (!user?.id) return;
+      setForwardSource(m);
+      setForwardOpen(true);
+      setForwardLoading(true);
+      try {
+        const targets = await fetchForwardTargets(user.id, conversationId);
+        setForwardTargets(targets);
+      } catch {
+        setForwardTargets([]);
+      } finally {
+        setForwardLoading(false);
+      }
+    },
+    [user?.id, conversationId]
+  );
+
+  const runForwardTo = useCallback(
+    async (target: ForwardTarget) => {
+      if (!forwardSource || !user?.id) return;
+      setForwardBusyId(target.conversationId);
+      const result = await forwardMessage({
+        source: forwardSource,
+        sourceMedia: mediaById[forwardSource.id] ?? null,
+        targetConversationId: target.conversationId,
+        senderId: user.id,
       });
-      const row = normalizeChatMessageRow(data as Record<string, unknown>);
-      setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)));
+      setForwardBusyId(null);
+      if (!result.ok) {
+        Alert.alert('Could not forward', result.error);
+        return;
+      }
+      setForwardOpen(false);
+      setForwardSource(null);
+      Alert.alert('Forwarded', `Message sent to ${target.name}.`, [
+        { text: 'Stay here', style: 'cancel' },
+        {
+          text: 'Open chat',
+          onPress: () => router.push(`/chat/${target.conversationId}` as Href),
+        },
+      ]);
+    },
+    [forwardSource, user?.id, mediaById]
+  );
+
+  const runPinMessage = useCallback(
+    async (m: UiMessage) => {
+      if (!conversationId || !user?.id) return;
+      const result = await pinConversationMessage(conversationId, m.id, user.id);
+      if (!result.ok) {
+        Alert.alert('Could not pin', result.error);
+        return;
+      }
+      setPinState({
+        pinnedMessageId: m.id,
+        pinnedAt: new Date().toISOString(),
+        pinnedBy: user.id,
+      });
+    },
+    [conversationId, user?.id]
+  );
+
+  const runUnpinMessage = useCallback(async () => {
+    if (!conversationId) return;
+    const result = await unpinConversationMessage(conversationId);
+    if (!result.ok) {
+      Alert.alert('Could not unpin', result.error);
+      return;
     }
-  }, [editModal, user, conversationId, assertOutgoingContactAllowed]);
+    setPinState({ pinnedMessageId: null, pinnedAt: null, pinnedBy: null });
+  }, [conversationId]);
 
   const showMessageActions = useCallback(
     (m: UiMessage) => {
       if (m.tempKey || !user) return;
-      const mine = m.sender_id === user.id;
-      const isDel = !!m.deleted_at;
+      const { hasMedia, mediaKind } = messageActionMediaMeta(m, mediaById[m.id]);
+      const copyText = messageCopyText(m, { hasMedia, mediaKind });
       const rawText = messageDisplayText(m)?.trim() ?? '';
-      const canCopy = !isDel && rawText.length > 0;
-      const canEdit =
-        mine &&
-        !isDel &&
-        withinMsSince(m.created_at, MESSAGE_EDIT_WINDOW_MS) &&
-        rawText.length > 0;
-      const canDeleteEveryone =
-        mine && !isDel && withinMsSince(m.created_at, MESSAGE_DELETE_FOR_EVERYONE_MS);
 
-      const runCopy = () => void Clipboard.setStringAsync(rawText);
-      const runEdit = () => setEditModal({ messageId: m.id, draft: rawText });
-      const runDelete = () =>
-        Alert.alert('Delete for everyone?', 'This removes the message for you and the other person.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => void softDeleteForEveryone(m.id) },
-        ]);
-
-      const items: MessageActionItem[] = [];
-      if (canCopy) items.push({ key: 'copy', label: 'Copy text', icon: 'copy-outline', onPress: runCopy });
-      if (canEdit) items.push({ key: 'edit', label: 'Edit', icon: 'create-outline', onPress: runEdit });
-      if (canDeleteEveryone)
-        items.push({
-          key: 'delete',
-          label: 'Delete for everyone',
-          icon: 'trash-outline',
-          destructive: true,
-          onPress: runDelete,
-        });
+      const items = buildMessageActions({
+        message: m,
+        viewerId: user.id,
+        pinnedMessageId: pinState.pinnedMessageId,
+        hiddenForViewer: hiddenForMeIds.has(m.id),
+        hasMedia,
+        mediaKind,
+        handlers: {
+          onReply: () => {
+            const quote = buildReplyQuoteFromTarget(
+              m,
+              peer?.name ?? 'Member',
+              user.id,
+              hasMedia
+            );
+            setReplyTarget(quote);
+          },
+          onCopy: () => {
+            void Clipboard.setStringAsync(copyText).then(() => {
+              setCopyAck(true);
+              setTimeout(() => setCopyAck(false), 1800);
+            });
+          },
+          onForward: () => void openForwardSheet(m),
+          onEdit: () => setEditModal({ messageId: m.id, draft: rawText }),
+          onPin: () => void runPinMessage(m),
+          onUnpin: () => void runUnpinMessage(),
+          onDeleteForMe: () =>
+            Alert.alert(
+              'Delete for me?',
+              'This message will be removed from your chat. The other person can still see it.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => void runDeleteForMe(m) },
+              ]
+            ),
+          onDeleteForEveryone: () =>
+            Alert.alert(
+              'Delete for everyone?',
+              'This removes the message for you and the other person.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => void runDeleteForEveryone(m) },
+              ]
+            ),
+        },
+      });
 
       if (items.length === 0) return;
       setMessageActionItems(items);
     },
-    [user, softDeleteForEveryone]
+    [
+      user,
+      hiddenForMeIds,
+      peer?.name,
+      pinState.pinnedMessageId,
+      openForwardSheet,
+      runPinMessage,
+      runUnpinMessage,
+      runDeleteForMe,
+      runDeleteForEveryone,
+      mediaById,
+    ]
   );
 
   const pickAndSendMedia = useCallback(async () => {
@@ -821,17 +1025,16 @@ export default function ChatThreadScreen() {
         const ok = await assertOutgoingContactAllowed(caption);
         if (!ok) return;
       }
+      const mediaInsertPayload: Record<string, unknown> = {
+        conversation_id: conversationId,
+        sender_id: user.id,
+        text: caption,
+        moderation_status: 'pending',
+      };
+      if (replyTarget?.messageId) mediaInsertPayload.reply_to_message_id = replyTarget.messageId;
+
       const { data: inserted, error: insErr } = await runMessageSelect((cols) =>
-        supabase
-          .from('messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: user.id,
-            text: caption,
-            moderation_status: 'pending',
-          })
-          .select(cols)
-          .single()
+        supabase.from('messages').insert(mediaInsertPayload).select(cols).single()
       );
 
       if (insErr || !inserted) {
@@ -909,11 +1112,21 @@ export default function ChatThreadScreen() {
       });
       clearTyping();
       setText('');
+      setReplyTarget(null);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     } finally {
       setSending(false);
     }
-  }, [user, conversationId, text, verifiedUser, clearTyping, dbUser?.account_status, assertOutgoingContactAllowed]);
+  }, [
+    user,
+    conversationId,
+    text,
+    verifiedUser,
+    clearTyping,
+    dbUser?.account_status,
+    assertOutgoingContactAllowed,
+    replyTarget?.messageId,
+  ]);
 
   const onQuickSendOffer = useCallback(() => {
     if (linkedMeetup) {
@@ -956,6 +1169,20 @@ export default function ChatThreadScreen() {
     () => <Animated.View style={chatListFooterStyle} />,
     [chatListFooterStyle]
   );
+
+  const pinnedPreview = useMemo(() => {
+    const pinId = pinState.pinnedMessageId;
+    if (!pinId) return null;
+    if (hiddenForMeIds.has(pinId)) return null;
+    const pinned = messagesById.get(pinId);
+    if (!pinned) return null;
+    if (pinned.deleted_at) return null;
+    const mine = pinned.sender_id === user?.id;
+    const senderLabel = mine ? 'You' : peer?.name ?? 'Member';
+    const hasMedia = hasMediaForMessage(pinId);
+    const quote = buildReplyQuoteFromTarget(pinned, peer?.name ?? 'Member', user?.id ?? '', hasMedia);
+    return { messageId: pinId, senderLabel, preview: quote.preview };
+  }, [pinState.pinnedMessageId, messagesById, user?.id, peer?.name, hasMediaForMessage, hiddenForMeIds]);
 
   const bubblePropsFor = useCallback(
     (m: UiMessage): { body: string | null; media: ChatBubbleMedia | null; legacy: string | null } => {
@@ -1119,17 +1346,58 @@ export default function ChatThreadScreen() {
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
             onStartReachedThreshold={0.25}
             onStartReached={() => void loadOlder()}
+            onScrollToIndexFailed={(info) => {
+              listRef.current?.scrollToOffset({
+                offset: Math.max(0, info.averageItemLength * info.index),
+                animated: true,
+              });
+              setTimeout(() => {
+                listRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: true,
+                  viewPosition: 0.5,
+                });
+              }, 120);
+            }}
             ListHeaderComponent={
-              loadingMore ? (
-                <View style={{ paddingVertical: 8 }}>
-                  <ActivityIndicator color={colors.textMuted} size="small" />
-                </View>
-              ) : null
+              <>
+                {loadingMore ? (
+                  <View style={{ paddingVertical: 8 }}>
+                    <ActivityIndicator color={colors.textMuted} size="small" />
+                  </View>
+                ) : null}
+                {pinnedPreview ? (
+                  <PinnedMessageBanner
+                    preview={pinnedPreview.preview}
+                    senderLabel={pinnedPreview.senderLabel}
+                    onPress={() => scrollToMessage(pinnedPreview.messageId)}
+                    onUnpin={() => void runUnpinMessage()}
+                  />
+                ) : null}
+              </>
             }
             renderItem={({ item }) => {
               const mine = item.sender_id === user?.id;
               const { body, media, legacy } = bubblePropsFor(item);
               const onLongPress = item.tempKey ? undefined : () => showMessageActions(item);
+              const quotePreview =
+                user?.id && item.reply_to_message_id
+                  ? resolveReplyQuote(
+                      item,
+                      messagesById,
+                      peer?.name ?? 'Member',
+                      user.id,
+                      hasMediaForMessage
+                    )
+                  : null;
+              const quote = quotePreview
+                ? {
+                    senderLabel: quotePreview.senderLabel,
+                    preview: quotePreview.preview,
+                    isDeleted: quotePreview.isDeleted,
+                    onPress: () => scrollToMessage(quotePreview.messageId),
+                  }
+                : null;
               const meta: ChatBubbleMeta | null =
                 !item.deleted_at && (body || media || legacy)
                   ? {
@@ -1151,6 +1419,9 @@ export default function ChatThreadScreen() {
                     legacyImageUrl={legacy}
                     isDeleted={!!item.deleted_at}
                     showEdited={!!item.edited_at && !item.deleted_at}
+                    quote={quote}
+                    forwarded={!!item.is_forwarded && !item.deleted_at}
+                    highlighted={highlightedMessageId === item.id}
                     onLongPress={onLongPress}
                     meta={meta}
                     theme={bubbleTheme}
@@ -1193,8 +1464,20 @@ export default function ChatThreadScreen() {
             onPlan={() => router.push('/plan/create' as Href)}
             onOffer={onQuickSendOffer}
             onPlace={() => void suggestMeetingArea()}
+            replyTo={
+              replyTarget
+                ? { senderLabel: replyTarget.senderLabel, preview: replyTarget.preview }
+                : null
+            }
+            onCancelReply={() => setReplyTarget(null)}
           />
         </Animated.View>
+
+        {copyAck ? (
+          <View style={[styles.copyToast, { bottom: insets.bottom + 88 }]} pointerEvents="none">
+            <Text style={styles.copyToastText}>Copied</Text>
+          </View>
+        ) : null}
 
         <Modal
           visible={!!editModal}
@@ -1252,6 +1535,18 @@ export default function ChatThreadScreen() {
           onClose={() => setMessageActionItems(null)}
           title=""
           actions={messageActionItems ?? []}
+        />
+
+        <ForwardMessageSheet
+          visible={forwardOpen}
+          loading={forwardLoading}
+          targets={forwardTargets}
+          busyId={forwardBusyId}
+          onClose={() => {
+            setForwardOpen(false);
+            setForwardSource(null);
+          }}
+          onSelect={(t) => void runForwardTo(t)}
         />
 
         {user?.id && peer?.id ? (
@@ -1401,4 +1696,13 @@ const styles = StyleSheet.create({
   editBtn: { paddingVertical: 8, paddingHorizontal: 12 },
   editBtnTextMuted: { fontSize: 16, color: colors.textMuted, fontWeight: '600' },
   editBtnPrimary: { color: colors.primary },
+  copyToast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(26, 29, 38, 0.88)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+  },
+  copyToastText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
