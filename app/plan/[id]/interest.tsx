@@ -3,12 +3,11 @@
  */
 import { PlanInterestEngagementCard } from '@/components/plans/PlanInterestEngagementCard';
 import { PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
-import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
-import { fetchIncognitoUserIds } from '@/lib/plans/incognitoEngagement';
+import { fetchHiddenEngagementUserIds } from '@/lib/plans/incognitoEngagement';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -16,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
@@ -113,10 +111,28 @@ function InterestLeadBlock({
   );
 }
 
+function InterestLeadSkeleton() {
+  return (
+    <View style={styles.leadBlock}>
+      <View style={styles.leadAccentSkeleton} />
+      <View style={styles.leadTextCol}>
+        <View style={styles.skeletonKicker} />
+        <View style={styles.skeletonTitle} />
+        <View style={styles.skeletonSubWide} />
+        <View style={styles.skeletonSub} />
+        <View style={styles.statRow}>
+          <View style={styles.skeletonStatPill} />
+          <View style={styles.skeletonStatPill} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function InterestListSkeleton() {
   return (
     <View style={styles.skeletonWrap}>
-      {[0, 1, 2].map((i) => (
+      {[0, 1, 2, 3].map((i) => (
         <View key={i} style={styles.skeletonCard}>
           <View style={styles.skeletonAvatar} />
           <View style={styles.skeletonBody}>
@@ -125,8 +141,20 @@ function InterestListSkeleton() {
           </View>
         </View>
       ))}
-      <ActivityIndicator color={colors.primary} style={styles.skeletonSpinner} />
     </View>
+  );
+}
+
+function InterestLoadingBody({ planTitle }: { planTitle?: string | null }) {
+  return (
+    <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+      {planTitle ? (
+        <InterestLeadBlock planTitle={planTitle} viewCount={0} saveCount={0} statsLoading />
+      ) : (
+        <InterestLeadSkeleton />
+      )}
+      <InterestListSkeleton />
+    </ScrollView>
   );
 }
 
@@ -203,8 +231,9 @@ export default function PlanInterestScreen() {
   const [rows, setRows] = useState<Row[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [engagementsLoading, setEngagementsLoading] = useState(true);
+  const [initialFetchDone, setInitialFetchDone] = useState(false);
   const hasCachedRowsRef = useRef(false);
-  const { allowed: canSeeInterest } = usePermission('plans.see_all_likes');
+  const { allowed: canSeeInterest, loading: permLoading } = usePermission('plans.see_all_likes');
 
   const load = useCallback(
     async (options?: { background?: boolean }) => {
@@ -212,13 +241,15 @@ export default function PlanInterestScreen() {
         setEngagementsLoading(false);
         return;
       }
-      const showListLoading = !options?.background && !hasCachedRowsRef.current;
+      const showListLoading = !options?.background;
       if (showListLoading) setEngagementsLoading(true);
 
+      let loadedPlan: DbPlan | null = null;
       try {
         const { data: p } = await supabase.from('plans').select('*').eq('id', id).single();
-        setPlan(p as DbPlan | null);
-        if (!p || (p as DbPlan).creator_id !== user?.id || !canSeeInterest) {
+        loadedPlan = (p as DbPlan | null) ?? null;
+        setPlan(loadedPlan);
+        if (!loadedPlan || loadedPlan.creator_id !== user?.id || !canSeeInterest) {
           setRows([]);
           hasCachedRowsRef.current = false;
           return;
@@ -230,7 +261,7 @@ export default function PlanInterestScreen() {
           .order('created_at', { ascending: false });
         const list = eng ?? [];
         const userIds = [...new Set(list.map((e) => e.user_id as string))];
-        const incognitoIds = await fetchIncognitoUserIds(userIds);
+        const incognitoIds = await fetchHiddenEngagementUserIds(userIds);
         const visibleEngagements = list.filter((e) => !incognitoIds.has(e.user_id as string));
         let profs: { user_id: string; display_name: string | null; avatar_url: string | null }[] = [];
         const visibleIds = [...new Set(visibleEngagements.map((e) => e.user_id as string))];
@@ -256,6 +287,11 @@ export default function PlanInterestScreen() {
         hasCachedRowsRef.current = nextRows.length > 0;
       } finally {
         setEngagementsLoading(false);
+        const hostOk =
+          !!loadedPlan &&
+          loadedPlan.creator_id === user?.id &&
+          canSeeInterest;
+        if (!options?.background && hostOk) setInitialFetchDone(true);
       }
     },
     [id, user?.id, canSeeInterest]
@@ -287,7 +323,7 @@ export default function PlanInterestScreen() {
     return (
       <InterestShell>
         <PlanStackScreenHeader title="Interest" barStyle={HEADER_BAR} titleStyle={styles.headerTitle} />
-        <PlanScreenLoading title="Loading activity" subtitle="Fetching views and saves for this plan." />
+        <InterestLoadingBody />
       </InterestShell>
     );
   }
@@ -314,6 +350,15 @@ export default function PlanInterestScreen() {
     );
   }
 
+  if (permLoading) {
+    return (
+      <InterestShell>
+        <PlanStackScreenHeader title="Interest" barStyle={HEADER_BAR} titleStyle={styles.headerTitle} />
+        <InterestLoadingBody planTitle={plan?.title} />
+      </InterestShell>
+    );
+  }
+
   if (!canSeeInterest) {
     return (
       <InterestShell>
@@ -323,12 +368,14 @@ export default function PlanInterestScreen() {
     );
   }
 
+  const listStillLoading = engagementsLoading || !initialFetchDone;
+
   return (
     <InterestShell>
       <PlanStackScreenHeader title="Interest" barStyle={HEADER_BAR} titleStyle={styles.headerTitle} />
       <FlatList
         style={styles.listFlex}
-        data={rows}
+        data={listStillLoading ? [] : rows}
         keyExtractor={(item, i) => `${item.user_id}-${item.kind}-${i}`}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
@@ -341,13 +388,11 @@ export default function PlanInterestScreen() {
               planTitle={plan.title ?? ''}
               viewCount={viewCount}
               saveCount={saveCount}
-              statsLoading={engagementsLoading}
+              statsLoading={listStillLoading}
             />
           ) : null
         }
-        ListEmptyComponent={
-          engagementsLoading ? <InterestListSkeleton /> : rows.length === 0 ? <InterestEmptyState /> : null
-        }
+        ListEmptyComponent={listStillLoading ? <InterestListSkeleton /> : <InterestEmptyState />}
         renderItem={({ item }) => (
           <PlanInterestEngagementCard
             name={item.display_name?.trim() || 'Member'}
@@ -579,5 +624,46 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(255, 101, 132, 0.1)',
   },
-  skeletonSpinner: { marginTop: spacing.md, alignSelf: 'center' },
+  leadAccentSkeleton: {
+    width: 5,
+    marginTop: 8,
+    borderRadius: 3,
+    alignSelf: 'stretch',
+    minHeight: 52,
+    backgroundColor: 'rgba(108, 99, 255, 0.15)',
+  },
+  skeletonKicker: {
+    width: 88,
+    height: 10,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 101, 132, 0.18)',
+    marginBottom: 8,
+  },
+  skeletonTitle: {
+    width: '72%',
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: 'rgba(108, 99, 255, 0.14)',
+    marginBottom: 10,
+  },
+  skeletonSubWide: {
+    width: '100%',
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    marginBottom: 6,
+  },
+  skeletonSub: {
+    width: '85%',
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    marginBottom: spacing.md,
+  },
+  skeletonStatPill: {
+    width: 108,
+    height: 34,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+  },
 });

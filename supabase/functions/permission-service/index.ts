@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
   const { data: user, error } = await supabase
     .from('users')
     .select(
-      'subscription_tier, subscription_expires_at, silver_trial_expires_at, gold_trial_expires_at, has_been_silver_subscriber'
+      'subscription_tier, subscription_expires_at, silver_trial_expires_at, gold_trial_expires_at, has_been_silver_subscriber, premium_until'
     )
     .eq('id', userId)
     .maybeSingle();

@@ -22,6 +22,14 @@ export function notificationIcon(type: string): IonName {
       return 'alarm-outline';
     case 'completion_release':
       return 'checkmark-done-outline';
+    case 'credit_issued':
+    case 'credit_expiring':
+      return 'sparkles-outline';
+    case 'trial_started':
+      return 'sparkles-outline';
+    case 'trial_expiring':
+    case 'trial_expired':
+      return 'time-outline';
     case 'cancel_chargeback':
       return 'close-circle-outline';
     case 'message':

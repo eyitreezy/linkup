@@ -5,29 +5,31 @@ import type { SubscriptionTier } from '@/lib/subscription/pricing';
 export function resolveClientEffectiveTier(user: DbUser | null | undefined, now = Date.now()): SubscriptionTier {
   if (!user) return 'FREE';
 
-  const paid = user.subscription_tier ?? 'FREE';
-  if (
-    paid !== 'FREE' &&
-    user.subscription_expires_at &&
-    new Date(user.subscription_expires_at).getTime() > now
-  ) {
-    return paid;
+  const paidTier = user.subscription_tier ?? 'FREE';
+  const paidActive =
+    paidTier !== 'FREE' &&
+    !!user.subscription_expires_at &&
+    new Date(user.subscription_expires_at).getTime() > now;
+
+  if (paidActive && (paidTier === 'PLATINUM' || paidTier === 'GOLD')) {
+    return paidTier;
   }
 
-  if (
-    user.silver_trial_expires_at &&
-    new Date(user.silver_trial_expires_at).getTime() > now &&
-    paid === 'FREE'
-  ) {
+  if (hasActiveGoldTrial(user)) {
+    return 'GOLD';
+  }
+
+  if (paidActive && paidTier === 'SILVER') {
     return 'SILVER';
   }
 
-  if (
-    user.gold_trial_expires_at &&
-    new Date(user.gold_trial_expires_at).getTime() > now &&
-    user.has_been_silver_subscriber
-  ) {
-    return 'GOLD';
+  if (paidTier === 'FREE' && hasActiveSilverTrial(user)) {
+    return 'SILVER';
+  }
+
+  // Legacy Paystack premium maps to SILVER-equivalent benefits at resolution time only
+  if (user.premium_until && new Date(user.premium_until).getTime() > now) {
+    return 'SILVER';
   }
 
   return 'FREE';
@@ -49,4 +51,9 @@ export function hasActiveSilverTrial(user: DbUser | null | undefined): boolean {
 export function hasActiveGoldTrial(user: DbUser | null | undefined): boolean {
   if (!user?.gold_trial_expires_at) return false;
   return new Date(user.gold_trial_expires_at).getTime() > Date.now();
+}
+
+export function hasLegacyPremium(user: DbUser | null | undefined): boolean {
+  if (!user?.premium_until) return false;
+  return new Date(user.premium_until).getTime() > Date.now();
 }

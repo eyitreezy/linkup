@@ -91,6 +91,14 @@ Deno.serve(async (req) => {
     metadata: { trial_type: 'gold_7_day', auto_triggered: false },
   });
 
+  await supabase.from('notifications').insert({
+    user_id: userId,
+    type: 'trial_started',
+    title: 'Your 7-day Gold trial has started',
+    body: 'Enjoy Gold features free for 7 days — including extended mood plans, group plans, and more.',
+    data: { href: '/subscription', trialType: 'gold' },
+  });
+
   return jsonResponse({
     activated: true,
     expires_at: expiresAt.toISOString(),

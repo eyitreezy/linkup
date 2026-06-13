@@ -11,18 +11,24 @@ export const CHAT_MESSAGE_COLUMNS_WITH_REPLY =
   `${CHAT_MESSAGE_COLUMNS_BASE}, reply_to_message_id` as const;
 
 /** Includes forward metadata when migration `20260620000001_chat_forward_pin` is applied. */
-export const CHAT_MESSAGE_COLUMNS_FULL =
+export const CHAT_MESSAGE_COLUMNS_WITH_FORWARD =
   `${CHAT_MESSAGE_COLUMNS_WITH_REPLY}, is_forwarded, forwarded_from_message_id` as const;
+
+/** Includes receipt_hidden when migration `20260610000010_platinum_delete_window` is applied. */
+export const CHAT_MESSAGE_COLUMNS_FULL =
+  `${CHAT_MESSAGE_COLUMNS_WITH_FORWARD}, receipt_hidden` as const;
 
 /** @deprecated Use `chatMessageSelectColumns()` — auto-falls back when columns missing. */
 export const CHAT_MESSAGE_COLUMNS = CHAT_MESSAGE_COLUMNS_FULL;
 
 let replyColumnSupported: boolean | null = null;
 let forwardColumnSupported: boolean | null = null;
+let receiptColumnSupported: boolean | null = null;
 
 export function chatMessageSelectColumns(): string {
   if (replyColumnSupported === false) return CHAT_MESSAGE_COLUMNS_BASE;
   if (forwardColumnSupported === false) return CHAT_MESSAGE_COLUMNS_WITH_REPLY;
+  if (receiptColumnSupported === false) return CHAT_MESSAGE_COLUMNS_WITH_FORWARD;
   return CHAT_MESSAGE_COLUMNS_FULL;
 }
 
@@ -38,8 +44,16 @@ export function markForwardColumnUnsupported(): void {
   forwardColumnSupported = false;
 }
 
+export function markReceiptColumnUnsupported(): void {
+  receiptColumnSupported = false;
+}
+
 function downgradeMessageColumns(cols: string): string {
   if (cols === CHAT_MESSAGE_COLUMNS_FULL) {
+    markReceiptColumnUnsupported();
+    return CHAT_MESSAGE_COLUMNS_WITH_FORWARD;
+  }
+  if (cols === CHAT_MESSAGE_COLUMNS_WITH_FORWARD) {
     markForwardColumnUnsupported();
     return CHAT_MESSAGE_COLUMNS_WITH_REPLY;
   }
@@ -64,6 +78,8 @@ export function normalizeChatMessageRow(row: Record<string, unknown>): ChatMessa
     is_forwarded: (row.is_forwarded as boolean | undefined) ?? false,
     forwarded_from_message_id:
       (row.forwarded_from_message_id as string | null | undefined) ?? null,
+    receipt_hidden: (row.receipt_hidden as boolean | undefined) ?? false,
+    is_system: row.sender_id == null && !!(row.text ?? row.body),
   };
 }
 
@@ -92,18 +108,22 @@ export type ChatMessageRow = {
   /** Legacy column; kept in sync with `text` in DB. */
   body: string | null;
   media_id: string | null;
-  sender_id: string;
+  sender_id: string | null;
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
   reply_to_message_id: string | null;
   is_forwarded: boolean;
   forwarded_from_message_id: string | null;
+  receipt_hidden: boolean;
+  group_sender_display?: string | null;
+  /** Centered system line (join/leave) — no bubble actions. */
+  is_system?: boolean;
 };
 
 export type ReplyQuotePreview = {
   messageId: string;
-  senderId: string;
+  senderId: string | null;
   senderLabel: string;
   preview: string;
   isDeleted: boolean;

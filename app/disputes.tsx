@@ -261,7 +261,13 @@ export default function DisputesScreen() {
                             style={styles.rowOuter}
                           >
                             <Pressable
-                              onPress={() => router.push(`/dispute/${item.plan_id}` as Href)}
+                              onPress={() =>
+                                router.push(
+                                  (item.status === 'pending'
+                                    ? `/dispute/${item.plan_id}`
+                                    : `/dispute/${item.plan_id}/detail`) as Href
+                                )
+                              }
                               style={({ pressed }) => [styles.rowInner, pressed && styles.rowPressed]}
                               accessibilityRole="button"
                               accessibilityLabel={`Plan dispute ${item.category}`}

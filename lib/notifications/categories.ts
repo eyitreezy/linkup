@@ -17,6 +17,8 @@ const PAYMENTS: NotificationEventType[] = [
   'completion_release',
   'cancel_chargeback',
   'dispute_opened',
+  'credit_issued',
+  'credit_expiring',
 ];
 
 const SYSTEM: NotificationEventType[] = [
@@ -28,6 +30,9 @@ const SYSTEM: NotificationEventType[] = [
   'account_restriction',
   'report_submitted',
   'premium_activated',
+  'trial_started',
+  'trial_expiring',
+  'trial_expired',
 ];
 
 export function notificationTab(type: string): NotificationFilterTab {

@@ -2,12 +2,17 @@
  * M2 — Chat thread: bubbles, media, realtime, trust caps, optimistic send.
  */
 import { ChatAppearanceSheet } from '@/components/messages/ChatAppearanceSheet';
+import { ChatSearchBar } from '@/components/messages/ChatSearchBar';
 import { ChatBubble, ChatBubbleStatus, type ChatBubbleMeta } from '@/components/messages/ChatBubble';
 import type { ChatBubbleMedia } from '@/components/messages/ChatBubble';
 import {
   MessageActionsSheet,
   type MessageActionItem,
 } from '@/components/messages/MessageActionsSheet';
+import {
+  MessageDeleteConfirmModal,
+  type MessageDeleteKind,
+} from '@/components/messages/MessageDeleteConfirmModal';
 import { ChatComposer } from '@/components/messages/ChatComposer';
 import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
 import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
@@ -15,6 +20,7 @@ import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
+import { usePermission } from '@/hooks/usePermission';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePresenceActions } from '@/contexts/PresenceContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,7 +60,19 @@ import {
   filterMessagesHiddenForUser,
   hideMessageForMe,
 } from '@/lib/messaging/messageDeletions';
+import {
+  fetchPeerReadCursor,
+  type ConversationReadRow,
+} from '@/lib/messaging/conversationReads';
+import {
+  isMessageReadByPeerCursor,
+  isMessageReadByPeerReplyHeuristic,
+} from '@/lib/messaging/readReceiptUtils';
+import { searchMessagesInConversation } from '@/lib/messaging/searchMessages';
+import { subscribeConversationReadsRealtime } from '@/lib/messaging/subscribeConversationReadsRealtime';
 import { subscribeConversationRealtime } from '@/lib/messaging/subscribeConversationRealtime';
+import { toggleMessageReceipt } from '@/lib/messaging/toggleMessageReceipt';
+import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { fetchActiveMeetupWithPeer, type LinkedMeetup } from '@/lib/messaging/fetchActiveMeetupWithPeer';
 import {
   detectOffPlatformContact,
@@ -151,6 +169,10 @@ export default function ChatThreadScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [editModal, setEditModal] = useState<EditModalState>(null);
   const [messageActionItems, setMessageActionItems] = useState<MessageActionItem[] | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    kind: MessageDeleteKind;
+    message: UiMessage;
+  } | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyQuotePreview | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [pinState, setPinState] = useState<ConversationPinState>({
@@ -176,6 +198,15 @@ export default function ChatThreadScreen() {
 
   const [appearance, setAppearance] = useState<ChatAppearanceState>(DEFAULT_CHAT_APPEARANCE);
   const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
+  const [peerReadCursor, setPeerReadCursor] = useState<ConversationReadRow | null>(null);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResultIndex, setSearchResultIndex] = useState(0);
+  const [serverSearchIds, setServerSearchIds] = useState<string[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const { allowed: hasReadReceiptsPerm } = usePermission('messaging.read_receipts');
+  const viewerTier = resolveClientEffectiveTier(dbUser);
 
   useEffect(() => {
     void loadChatAppearance().then(setAppearance);
@@ -211,7 +242,7 @@ export default function ChatThreadScreen() {
 
   const showTypingIndicator = peerTyping && typingVisibleToViewer(profile, peer?.preferences);
 
-  const readReceiptsOn = getVisibilityPrefs(profile).read_receipts;
+  const readReceiptsOn = hasReadReceiptsPerm && getVisibilityPrefs(profile).read_receipts;
 
   const messagesById = useMemo(() => {
     const map = new Map<string, ChatMessageRow>();
@@ -245,22 +276,91 @@ export default function ChatThreadScreen() {
     [messages]
   );
 
-  /** Approximate “read” when the peer has any later message (common 1:1 heuristic; no server read cursor). */
-  const approxReadByMessageId = useMemo(() => {
-    if (!user?.id) return new Map<string, boolean>();
-    let latestPeerMs = 0;
+  const chronologicalMessages = useMemo(
+    () =>
+      messages
+        .filter((m) => !m.tempKey)
+        .map((m) => ({ id: m.id, created_at: m.created_at })),
+    [messages]
+  );
+
+  const latestPeerMessageMs = useMemo(() => {
+    if (!user?.id) return 0;
+    let ms = 0;
     for (const m of messages) {
       if (m.tempKey || m.sender_id === user.id) continue;
-      latestPeerMs = Math.max(latestPeerMs, new Date(m.created_at).getTime());
+      ms = Math.max(ms, new Date(m.created_at).getTime());
     }
-    const map = new Map<string, boolean>();
-    for (const m of messages) {
-      if (m.tempKey || m.sender_id !== user.id) continue;
-      const t = new Date(m.created_at).getTime();
-      map.set(m.id, latestPeerMs > t);
-    }
-    return map;
+    return ms;
   }, [messages, user?.id]);
+
+  const isMessageReadByPeer = useCallback(
+    (message: UiMessage) => {
+      if (message.receipt_hidden) return false;
+      return (
+        isMessageReadByPeerCursor(
+          message.id,
+          message.created_at,
+          chronologicalMessages,
+          peerReadCursor
+        ) ||
+        isMessageReadByPeerReplyHeuristic(message.created_at, latestPeerMessageMs)
+      );
+    },
+    [chronologicalMessages, peerReadCursor, latestPeerMessageMs]
+  );
+
+  const localSearchIds = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length < 1) return [];
+    return messages
+      .filter(
+        (m) =>
+          !m.tempKey &&
+          !m.deleted_at &&
+          !hiddenForMeIds.has(m.id) &&
+          (messageDisplayText(m) ?? '').toLowerCase().includes(q)
+      )
+      .map((m) => m.id);
+  }, [searchQuery, messages, hiddenForMeIds]);
+
+  const searchResults = useMemo(() => {
+    const merged = [...new Set([...localSearchIds, ...serverSearchIds])];
+    const order = new Map(messages.map((m, i) => [m.id, i]));
+    return merged.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  }, [localSearchIds, serverSearchIds, messages]);
+
+  useEffect(() => {
+    if (!searchActive) {
+      setServerSearchIds([]);
+      setSearchLoading(false);
+      return;
+    }
+    const q = searchQuery.trim();
+    if (q.length < 3 || !conversationId || !user?.id) {
+      setServerSearchIds([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    const t = setTimeout(() => {
+      void searchMessagesInConversation(conversationId, q, user.id).then((rows) => {
+        setServerSearchIds(rows.map((r) => r.id));
+        setSearchLoading(false);
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [searchQuery, searchActive, conversationId, user?.id]);
+
+  useEffect(() => {
+    if (!searchActive || searchResults.length === 0) return;
+    const id = searchResults[Math.min(searchResultIndex, searchResults.length - 1)];
+    if (id) scrollToMessage(id);
+  }, [searchResultIndex, searchResults, searchActive, scrollToMessage]);
+
+  useEffect(() => {
+    setSearchResultIndex(0);
+  }, [searchQuery]);
 
   useEffect(() => {
     peerPresenceRef.current = peerPresence;
@@ -429,12 +529,36 @@ export default function ChatThreadScreen() {
   }, [peer?.id]);
 
   useEffect(() => {
+    if (!peer?.id || !conversationId || !isSupabaseConfigured) {
+      setPeerReadCursor(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchPeerReadCursor(conversationId, peer.id).then((row) => {
+      if (!cancelled) setPeerReadCursor(row);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [peer?.id, conversationId]);
+
+  useEffect(() => {
     if (!conversationId || !isSupabaseConfigured) return;
     void fetchConversationPin(conversationId).then(setPinState);
-    return subscribeConversationRealtime(conversationId, {
+    const unsubPin = subscribeConversationRealtime(conversationId, {
       onPinChange: setPinState,
     });
-  }, [conversationId]);
+    const unsubReads = subscribeConversationReadsRealtime(conversationId, {
+      onUpsert: (row) => {
+        if (!user?.id || row.user_id === user.id) return;
+        setPeerReadCursor(row);
+      },
+    });
+    return () => {
+      unsubPin();
+      unsubReads();
+    };
+  }, [conversationId, user?.id]);
 
   useEffect(() => {
     if (!conversationId || !isSupabaseConfigured) return;
@@ -525,7 +649,7 @@ export default function ChatThreadScreen() {
     if (!conversationId) return;
     const real = messages.filter((m) => !m.tempKey);
     const last = real[real.length - 1];
-    if (last) void setConversationLastRead(conversationId, last.created_at);
+    if (last) void setConversationLastRead(conversationId, last.created_at, last.id);
   }, [conversationId, messages]);
 
   const countTodaySends = useCallback(async (): Promise<number> => {
@@ -631,6 +755,7 @@ export default function ChatThreadScreen() {
       reply_to_message_id: replyId,
       is_forwarded: false,
       forwarded_from_message_id: null,
+      receipt_hidden: false,
     };
     setMessages((p) => [...p, optimistic]);
     setText('');
@@ -755,7 +880,7 @@ export default function ChatThreadScreen() {
   const runDeleteForEveryone = useCallback(
     async (m: UiMessage) => {
       if (!user?.id) return;
-      const result = await deleteMessageForEveryone(supabase, m, user.id);
+      const result = await deleteMessageForEveryone(supabase, m, user.id, viewerTier);
       if (!result.ok) {
         Alert.alert('Could not delete', result.error);
         return;
@@ -769,8 +894,17 @@ export default function ChatThreadScreen() {
         return next;
       });
     },
-    [user?.id]
+    [user?.id, viewerTier]
   );
+
+  const runToggleReceipt = useCallback(async (m: UiMessage, hidden: boolean) => {
+    const result = await toggleMessageReceipt(m.id, hidden);
+    if (!result.ok) {
+      Alert.alert('Could not update', result.error);
+      return;
+    }
+    setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, receipt_hidden: hidden } : x)));
+  }, []);
 
   const saveEditedMessage = useCallback(async () => {
     if (!editModal || !user || !conversationId) return;
@@ -903,6 +1037,7 @@ export default function ChatThreadScreen() {
       const items = buildMessageActions({
         message: m,
         viewerId: user.id,
+        viewerTier,
         pinnedMessageId: pinState.pinnedMessageId,
         hiddenForViewer: hiddenForMeIds.has(m.id),
         hasMedia,
@@ -927,24 +1062,15 @@ export default function ChatThreadScreen() {
           onEdit: () => setEditModal({ messageId: m.id, draft: rawText }),
           onPin: () => void runPinMessage(m),
           onUnpin: () => void runUnpinMessage(),
-          onDeleteForMe: () =>
-            Alert.alert(
-              'Delete for me?',
-              'This message will be removed from your chat. The other person can still see it.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => void runDeleteForMe(m) },
-              ]
-            ),
-          onDeleteForEveryone: () =>
-            Alert.alert(
-              'Delete for everyone?',
-              'This removes the message for you and the other person.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: () => void runDeleteForEveryone(m) },
-              ]
-            ),
+          onToggleReceipt: () => void runToggleReceipt(m, !m.receipt_hidden),
+          onDeleteForMe: () => {
+            setMessageActionItems(null);
+            setDeleteConfirm({ kind: 'for_me', message: m });
+          },
+          onDeleteForEveryone: () => {
+            setMessageActionItems(null);
+            setDeleteConfirm({ kind: 'for_everyone', message: m });
+          },
         },
       });
 
@@ -953,12 +1079,14 @@ export default function ChatThreadScreen() {
     },
     [
       user,
+      viewerTier,
       hiddenForMeIds,
       peer?.name,
       pinState.pinnedMessageId,
       openForwardSheet,
       runPinMessage,
       runUnpinMessage,
+      runToggleReceipt,
       runDeleteForMe,
       runDeleteForEveryone,
       mediaById,
@@ -1238,6 +1366,30 @@ export default function ChatThreadScreen() {
             <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
               <Ionicons name="chevron-back" size={26} color={colors.text} />
             </Pressable>
+            {searchActive ? (
+              <ChatSearchBar
+                query={searchQuery}
+                onQueryChange={setSearchQuery}
+                onCancel={() => {
+                  setSearchActive(false);
+                  setSearchQuery('');
+                  setSearchResultIndex(0);
+                  setServerSearchIds([]);
+                }}
+                resultCount={searchResults.length}
+                currentIndex={searchResultIndex}
+                searching={searchLoading}
+                onPrevResult={() =>
+                  setSearchResultIndex((i) => Math.max(0, i - 1))
+                }
+                onNextResult={() =>
+                  setSearchResultIndex((i) =>
+                    searchResults.length > 0 ? Math.min(searchResults.length - 1, i + 1) : 0
+                  )
+                }
+              />
+            ) : (
+              <>
             <Pressable
               style={styles.headerMid}
               onPress={() => peer?.id && router.push(`/user/${peer.id}` as Href)}
@@ -1291,6 +1443,15 @@ export default function ChatThreadScreen() {
             {peer?.id && user?.id !== peer.id ? (
               <View style={styles.headerRight}>
                 <Pressable
+                  onPress={() => setSearchActive(true)}
+                  style={styles.reportBtn}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Search messages"
+                >
+                  <Ionicons name="search-outline" size={22} color={colors.textMuted} />
+                </Pressable>
+                <Pressable
                   onPress={() => setAppearanceSheetOpen(true)}
                   style={styles.reportBtn}
                   hitSlop={12}
@@ -1311,6 +1472,8 @@ export default function ChatThreadScreen() {
               </View>
             ) : (
               <View style={{ width: 32 }} />
+            )}
+              </>
             )}
           </View>
         </LinearGradient>
@@ -1407,7 +1570,7 @@ export default function ChatThreadScreen() {
                         mine &&
                         !item.tempKey &&
                         readReceiptsOn &&
-                        (approxReadByMessageId.get(item.id) ?? false),
+                        isMessageReadByPeer(item),
                     }
                   : null;
               return (
@@ -1562,6 +1725,19 @@ export default function ChatThreadScreen() {
         ) : null}
 
         <ContactShareBlockedModal visible={contactBlockedOpen} onDismiss={() => void dismissContactBlockedModal()} />
+
+        <MessageDeleteConfirmModal
+          visible={deleteConfirm !== null}
+          kind={deleteConfirm?.kind ?? 'for_me'}
+          onClose={() => setDeleteConfirm(null)}
+          onConfirm={() => {
+            if (!deleteConfirm) return;
+            if (deleteConfirm.kind === 'for_me') {
+              return runDeleteForMe(deleteConfirm.message);
+            }
+            return runDeleteForEveryone(deleteConfirm.message);
+          }}
+        />
 
         {user?.id && peer?.id ? (
           <ReportSheet

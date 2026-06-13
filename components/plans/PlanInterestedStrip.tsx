@@ -5,8 +5,7 @@ import { Avatar } from '@/components/Avatar';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { colors, radius, spacing } from '@/constants/theme';
 import { usePermission } from '@/hooks/usePermission';
-import { openDirectChat } from '@/lib/messaging/openDirectChat';
-import { fetchIncognitoUserIds } from '@/lib/plans/incognitoEngagement';
+import { fetchHiddenEngagementUserIds } from '@/lib/plans/incognitoEngagement';
 import { supabase } from '@/lib/supabase';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -53,7 +52,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       return;
     }
 
-    const incognitoIds = await fetchIncognitoUserIds(userIds);
+    const incognitoIds = await fetchHiddenEngagementUserIds(userIds);
     const visibleIds = userIds.filter((uid) => !incognitoIds.has(uid));
     if (visibleIds.length === 0) {
       setRows([]);
@@ -125,13 +124,9 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       {rows.length > 0 ? (
         <Pressable
           style={styles.connectBtn}
-          onPress={() => {
-            void (async () => {
-              for (const r of rows) {
-                await openDirectChat(supabase, currentUserId, r.user_id);
-              }
-            })();
-          }}
+          onPress={() => router.push(`/plan/${planId}/negotiate` as Href)}
+          accessibilityRole="button"
+          accessibilityLabel="Connect with all interested members via manage offers"
         >
           <Text style={styles.connectTxt}>Connect with all →</Text>
         </Pressable>

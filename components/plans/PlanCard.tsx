@@ -1,7 +1,10 @@
 /**
  * Hybrid plan card — media-forward header, trust signals, quick actions.
  */
+import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
+import { TierBadge } from '@/components/TierBadge';
 import { colors, radius, spacing } from '@/constants/theme';
+import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { isUserVerified } from '@/lib/verification/access';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
@@ -141,6 +144,8 @@ function PlanCardInner({
   const when = formatPlanWhen(row);
   const desc = row.description?.trim() ?? '';
   const boosted = isPlanBoostActive(row.boosted_until);
+  const creatorSpotlighted = isCreatorSpotlightActive(row.creatorProfile?.spotlight_until);
+  const hostTier = row.creatorProfile?.subscription_badge;
   const offerCta = useMemo(() => deriveOfferCta(userOffer ?? null, warmTone), [userOffer, warmTone]);
   const showCreatorPresence = !isOwn;
   const presenceUi = useMemo(
@@ -235,6 +240,8 @@ function PlanCardInner({
               </Text>
               <View style={styles.datingChipRow}>
                 <HostPresenceChip presence={presenceUi} />
+                {!boosted && creatorSpotlighted ? <CreatorSpotlightChip /> : null}
+                {hostTier === 'PLATINUM' ? <TierBadge tier="PLATINUM" compact /> : null}
                 {showTrustChip ? (
                   <View style={styles.datingTrustChip}>
                     <Text style={styles.datingTrustChipTxt}>Trusted</Text>
@@ -402,6 +409,8 @@ function PlanCardInner({
                 <Text style={styles.profileChipTxt}>Solid profile</Text>
               </View>
             ) : null}
+            {!boosted && creatorSpotlighted ? <CreatorSpotlightChip /> : null}
+            {hostTier === 'PLATINUM' ? <TierBadge tier="PLATINUM" compact /> : null}
           </View>
           {distanceKm != null ? (
             <Text style={styles.dist}>{distanceKm < 1 ? '< 1 km away' : `${distanceKm.toFixed(1)} km away`}</Text>

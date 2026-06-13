@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   hasActiveGoldTrial,
   hasActiveSilverTrial,
+  hasLegacyPremium,
   resolveClientEffectiveTier,
   trialDaysRemaining,
 } from '@/lib/subscription/effectiveTier';
@@ -48,6 +49,7 @@ export default function SubscriptionScreen() {
   const [busyTier, setBusyTier] = useState<PaidTier | null>(null);
   const [goldTrialBusy, setGoldTrialBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [goldTrialSuccess, setGoldTrialSuccess] = useState(false);
 
   const effective = resolveClientEffectiveTier(dbUser);
   const paidTier = dbUser?.subscription_tier ?? 'FREE';
@@ -64,6 +66,8 @@ export default function SubscriptionScreen() {
     paidTier === 'SILVER' &&
     paidActive &&
     !dbUser.gold_trial_activated_at;
+
+  const legacyPremiumActive = hasLegacyPremium(dbUser);
 
   const startCheckout = useCallback(
     async (tier: PaidTier) => {
@@ -148,14 +152,11 @@ export default function SubscriptionScreen() {
     if (!goldTrialEligible) return;
     setGoldTrialBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke('activate-gold-trial', { body: {} });
+      const { error } = await supabase.functions.invoke('activate-gold-trial', { body: {} });
       if (error) throw error;
       invalidatePermissionCache();
       await refreshProfile();
-      Alert.alert(
-        'Gold Explorer',
-        `Trial active until ${new Date((data as { expires_at: string }).expires_at).toLocaleDateString()}`
-      );
+      setGoldTrialSuccess(true);
     } catch (e) {
       Alert.alert('Trial', e instanceof Error ? e.message : 'Could not activate trial');
     } finally {
@@ -262,6 +263,27 @@ export default function SubscriptionScreen() {
           goldTrialDays={goldTrialDays ?? 0}
         />
 
+        {legacyPremiumActive && effective !== 'FREE' && paidTier === 'FREE' ? (
+          <View style={styles.legacyPremiumCard}>
+            <Text style={styles.legacyPremiumTitle}>Legacy premium active</Text>
+            <Text style={styles.legacyPremiumDesc}>
+              You have legacy premium access until{' '}
+              {new Date(dbUser!.premium_until!).toLocaleDateString(undefined, { dateStyle: 'medium' })},
+              giving you Silver-equivalent benefits. Subscribe to a current plan for continued access after this
+              date.
+            </Text>
+          </View>
+        ) : null}
+
+        {goldTrialSuccess ? (
+          <View style={styles.successBanner}>
+            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <Text style={styles.successBannerTxt}>
+              Gold trial activated — head to Discover to explore!
+            </Text>
+          </View>
+        ) : null}
+
         <BillingCycleToggle value={cycle} onChange={setCycle} />
 
         <Text style={styles.sectionLabel}>Choose your tier</Text>
@@ -291,6 +313,11 @@ export default function SubscriptionScreen() {
           <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
           <Text style={styles.trustTxt}>Secure checkout powered by Flutterwave</Text>
         </View>
+
+        <Pressable style={styles.historyLink} onPress={() => router.push('/subscription/history')}>
+          <Text style={styles.historyLinkText}>View subscription history</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+        </Pressable>
       </ScrollView>
     </Screen>
   );
@@ -356,4 +383,35 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   trustTxt: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  legacyPremiumCard: {
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.06)',
+  },
+  legacyPremiumTitle: { fontSize: 15, fontWeight: '900', color: colors.text, marginBottom: 6 },
+  legacyPremiumDesc: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.28)',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  successBannerTxt: { flex: 1, fontSize: 14, fontWeight: '700', color: '#047857' },
+  historyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    gap: 4,
+    paddingVertical: spacing.sm,
+  },
+  historyLinkText: { fontSize: 16, fontWeight: '800', color: colors.primary },
 });

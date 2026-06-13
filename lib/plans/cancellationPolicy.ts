@@ -2,7 +2,7 @@
  * Cancellation & refund policy — single source for UI copy and client previews.
  * Server enforcement: `submit_plan_cancellation` (see Supabase migration).
  */
-import type { EscrowPattern } from '@/types/database';
+import type { EscrowPattern, SubscriptionTier } from '@/types/database';
 
 export const HOST_CANCEL_HOURS = {
   EARLY: 72,
@@ -62,9 +62,26 @@ export function qualifiesForGoodwillCredit(opts: {
   return false;
 }
 
+/** Base goodwill amount only (before tier multiplier). Use `goodwillCreditCentsForTier` for previews. */
 export function goodwillCreditCents(guestReleaseCents: number): number {
   if (guestReleaseCents <= 0) return 200;
   return Math.min(3000, Math.max(200, Math.floor(guestReleaseCents * 0.08)));
+}
+
+/** Mirror of server `goodwill_credit_amount()` multipliers — keep in sync. */
+export const GOODWILL_TIER_MULTIPLIER: Record<SubscriptionTier, number> = {
+  FREE: 1.0,
+  SILVER: 1.0,
+  GOLD: 1.5,
+  PLATINUM: 2.0,
+};
+
+export function goodwillCreditCentsForTier(
+  baseAmountCents: number,
+  guestTier: SubscriptionTier
+): number {
+  const multiplier = GOODWILL_TIER_MULTIPLIER[guestTier] ?? 1.0;
+  return Math.round(baseAmountCents * multiplier);
 }
 
 export type CancellationFundedLegs = {

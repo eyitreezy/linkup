@@ -15,7 +15,9 @@ import { PlansFab } from '@/components/plans/PlansFab';
 import { PlansFeedSkeleton } from '@/components/plans/PlansFeedSkeleton';
 import { PlansKycBanner } from '@/components/plans/PlansKycBanner';
 import { PlansLocationPrompt } from '@/components/plans/PlansLocationPrompt';
+import { SoftKycPrompt } from '@/components/kyc/SoftKycPrompt';
 import { SilverTrialWelcomeModal } from '@/components/subscription/SilverTrialWelcomeModal';
+import { GoldTrialWelcomeModal } from '@/components/subscription/GoldTrialWelcomeModal';
 import { TrialBanner } from '@/components/TrialBanner';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PremiumFeaturePaywallModal } from '@/components/premium/PremiumFeaturePaywallModal';
@@ -36,6 +38,7 @@ import {
   mergePlansWithProfiles,
   type PlanRowFromDb,
 } from '@/lib/plans/planFeedMerge';
+import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
 import { rankDiscoveryPlans } from '@/lib/plans/feedRanking';
 import {
   fetchHiddenPlanIds,
@@ -48,7 +51,8 @@ import { prefetchPlanDetail, seedPlanDetailFromFeed } from '@/lib/plans/planDeta
 import { derivePresenceUi, hostPresenceMatchesFilter, resolveHostPresenceKind } from '@/lib/presence/derivePresenceUi';
 import { fetchPresenceMap } from '@/lib/presence/presenceHeartbeat';
 import { usePermission } from '@/hooks/usePermission';
-import { hasActiveSilverTrial } from '@/lib/subscription/effectiveTier';
+import { hasActiveGoldTrial, hasActiveSilverTrial } from '@/lib/subscription/effectiveTier';
+import { peekSoftKycPromptPending, consumeSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 import type { SubscriptionTier } from '@/types/database';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { isUserVerified, requiresVerificationGate } from '@/lib/verification/access';
@@ -161,6 +165,11 @@ export default function PlansScreen() {
   const { allowed: canAdvancedFilters } = usePermission('discover.advanced_filters');
   const { allowed: canTravelMode } = usePermission('discover.travel_mode');
   const { allowed: canUndoSwipe } = usePermission('discover.undo_swipe');
+  const { allowed: hasWiderRadius, effectiveTier: discoverTier } = usePermission('discover.wider_radius');
+  const browseRadiusKm = useMemo(
+    () => effectiveDiscoveryRadiusKm(radiusKm, discoverTier, hasWiderRadius),
+    [radiusKm, discoverTier, hasWiderRadius]
+  );
   const canDismissSwipe = canUndoSwipe;
   const travel = profile?.preferences?.travel_mode ?? null;
   const effectiveLat =
@@ -185,6 +194,11 @@ export default function PlansScreen() {
   const [upgradeFeature, setUpgradeFeature] = useState('discover.travel_mode');
   const [upgradeTier, setUpgradeTier] = useState<SubscriptionTier>('GOLD');
   const [silverWelcomeOpen, setSilverWelcomeOpen] = useState(false);
+  const [goldWelcomeOpen, setGoldWelcomeOpen] = useState(false);
+  const [softKycOpen, setSoftKycOpen] = useState(false);
+  type FirstSessionModal = 'silverWelcome' | 'goldWelcome' | 'softKyc';
+  const modalQueueRef = useRef<FirstSessionModal[]>([]);
+  const [activeModal, setActiveModal] = useState<FirstSessionModal | null>(null);
   const [hiddenPlanIds, setHiddenPlanIds] = useState<string[]>([]);
   const [lastHiddenId, setLastHiddenId] = useState<string | null>(null);
   const [blockedIds, setBlockedIds] = useState<string[]>([]);
@@ -234,10 +248,10 @@ export default function PlansScreen() {
   useEffect(() => {
     const f = profile?.preferences?.feed_filters;
     if (f && typeof f === 'object') {
-      const parsed = parseStoredFeedFilters(f, radiusKm);
+      const parsed = parseStoredFeedFilters(f, browseRadiusKm);
       setFeedFilter(parsed);
     }
-  }, [profile?.preferences, radiusKm]);
+  }, [profile?.preferences, browseRadiusKm]);
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return;
@@ -257,7 +271,7 @@ export default function PlansScreen() {
     let merged = mergePlansWithProfiles(accRef.current, profMap);
     const blocked = new Set(blockedIds);
     const hidden = new Set(hiddenPlanIds);
-    const maxKm = feedFilter.maxDistanceKm ?? radiusKm;
+    const maxKm = feedFilter.maxDistanceKm ?? browseRadiusKm;
 
     merged = merged.filter((row) => {
       if (row.is_mood_plan && isPlanMoodWindowClosed(row)) return false;
@@ -303,7 +317,7 @@ export default function PlansScreen() {
     setRows(merged);
   }, [
     user?.id,
-    radiusKm,
+    browseRadiusKm,
     effectiveLat,
     effectiveLng,
     feedFilter,
@@ -369,7 +383,8 @@ export default function PlansScreen() {
       derivePresenceUi(
         profile ?? null,
         row.creatorProfile?.preferences,
-        presenceByUser[row.creator_id] ?? null
+        presenceByUser[row.creator_id] ?? null,
+        !!row.creatorProfile?.masked_activity_enabled
       ),
     [profile, presenceByUser]
   );
@@ -397,7 +412,8 @@ export default function PlansScreen() {
       const kind = resolveHostPresenceKind(
         profile ?? null,
         row.creatorProfile?.preferences,
-        presenceByUser[row.creator_id] ?? null
+        presenceByUser[row.creator_id] ?? null,
+        !!row.creatorProfile?.masked_activity_enabled
       );
       return hostPresenceMatchesFilter(kind, feedFilter.hostPresence);
     });
@@ -697,12 +713,57 @@ export default function PlansScreen() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id || !dbUser?.silver_trial_activated_at || !hasActiveSilverTrial(dbUser)) return;
-    const key = `silver_trial_welcome_seen_${user.id}`;
-    void AsyncStorage.getItem(key).then((seen) => {
-      if (!seen) setSilverWelcomeOpen(true);
-    });
-  }, [user?.id, dbUser?.silver_trial_activated_at, dbUser?.silver_trial_expires_at]);
+    if (!user?.id || !dbUser) return;
+
+    void (async () => {
+      const queue: FirstSessionModal[] = [];
+
+      if (dbUser.silver_trial_activated_at && hasActiveSilverTrial(dbUser)) {
+        const seen = await AsyncStorage.getItem(`silver_trial_welcome_seen_${user.id}`);
+        if (!seen) queue.push('silverWelcome');
+      }
+
+      if (hasActiveGoldTrial(dbUser)) {
+        const seen = await AsyncStorage.getItem(`gold_trial_welcome_seen_${user.id}`);
+        if (!seen) queue.push('goldWelcome');
+      }
+
+      if (!isUserVerified(dbUser.verification_status)) {
+        const pending = await peekSoftKycPromptPending();
+        if (pending) queue.push('softKyc');
+      }
+
+      modalQueueRef.current = queue;
+      setActiveModal(queue[0] ?? null);
+    })();
+  }, [
+    user?.id,
+    dbUser?.id,
+    dbUser?.verification_status,
+    dbUser?.silver_trial_activated_at,
+    dbUser?.silver_trial_expires_at,
+    dbUser?.gold_trial_expires_at,
+  ]);
+
+  useEffect(() => {
+    if (activeModal === 'softKyc') {
+      void consumeSoftKycPromptPending();
+    }
+    if (activeModal === 'goldWelcome' && user?.id) {
+      void AsyncStorage.setItem(`gold_trial_welcome_seen_${user.id}`, '1');
+    }
+  }, [activeModal, user?.id]);
+
+  useEffect(() => {
+    setSilverWelcomeOpen(activeModal === 'silverWelcome');
+    setGoldWelcomeOpen(activeModal === 'goldWelcome');
+    setSoftKycOpen(activeModal === 'softKyc');
+  }, [activeModal]);
+
+  const advanceModalQueue = useCallback(() => {
+    modalQueueRef.current = modalQueueRef.current.slice(1);
+    setActiveModal(modalQueueRef.current[0] ?? null);
+  }, []);
 
   const feedBanner = useMemo(
     () => (
@@ -875,6 +936,9 @@ export default function PlansScreen() {
           discoveryMood={discoveryMood}
           feedMode={feedMode}
           baseRadiusKm={radiusKm}
+          browseRadiusKm={browseRadiusKm}
+          hasWiderRadius={hasWiderRadius}
+          effectiveTier={discoverTier}
           onUpgrade={() => {
             setFilterOpen(false);
             router.push('/subscription' as Href);
@@ -941,12 +1005,17 @@ export default function PlansScreen() {
       <SilverTrialWelcomeModal
         visible={silverWelcomeOpen}
         onContinue={() => {
-          setSilverWelcomeOpen(false);
           if (user?.id) {
             void AsyncStorage.setItem(`silver_trial_welcome_seen_${user.id}`, '1');
           }
+          advanceModalQueue();
         }}
       />
+      <GoldTrialWelcomeModal
+        visible={goldWelcomeOpen}
+        onContinue={advanceModalQueue}
+      />
+      <SoftKycPrompt visible={softKycOpen} onDismiss={advanceModalQueue} />
       {feedMode === 'list' ? (
         <PlansSearchBar
           onDebouncedQueryChange={onDebouncedSearchChange}

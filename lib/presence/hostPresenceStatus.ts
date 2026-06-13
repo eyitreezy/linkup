@@ -23,8 +23,10 @@ function subjectPrefs(prefs: ProfilePreferences | undefined) {
 export function resolveHostPresenceKind(
   viewerProfile: DbProfile | null | undefined,
   subjectPreferences: ProfilePreferences | undefined,
-  row: Pick<DbUserPresence, 'is_online' | 'last_seen' | 'updated_at'> | null | undefined
+  row: Pick<DbUserPresence, 'is_online' | 'last_seen' | 'updated_at'> | null | undefined,
+  subjectMaskedActivity?: boolean
 ): HostPresenceKind {
+  if (subjectMaskedActivity) return 'hidden';
   if (!viewerMaySeeOthersPresence(viewerProfile)) return 'hidden';
   const sub = subjectPrefs(subjectPreferences);
   if (!sub.show_online_status && !sub.show_last_seen) return 'hidden';
@@ -66,9 +68,12 @@ export function presenceUiFromKind(kind: HostPresenceKind): PresenceUi {
 export function derivePresenceUi(
   viewerProfile: DbProfile | null | undefined,
   subjectPreferences: ProfilePreferences | undefined,
-  row: Pick<DbUserPresence, 'is_online' | 'last_seen' | 'updated_at'> | null | undefined
+  row: Pick<DbUserPresence, 'is_online' | 'last_seen' | 'updated_at'> | null | undefined,
+  subjectMaskedActivity?: boolean
 ): PresenceUi {
-  return presenceUiFromKind(resolveHostPresenceKind(viewerProfile, subjectPreferences, row));
+  return presenceUiFromKind(
+    resolveHostPresenceKind(viewerProfile, subjectPreferences, row, subjectMaskedActivity)
+  );
 }
 
 export function hostPresenceMatchesFilter(kind: HostPresenceKind, filter: HostPresenceFilter): boolean {

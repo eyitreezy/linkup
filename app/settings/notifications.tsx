@@ -1,7 +1,9 @@
 import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { TierBadge } from '@/components/TierBadge';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermission } from '@/hooks/usePermission';
 import { syncExpoPushTokenForUser } from '@/lib/notifications/registerPushNotifications';
 import { defaultVisibilityPrefs } from '@/lib/presence/visibilityPrefs';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -28,6 +30,7 @@ function PrefSwitch({ value, onValueChange }: { value: boolean; onValueChange: (
 
 export default function NotificationsSettingsScreen() {
   const { user, profile, refreshProfile } = useAuth();
+  const { allowed: canSeeReadReceipts } = usePermission('messaging.read_receipts');
   const prefs = profile?.preferences?.notifications ?? {};
 
   const v0 = defaultVisibilityPrefs();
@@ -233,27 +236,30 @@ export default function NotificationsSettingsScreen() {
               <View style={styles.row}>
                 <View style={styles.rowText}>
                   <Text style={styles.label}>Read receipts</Text>
-                  <Text style={styles.hint}>Let others know when you&apos;ve read messages (when chat supports it)</Text>
+                  <Text style={styles.hint}>
+                    {canSeeReadReceipts
+                      ? 'Let others know when you\'ve read their messages'
+                      : 'Silver and above'}
+                  </Text>
                 </View>
-                <PrefSwitch
-                  value={readReceipts}
-                  onValueChange={(v) => {
-                    if (v && user?.id) {
-                      void checkPermission(user.id, 'messaging.read_receipts').then((perm) => {
-                        if (!perm.allowed) {
-                          setReadReceiptsUpgradeTier(perm.upgradeTo ?? 'SILVER');
-                          setReadReceiptsUpgradeOpen(true);
-                          return;
-                        }
-                        setReadReceipts(true);
-                        void saveAll({ push, email, showOnline, showLastSeen, readReceipts: true, shareTyping });
-                      });
-                      return;
-                    }
-                    setReadReceipts(v);
-                    void saveAll({ push, email, showOnline, showLastSeen, readReceipts: v, shareTyping });
-                  }}
-                />
+                {canSeeReadReceipts ? (
+                  <PrefSwitch
+                    value={readReceipts}
+                    onValueChange={(v) => {
+                      setReadReceipts(v);
+                      void saveAll({ push, email, showOnline, showLastSeen, readReceipts: v, shareTyping });
+                    }}
+                  />
+                ) : (
+                  <Pressable
+                    onPress={() => router.push('/subscription' as Href)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Upgrade for read receipts"
+                  >
+                    <TierBadge tier="SILVER" compact />
+                  </Pressable>
+                )}
               </View>
               <View style={[styles.row, styles.rowLast]}>
                 <View style={styles.rowText}>

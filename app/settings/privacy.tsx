@@ -29,6 +29,7 @@ export default function PrivacySafetyScreen() {
   const [isPlatinum, setIsPlatinum] = useState(false);
   const [incognitoEnabled, setIncognitoEnabled] = useState(false);
   const [profileViewPrivacyEnabled, setProfileViewPrivacyEnabled] = useState(false);
+  const [maskedActivityEnabled, setMaskedActivityEnabled] = useState(false);
   const [privacyBusy, setPrivacyBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -44,7 +45,12 @@ export default function PrivacySafetyScreen() {
   useEffect(() => {
     setIncognitoEnabled(!!profile?.incognito_browse_enabled);
     setProfileViewPrivacyEnabled(!!profile?.profile_view_privacy_enabled);
-  }, [profile?.incognito_browse_enabled, profile?.profile_view_privacy_enabled]);
+    setMaskedActivityEnabled(!!profile?.masked_activity_enabled);
+  }, [
+    profile?.incognito_browse_enabled,
+    profile?.profile_view_privacy_enabled,
+    profile?.masked_activity_enabled,
+  ]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -57,18 +63,21 @@ export default function PrivacySafetyScreen() {
   }, [user?.id, dbUser?.subscription_tier]);
 
   const savePrivacyToggle = useCallback(
-    async (next: { incognito?: boolean; profileViewPrivacy?: boolean }) => {
+    async (next: { incognito?: boolean; profileViewPrivacy?: boolean; maskedActivity?: boolean }) => {
       if (!user || !isSupabaseConfigured || privacyBusy) return;
       setPrivacyBusy(true);
       const incognito =
         next.incognito !== undefined ? next.incognito : incognitoEnabled;
       const profileViewPrivacy =
         next.profileViewPrivacy !== undefined ? next.profileViewPrivacy : profileViewPrivacyEnabled;
+      const maskedActivity =
+        next.maskedActivity !== undefined ? next.maskedActivity : maskedActivityEnabled;
       const { error } = await supabase
         .from('profiles')
         .update({
           incognito_browse_enabled: incognito,
           profile_view_privacy_enabled: profileViewPrivacy,
+          masked_activity_enabled: maskedActivity,
         })
         .eq('user_id', user.id);
       setPrivacyBusy(false);
@@ -81,6 +90,7 @@ export default function PrivacySafetyScreen() {
       privacyBusy,
       incognitoEnabled,
       profileViewPrivacyEnabled,
+      maskedActivityEnabled,
       refreshProfile,
     ]
   );
@@ -169,6 +179,21 @@ export default function PrivacySafetyScreen() {
                       onValueChange={(v) => {
                         setProfileViewPrivacyEnabled(v);
                         void savePrivacyToggle({ profileViewPrivacy: v });
+                      }}
+                    />
+                  </View>
+                  <View style={[styles.prefRow, styles.prefRowBorder]}>
+                    <View style={styles.prefTextCol}>
+                      <Text style={styles.prefLabel}>Masked activity</Text>
+                      <Text style={styles.prefSub}>
+                        Your recent activity won&apos;t appear in feeds or suggestion lists.
+                      </Text>
+                    </View>
+                    <PrefSwitch
+                      value={maskedActivityEnabled}
+                      onValueChange={(v) => {
+                        setMaskedActivityEnabled(v);
+                        void savePrivacyToggle({ maskedActivity: v });
                       }}
                     />
                   </View>

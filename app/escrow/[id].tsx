@@ -19,6 +19,7 @@ import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildEscrowTimeline } from '@/lib/escrow/buildEscrowTimeline';
 import { formatEscrowMoney, isMeetupWithinHours, meetupHoursUntilLabel } from '@/lib/escrow/escrowPaymentPreview';
+import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
 import { getPaymentStatusLabel, getReleaseRecipientLabel } from '@/lib/escrow/releaseCopy';
 import {
   confirmMeetupComplete,
@@ -533,6 +534,30 @@ export default function EscrowDetailScreen() {
           yourShareLabel={yourShareLabel}
         />
 
+        {escrow.status === 'released' && (escrow.goodwill_applied_cents ?? 0) > 0 ? (
+          <View style={styles.feeBreakdownCard}>
+            <Text style={styles.feeBreakdownTitle}>Fee breakdown</Text>
+            <View style={styles.feeBreakdownRow}>
+              <Text style={styles.feeBreakdownLabel}>Platform fee</Text>
+              <Text style={styles.feeBreakdownStrike}>
+                {formatEscrowMoney(platformFeeCentsForAmount(escrow.amount_cents), escrow.currency)}
+              </Text>
+            </View>
+            <View style={styles.feeBreakdownRow}>
+              <Text style={styles.feeBreakdownLabelGoodwill}>Goodwill credit applied</Text>
+              <Text style={styles.feeBreakdownGoodwill}>
+                −{formatEscrowMoney(escrow.goodwill_applied_cents ?? 0, escrow.currency)}
+              </Text>
+            </View>
+            <View style={[styles.feeBreakdownRow, styles.feeBreakdownTotal]}>
+              <Text style={styles.feeBreakdownLabelBold}>Fee charged</Text>
+              <Text style={styles.feeBreakdownAmountBold}>
+                {formatEscrowMoney(escrow.platform_fee_cents ?? 0, escrow.currency)}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {patternB && escrow.status === 'pending_funding' ? (
           <EscrowSplitFundingCard
             hostShareCents={escrow.host_share_cents ?? 0}
@@ -818,4 +843,41 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '600',
   },
+  feeBreakdownCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    marginBottom: spacing.md,
+  },
+  feeBreakdownTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  feeBreakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  feeBreakdownTotal: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  feeBreakdownLabel: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  feeBreakdownLabelGoodwill: { fontSize: 14, fontWeight: '700', color: '#047857' },
+  feeBreakdownLabelBold: { fontSize: 14, fontWeight: '900', color: colors.text },
+  feeBreakdownStrike: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  feeBreakdownGoodwill: { fontSize: 14, fontWeight: '900', color: '#047857' },
+  feeBreakdownAmountBold: { fontSize: 16, fontWeight: '900', color: colors.text },
 });

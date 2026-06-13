@@ -4,8 +4,10 @@
  */
 import { Button } from '@/components/Button';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
+import { TierBadge } from '@/components/TierBadge';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbSupportTicket, TicketStatus } from '@/types/database';
 import { Href, router, useFocusEffect } from 'expo-router';
@@ -36,10 +38,16 @@ const SUBJECT_OPTIONS = [
 
 type IonName = ComponentProps<typeof Ionicons>['name'];
 
+const PAYMENT_HELP_COPY = `If money is stuck in escrow after a meetup issue, open a dispute from your escrow screen — this holds the funds while we review it.
+
+For misconduct, scams, or safety concerns on a plan you attended, use the plan dispute option (video evidence required).
+
+For billing questions or other payment queries, send us a support ticket here.`;
+
 const HELP_CARDS: { title: string; body: string; icon: IonName; onPress?: () => void }[] = [
   {
     title: 'Payment issues',
-    body: 'Escrow holds your payment until the meetup is confirmed. Open a dispute from escrow if something’s wrong.',
+    body: PAYMENT_HELP_COPY,
     icon: 'card-outline',
   },
   {
@@ -74,12 +82,18 @@ function isOpenTab(s: TicketStatus): boolean {
   return s === 'open' || s === 'in_progress';
 }
 
+type ActiveEscrowSnippet = { id: string; plan_id: string; status: string };
+
 export default function SupportHomeScreen() {
-  const { user } = useAuth();
+  const { user, dbUser } = useAuth();
+  const effectiveTier = resolveClientEffectiveTier(dbUser);
   const [tickets, setTickets] = useState<DbSupportTicket[]>([]);
   const [tab, setTab] = useState<'open' | 'resolved'>('open');
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [conciergeModalOpen, setConciergeModalOpen] = useState(false);
+  const [disambigOpen, setDisambigOpen] = useState(false);
+  const [activeEscrows, setActiveEscrows] = useState<ActiveEscrowSnippet[]>([]);
   const [subject, setSubject] = useState<string>(SUBJECT_OPTIONS[0]);
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -112,24 +126,60 @@ export default function SupportHomeScreen() {
     [tickets, tab]
   );
 
-  async function submitTicket() {
+  function proceedToTicketForm(topic: string) {
+    setSubject(topic);
+    setModalOpen(true);
+  }
+
+  async function handlePaymentTopicSelect() {
+    if (!user) return;
+    const { data: rows } = await supabase
+      .from('escrow_transactions')
+      .select('id, plan_id, status')
+      .in('status', ['pending_funding', 'funded', 'disputed', 'active'])
+      .or(`payer_id.eq.${user.id},payee_id.eq.${user.id}`)
+      .limit(3);
+    if (rows && rows.length > 0) {
+      setActiveEscrows(rows as ActiveEscrowSnippet[]);
+      setDisambigOpen(true);
+    } else {
+      proceedToTicketForm('Payment & escrow');
+    }
+  }
+
+  async function submitTicket(opts?: { concierge?: boolean }) {
     if (!user || !body.trim()) {
       Alert.alert('Support', 'Please describe what you need help with.');
       return;
     }
     setSubmitting(true);
+    const trimmed = body.trim();
+    const isConcierge = !!opts?.concierge;
     const { error } = await supabase.from('support_tickets').insert({
       user_id: user.id,
-      subject: subject.trim(),
-      body: body.trim(),
+      subject: isConcierge ? `Concierge: ${trimmed.substring(0, 50)}` : subject.trim(),
+      body: trimmed,
+      is_concierge: isConcierge,
+      queue_priority: isConcierge ? 1 : undefined,
+      sla_hours: isConcierge ? 2 : undefined,
+      sla_deadline: isConcierge
+        ? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+        : undefined,
+      priority: isConcierge ? 'urgent' : undefined,
     });
     setSubmitting(false);
     if (error) Alert.alert('Support', error.message);
     else {
       setBody('');
       setModalOpen(false);
+      setConciergeModalOpen(false);
       void load();
-      Alert.alert('Sent', 'We’ve received your message and will get back to you.');
+      Alert.alert(
+        'Sent',
+        isConcierge
+          ? 'Your concierge request is in — we aim to respond within 2 hours.'
+          : 'We’ve received your message and will get back to you.'
+      );
     }
   }
 
@@ -152,6 +202,39 @@ export default function SupportHomeScreen() {
               <Text style={styles.leadSub}>We’re here to help you — quick answers below or open a ticket anytime.</Text>
             </View>
           </View>
+
+          {effectiveTier === 'PLATINUM' ? (
+            <View style={styles.conciergeOuter}>
+              <LinearGradient
+                colors={['rgba(124, 77, 255, 0.22)', 'rgba(232, 234, 246, 0.9)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.conciergeBorder}
+              >
+                <View style={styles.conciergeInner}>
+                  <View style={styles.conciergeHeader}>
+                    <TierBadge tier="PLATINUM" compact />
+                    <Text style={styles.conciergeTitle}>Platinum Concierge</Text>
+                  </View>
+                  <Text style={styles.conciergeDesc}>
+                    Priority human-agent support with a 2-hour response commitment.
+                  </Text>
+                  <View style={styles.conciergeSlaRow}>
+                    <Ionicons name="time-outline" size={14} color="#5E35B1" />
+                    <Text style={styles.conciergeSlaText}>Typically responds within 2 hours</Text>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.conciergeBtn, pressed && styles.ctaPressed]}
+                    onPress={() => setConciergeModalOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Contact concierge"
+                  >
+                    <Text style={styles.conciergeBtnLabel}>Contact concierge</Text>
+                  </Pressable>
+                </View>
+              </LinearGradient>
+            </View>
+          ) : null}
 
           <View style={styles.sectionHead}>
             <View style={styles.sectionHeadRow}>
@@ -183,6 +266,7 @@ export default function SupportHomeScreen() {
                   ]}
                   onPress={() => {
                     if (c.onPress) c.onPress();
+                    else if (c.title === 'Payment issues') Alert.alert(c.title, PAYMENT_HELP_COPY);
                     else Alert.alert(c.title, c.body);
                   }}
                 >
@@ -298,11 +382,13 @@ export default function SupportHomeScreen() {
             >
               <View style={styles.cardInner}>
                 {filtered.map((item, i) => (
-                  <View
+                  <Pressable
                     key={item.id}
-                    style={[
+                    onPress={() => router.push(`/support/ticket/${item.id}` as Href)}
+                    style={({ pressed }) => [
                       styles.ticketRow,
                       i < filtered.length - 1 ? styles.ticketRowDivider : undefined,
+                      pressed && styles.helpRowPressed,
                     ]}
                   >
                     <Text style={styles.ticketTitle} numberOfLines={2}>
@@ -318,7 +404,7 @@ export default function SupportHomeScreen() {
                         Updated {new Date(item.updated_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             </LinearGradient>
@@ -345,7 +431,14 @@ export default function SupportHomeScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
                 <View style={styles.chipsRow}>
                   {SUBJECT_OPTIONS.map((s) => (
-                    <Pressable key={s} onPress={() => setSubject(s)} style={styles.chipHit}>
+                    <Pressable
+                      key={s}
+                      onPress={() => {
+                        if (s === 'Payment & escrow') void handlePaymentTopicSelect();
+                        else setSubject(s);
+                      }}
+                      style={styles.chipHit}
+                    >
                       {subject === s ? (
                         <LinearGradient
                           colors={[colors.primary, '#8B7CE8']}
@@ -376,6 +469,102 @@ export default function SupportHomeScreen() {
               />
               <Button title="Submit" onPress={() => void submitTicket()} loading={submitting} />
               <Button title="Cancel" variant="ghost" onPress={() => setModalOpen(false)} style={{ marginTop: spacing.sm }} />
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal visible={conciergeModalOpen} animationType="slide" transparent statusBarTranslucent>
+          <Pressable style={styles.modalBackdrop} onPress={() => setConciergeModalOpen(false)}>
+            <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+              <LinearGradient
+                colors={['#F3EFFF', '#EDE8FF']}
+                style={StyleSheet.absoluteFillObject}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+              />
+              <View style={styles.conciergeModalHead}>
+                <TierBadge tier="PLATINUM" compact />
+                <Text style={styles.modalTitle}>Concierge Support</Text>
+              </View>
+              <Text style={styles.modalSub}>Describe anything — a concierge agent will take it from here.</Text>
+              <Text style={styles.conciergeSlaReminder}>We&apos;ll respond within 2 hours.</Text>
+              <Text style={styles.inputLabel}>What do you need?</Text>
+              <TextInput
+                style={styles.textarea}
+                placeholder="Tell us what you need — no topic required."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                value={body}
+                onChangeText={setBody}
+                textAlignVertical="top"
+              />
+              <Button title="Send to concierge" onPress={() => void submitTicket({ concierge: true })} loading={submitting} />
+              <Button
+                title="Cancel"
+                variant="ghost"
+                onPress={() => setConciergeModalOpen(false)}
+                style={{ marginTop: spacing.sm }}
+              />
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal visible={disambigOpen} animationType="slide" transparent statusBarTranslucent>
+          <Pressable style={styles.disambigBackdrop} onPress={() => setDisambigOpen(false)}>
+            <Pressable style={styles.disambigSheet} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.disambigHandle} />
+              <Text style={styles.disambigTitle}>What&apos;s the issue?</Text>
+              <Text style={styles.disambigSub}>
+                You have active escrow — pick the path that matches your situation.
+              </Text>
+
+              <Pressable
+                style={styles.disambigOption}
+                onPress={() => {
+                  setDisambigOpen(false);
+                  const esc = activeEscrows[0];
+                  if (esc) router.push(`/escrow/${esc.id}` as Href);
+                }}
+              >
+                <View style={styles.disambigOptionText}>
+                  <Text style={styles.disambigOptionTitle}>Money stuck / wrong amount in escrow</Text>
+                  <Text style={styles.disambigOptionDesc}>
+                    Go to your escrow screen to dispute and hold the funds.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </Pressable>
+
+              <Pressable
+                style={styles.disambigOption}
+                onPress={() => {
+                  setDisambigOpen(false);
+                  const esc = activeEscrows[0];
+                  if (esc?.plan_id) router.push(`/dispute/${esc.plan_id}` as Href);
+                }}
+              >
+                <View style={styles.disambigOptionText}>
+                  <Text style={styles.disambigOptionTitle}>Misconduct, scam, or safety concern</Text>
+                  <Text style={styles.disambigOptionDesc}>
+                    File a plan dispute with evidence (video required).
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </Pressable>
+
+              <Pressable
+                style={styles.disambigOption}
+                onPress={() => {
+                  setDisambigOpen(false);
+                  proceedToTicketForm('Payment & escrow');
+                }}
+              >
+                <View style={styles.disambigOptionText}>
+                  <Text style={styles.disambigOptionTitle}>Something else — contact support</Text>
+                  <Text style={styles.disambigOptionDesc}>A support agent will help you.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
@@ -687,5 +876,134 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.lg,
     backgroundColor: 'rgba(255,255,255,0.9)',
+  },
+  conciergeOuter: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  conciergeBorder: {
+    borderRadius: radius.xl,
+    padding: 2,
+  },
+  conciergeInner: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: radius.xl - 1,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 53, 177, 0.18)',
+  },
+  conciergeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  conciergeTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#5E35B1',
+    letterSpacing: -0.2,
+  },
+  conciergeDesc: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
+  },
+  conciergeSlaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
+  },
+  conciergeSlaText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#5E35B1',
+  },
+  conciergeBtn: {
+    backgroundColor: '#7C4DFF',
+    borderRadius: radius.button,
+    paddingVertical: 14,
+    alignItems: 'center',
+    minHeight: 48,
+  },
+  conciergeBtnLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  conciergeModalHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  conciergeSlaReminder: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#5E35B1',
+    marginBottom: spacing.md,
+  },
+  disambigBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    justifyContent: 'flex-end',
+  },
+  disambigSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    maxHeight: '88%',
+  },
+  disambigHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  disambigTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: -0.3,
+    marginBottom: spacing.xs,
+  },
+  disambigSub: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  disambigOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    marginBottom: spacing.sm,
+  },
+  disambigOptionText: { flex: 1, minWidth: 0 },
+  disambigOptionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  disambigOptionDesc: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 19,
   },
 });

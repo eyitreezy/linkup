@@ -29,18 +29,32 @@ export function CancellationSummaryCard({ outcome }: Props) {
       <CancellationPolicyRows rows={CANCELLATION_POLICY_TABLE_ROWS} />
       {outcome ? (
         <View style={styles.outcome}>
-          <Text style={styles.outcomeTitle}>Latest outcome</Text>
-          <Text style={styles.outcomeLine}>
-            {outcome.roleLabel} · {outcome.band.replace('_', ' ')}
-          </Text>
+          <Text style={styles.outcomeTitle}>Cancellation processed</Text>
+          <View style={styles.outcomeRow}>
+            <Text style={styles.outcomeLabel}>
+              Your refund ({outcome.roleLabel})
+            </Text>
+            <Text style={styles.outcomeAmount}>
+              ₦
+              {(
+                (outcome.roleLabel === 'Guest' ? outcome.refundCents : outcome.feeCents) / 100
+              ).toLocaleString()}
+            </Text>
+          </View>
           <Text style={styles.outcomeLine}>
             Guest release ₦{(outcome.refundCents / 100).toLocaleString()} · Host release ₦
             {(outcome.feeCents / 100).toLocaleString()}
           </Text>
+          <Text style={styles.outcomeLine}>
+            {outcome.roleLabel} · {outcome.band.replace('_', ' ')}
+          </Text>
           {(outcome.goodwillCents ?? 0) > 0 ? (
-            <Text style={styles.goodwill}>
-              Goodwill credit ₦{((outcome.goodwillCents ?? 0) / 100).toLocaleString()} (non-withdrawable)
-            </Text>
+            <View style={styles.outcomeRow}>
+              <Text style={styles.outcomeLabelGoodwill}>Goodwill credit</Text>
+              <Text style={styles.outcomeAmountGoodwill}>
+                +₦{((outcome.goodwillCents ?? 0) / 100).toLocaleString()}
+              </Text>
+            </View>
           ) : null}
         </View>
       ) : null}
@@ -70,7 +84,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  outcomeTitle: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  outcomeLine: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
-  goodwill: { fontSize: 13, fontWeight: '700', color: colors.primary, marginTop: 6 },
+  outcomeTitle: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  outcomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  outcomeLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  outcomeAmount: { fontSize: 15, fontWeight: '900', color: colors.text },
+  outcomeLabelGoodwill: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  outcomeAmountGoodwill: { fontSize: 15, fontWeight: '900', color: colors.primary },
+  outcomeLine: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 4 },
 });

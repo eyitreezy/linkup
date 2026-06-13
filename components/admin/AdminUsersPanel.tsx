@@ -2,6 +2,8 @@
  * Admin — user directory: search, filter, sort, view/edit account + profile, suspend flow.
  */
 import { KycNoticeModal } from '@/components/kyc/KycNoticeModal';
+import { AdminGoodwillPanel } from '@/components/admin/AdminGoodwillPanel';
+import { AdminTrialPanel } from '@/components/admin/AdminTrialPanel';
 import { PlanShelfActionConfirmModal } from '@/components/plans/PlanShelfActionConfirmModal';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -568,6 +570,9 @@ function UserEditModal({ userRow, busy, onClose, onSave }: UserEditModalProps) {
                 <Text style={styles.toggleTxt}>{is_profile_public ? 'On' : 'Off'}</Text>
               </Pressable>
             </View>
+
+            <AdminTrialPanel user={userRow} />
+            <AdminGoodwillPanel userId={userRow.id} />
 
             <View style={styles.modalActions}>
               <Pressable onPress={onClose} style={styles.btnGhostFull} disabled={busy}>

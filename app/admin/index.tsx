@@ -3,7 +3,13 @@
  */
 import { AdminPlansPanel } from '@/components/admin/AdminPlansPanel';
 import { AdminSupportTicketModal } from '@/components/admin/AdminSupportTicketModal';
+import {
+  EscrowDisputeResolveModal,
+  type EscrowResolveContext,
+} from '@/components/admin/EscrowDisputeResolveModal';
+import { SlaDeadlineBadge } from '@/components/admin/SlaDeadlineBadge';
 import { AdminUsersPanel } from '@/components/admin/AdminUsersPanel';
+import { TierBadge } from '@/components/TierBadge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
@@ -36,6 +42,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -56,6 +63,8 @@ type EscrowDisputeAdminRow = {
   admin_resolution: string | null;
   support_ticket_id: string | null;
   detail: string | null;
+  queue_priority?: number | null;
+  sla_deadline?: string | null;
   escrow_row?: Pick<
     DbEscrowTransaction,
     'id' | 'amount_cents' | 'currency' | 'plan_id' | 'payer_id' | 'payee_id' | 'status'
@@ -361,8 +370,14 @@ export default function AdminScreen() {
   const [planDispNotes, setPlanDispNotes] = useState('');
   const [planDispBusy, setPlanDispBusy] = useState(false);
   const [planDispFilter, setPlanDispFilter] = useState<'open' | 'all'>('open');
+  const [planDispPartialPct, setPlanDispPartialPct] = useState('50');
+  const [planDispPartialOpen, setPlanDispPartialOpen] = useState(false);
+  const [planDispIssueGoodwill, setPlanDispIssueGoodwill] = useState(false);
+  const [planDispGoodwillAmount, setPlanDispGoodwillAmount] = useState('');
+  const [planDispEscrowCents, setPlanDispEscrowCents] = useState<number | null>(null);
   const [ticketFilter, setTicketFilter] = useState<'open' | 'all'>('open');
   const [ticketDetail, setTicketDetail] = useState<DbSupportTicket | null>(null);
+  const [escrowResolveCtx, setEscrowResolveCtx] = useState<EscrowResolveContext | null>(null);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -404,15 +419,23 @@ export default function AdminScreen() {
     const { data: d } = await supabase
       .from('escrow_disputes')
       .select(
-        'id, reason, status, created_at, resolved_at, escrow_id, opened_by, admin_resolution, support_ticket_id, detail'
+        'id, reason, status, created_at, resolved_at, escrow_id, opened_by, admin_resolution, support_ticket_id, detail, queue_priority'
       )
-      .order('created_at', { ascending: false })
+      .order('queue_priority', { ascending: true })
+      .order('created_at', { ascending: true })
       .limit(40);
     if (d && d.length) {
       const escrowIds = [
         ...new Set(
           d
             .map((x: { escrow_id: string | null }) => x.escrow_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        ),
+      ];
+      const ticketIds = [
+        ...new Set(
+          d
+            .map((x: { support_ticket_id: string | null }) => x.support_ticket_id)
             .filter((id): id is string => typeof id === 'string' && id.length > 0)
         ),
       ];
@@ -430,18 +453,32 @@ export default function AdminScreen() {
           .in('id', escrowIds);
         for (const e of escrows ?? []) byEscrow[e.id] = e as (typeof byEscrow)[string];
       }
+      let slaByTicket: Record<string, string> = {};
+      if (ticketIds.length) {
+        const { data: linkedTickets } = await supabase
+          .from('support_tickets')
+          .select('id, sla_deadline')
+          .in('id', ticketIds);
+        for (const tk of linkedTickets ?? []) {
+          if (tk.sla_deadline) slaByTicket[tk.id] = tk.sla_deadline as string;
+        }
+      }
       setDisp(
         d.map((row) => ({
           ...(row as EscrowDisputeAdminRow),
           escrow_row: row.escrow_id ? byEscrow[row.escrow_id] ?? null : null,
+          sla_deadline: row.support_ticket_id ? slaByTicket[row.support_ticket_id] ?? null : null,
         }))
       );
     } else setDisp([]);
 
     const { data: t } = await supabase
       .from('support_tickets')
-      .select('id, user_id, subject, body, status, priority, created_at, updated_at')
-      .order('created_at', { ascending: false })
+      .select(
+        'id, user_id, subject, body, status, priority, queue_priority, sla_deadline, is_concierge, created_at, updated_at'
+      )
+      .order('queue_priority', { ascending: true })
+      .order('created_at', { ascending: true })
       .limit(120);
     if (t) setTickets(t as DbSupportTicket[]);
 
@@ -675,10 +712,22 @@ export default function AdminScreen() {
     return { kycPending, reportsPending, disputesOpen, modHigh, escrowOpen, ticketsOpen };
   }, [ver, reports, planDisputes, mods, disp, tickets]);
 
+  const sortedDisp = useMemo(() => {
+    return [...disp].sort((a, b) => {
+      const pa = a.queue_priority ?? 4;
+      const pb = b.queue_priority ?? 4;
+      if (pa !== pb) return pa - pb;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+  }, [disp]);
+
   const filteredTickets = useMemo(() => {
-    const sorted = [...tickets].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    const sorted = [...tickets].sort((a, b) => {
+      const pa = a.queue_priority ?? 4;
+      const pb = b.queue_priority ?? 4;
+      if (pa !== pb) return pa - pb;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
     if (ticketFilter === 'all') return sorted;
     return sorted.filter((x) => {
       const s = x.status.toLowerCase();
@@ -689,12 +738,26 @@ export default function AdminScreen() {
   const openPlanDisputeDetail = useCallback(async (row: DbDispute) => {
     setPlanDispDetail(row);
     setPlanDispNotes(row.internal_notes ?? '');
-    const { data: ev } = await supabase
-      .from('dispute_evidence')
-      .select('*')
-      .eq('dispute_id', row.id)
-      .order('created_at', { ascending: true });
+    setPlanDispPartialPct('50');
+    setPlanDispPartialOpen(false);
+    setPlanDispEscrowCents(null);
+    const [{ data: ev }, { data: esc }] = await Promise.all([
+      supabase
+        .from('dispute_evidence')
+        .select('*')
+        .eq('dispute_id', row.id)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('escrow_transactions')
+        .select('amount_cents')
+        .eq('plan_id', row.plan_id)
+        .in('status', ['funded', 'disputed', 'active'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
     setPlanDispEvidence((ev ?? []) as DbDisputeEvidence[]);
+    if (esc?.amount_cents != null) setPlanDispEscrowCents(esc.amount_cents as number);
   }, []);
 
   async function savePlanDispReviewNotes() {
@@ -715,7 +778,8 @@ export default function AdminScreen() {
 
   async function resolvePlanDisputeRow(
     status: 'resolved' | 'rejected',
-    resolution: 'refund' | 'partial' | 'none' | null
+    resolution: 'refund' | 'partial' | 'none' | null,
+    partialBps?: number
   ) {
     if (!planDispDetail) return;
     setPlanDispBusy(true);
@@ -724,13 +788,39 @@ export default function AdminScreen() {
       p_new_status: status,
       p_resolution: status === 'resolved' ? resolution : 'none',
       p_internal_notes: planDispNotes.trim() || null,
+      p_partial_bps: resolution === 'partial' ? (partialBps ?? null) : null,
     });
-    setPlanDispBusy(false);
-    if (error) Alert.alert('Resolve failed', error.message);
-    else {
-      setPlanDispDetail(null);
-      void load();
+    if (error) {
+      setPlanDispBusy(false);
+      Alert.alert('Resolve failed', error.message);
+      return;
     }
+
+    if (
+      status === 'resolved' &&
+      planDispIssueGoodwill &&
+      planDispGoodwillAmount.trim() &&
+      resolution !== 'none'
+    ) {
+      const amountCents = Math.round(parseFloat(planDispGoodwillAmount) * 100);
+      if (amountCents > 0) {
+        const { error: gwErr } = await supabase.rpc('admin_issue_goodwill_credit', {
+          p_user_id: planDispDetail.reporter_id,
+          p_amount_cents: amountCents,
+          p_source: 'dispute_resolution',
+          p_admin_note: `Dispute resolution: ${planDispDetail.id}`,
+          p_dispute_id: planDispDetail.id,
+        });
+        if (gwErr) Alert.alert('Goodwill issue failed', gwErr.message);
+      }
+    }
+
+    setPlanDispBusy(false);
+    setPlanDispDetail(null);
+    setPlanDispPartialOpen(false);
+    setPlanDispIssueGoodwill(false);
+    setPlanDispGoodwillAmount('');
+    void load();
   }
 
   if (!isAdmin) return <Redirect href="/(tabs)/profile" />;
@@ -1107,7 +1197,7 @@ export default function AdminScreen() {
                 icon="wallet-outline"
               />
               <FlatList
-                data={disp}
+                data={sortedDisp}
                 scrollEnabled={false}
                 keyExtractor={(x) => x.id}
                 ListEmptyComponent={
@@ -1140,15 +1230,20 @@ export default function AdminScreen() {
                                 {item.reason}
                               </Text>
                             </View>
-                            <View
-                              style={[
-                                styles.escrowStatusPill,
-                                { backgroundColor: stMeta.bg, borderColor: stMeta.border },
-                              ]}
-                            >
-                              <Text style={[styles.escrowStatusPillTxt, { color: stMeta.fg }]}>
-                                {stMeta.label}
-                              </Text>
+                            <View style={styles.escrowCardPillCol}>
+                              {item.sla_deadline ? (
+                                <SlaDeadlineBadge deadline={item.sla_deadline} />
+                              ) : null}
+                              <View
+                                style={[
+                                  styles.escrowStatusPill,
+                                  { backgroundColor: stMeta.bg, borderColor: stMeta.border },
+                                ]}
+                              >
+                                <Text style={[styles.escrowStatusPillTxt, { color: stMeta.fg }]}>
+                                  {stMeta.label}
+                                </Text>
+                              </View>
                             </View>
                           </View>
 
@@ -1254,20 +1349,25 @@ export default function AdminScreen() {
 
                           {canResolve ? (
                             <Button
-                              title="Mark resolved"
+                              title="Resolve dispute"
                               variant="ghost"
                               fullWidth
-                              onPress={() =>
-                                void supabase
-                                  .from('escrow_disputes')
-                                  .update({
-                                    status: 'resolved',
-                                    admin_resolution: 'Resolved in app',
-                                    resolved_at: new Date().toISOString(),
-                                  })
-                                  .eq('id', item.id)
-                                  .then(() => load())
-                              }
+                              onPress={() => {
+                                if (!esc?.id) {
+                                  Alert.alert('Escrow missing', 'Could not load escrow row for this dispute.');
+                                  return;
+                                }
+                                setEscrowResolveCtx({
+                                  disputeId: item.id,
+                                  escrowId: esc.id,
+                                  amountCents: esc.amount_cents,
+                                  currency: esc.currency,
+                                  payerId: esc.payer_id,
+                                  payeeId: esc.payee_id,
+                                  payerLabel: shortUuid(esc.payer_id, 10),
+                                  payeeLabel: shortUuid(esc.payee_id, 10),
+                                });
+                              }}
                               style={styles.escrowResolveBtn}
                             />
                           ) : (
@@ -1330,15 +1430,26 @@ export default function AdminScreen() {
                           <Text style={styles.supportCardSubject} numberOfLines={2}>
                             {item.subject || '(No subject)'}
                           </Text>
-                          <View
-                            style={[
-                              styles.ticketStatusPill,
-                              { backgroundColor: tst.bg, borderColor: tst.border },
-                            ]}
-                          >
-                            <Text style={[styles.ticketStatusPillTxt, { color: tst.fg }]}>
-                              {item.status.replace(/_/g, ' ')}
-                            </Text>
+                          <View style={styles.supportCardPillCol}>
+                            {item.is_concierge ? (
+                              <View style={styles.conciergeChip}>
+                                <TierBadge tier="PLATINUM" compact />
+                                <Text style={styles.conciergeChipTxt}>Concierge</Text>
+                              </View>
+                            ) : null}
+                            {item.sla_deadline ? (
+                              <SlaDeadlineBadge deadline={item.sla_deadline} />
+                            ) : null}
+                            <View
+                              style={[
+                                styles.ticketStatusPill,
+                                { backgroundColor: tst.bg, borderColor: tst.border },
+                              ]}
+                            >
+                              <Text style={[styles.ticketStatusPillTxt, { color: tst.fg }]}>
+                                {item.status.replace(/_/g, ' ')}
+                              </Text>
+                            </View>
                           </View>
                         </View>
                         <View style={styles.supportCardMetaRow}>
@@ -1608,6 +1719,20 @@ export default function AdminScreen() {
                     <Button fullWidth title="Close" variant="ghost" onPress={() => setPlanDispDetail(null)} />
                   </View>
                   <Text style={styles.subhead}>Resolve</Text>
+                  <View style={styles.goodwillOptionRow}>
+                    <Switch value={planDispIssueGoodwill} onValueChange={setPlanDispIssueGoodwill} />
+                    <Text style={styles.goodwillOptionLabel}>Also issue goodwill credit to reporter</Text>
+                  </View>
+                  {planDispIssueGoodwill ? (
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Goodwill amount (NGN)"
+                      keyboardType="decimal-pad"
+                      value={planDispGoodwillAmount}
+                      onChangeText={setPlanDispGoodwillAmount}
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  ) : null}
                   <View style={styles.modalBtnCol}>
                     <Button
                       fullWidth
@@ -1636,8 +1761,65 @@ export default function AdminScreen() {
                       title="Resolve · partial refund"
                       loading={planDispBusy}
                       variant="secondary"
-                      onPress={() => void resolvePlanDisputeRow('resolved', 'partial')}
+                      onPress={() => setPlanDispPartialOpen((v) => !v)}
                     />
+                    {planDispPartialOpen ? (
+                      <View style={styles.planPartialBox}>
+                        <Text style={styles.planPartialLbl}>Guest receives (% of net)</Text>
+                        <View style={styles.planPartialRow}>
+                          <TextInput
+                            style={styles.planPartialInput}
+                            keyboardType="numeric"
+                            value={planDispPartialPct}
+                            onChangeText={setPlanDispPartialPct}
+                            maxLength={3}
+                            placeholder="50"
+                            placeholderTextColor={colors.textMuted}
+                          />
+                          <Text style={styles.planPartialPct}>%</Text>
+                        </View>
+                        {planDispEscrowCents != null ? (
+                          <Text style={styles.planPartialHint}>
+                            Guest ~₦
+                            {Math.round(
+                              ((planDispEscrowCents * 0.94 * parseInt(planDispPartialPct || '0', 10)) / 100) /
+                                100
+                            ).toLocaleString()}{' '}
+                            · Host ~₦
+                            {Math.round(
+                              ((planDispEscrowCents * 0.94 * (100 - parseInt(planDispPartialPct || '0', 10))) /
+                                100) /
+                                100
+                            ).toLocaleString()}{' '}
+                            (est. net)
+                          </Text>
+                        ) : null}
+                        <Button
+                          fullWidth
+                          title="Confirm partial resolution"
+                          loading={planDispBusy}
+                          onPress={() => {
+                            const pct = parseInt(planDispPartialPct, 10);
+                            if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+                              Alert.alert('Partial', 'Enter a percentage between 0 and 100.');
+                              return;
+                            }
+                            Alert.alert(
+                              'Apply partial refund?',
+                              `Guest receives ${pct}% of net escrow.`,
+                              [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                  text: 'Confirm',
+                                  onPress: () =>
+                                    void resolvePlanDisputeRow('resolved', 'partial', pct * 100),
+                                },
+                              ]
+                            );
+                          }}
+                        />
+                      </View>
+                    ) : null}
                     <Button
                       fullWidth
                       title="Resolve · no payout"
@@ -1653,7 +1835,17 @@ export default function AdminScreen() {
         </View>
       </Modal>
 
-      <AdminSupportTicketModal ticket={ticketDetail} onClose={() => setTicketDetail(null)} />
+      <AdminSupportTicketModal
+        ticket={ticketDetail}
+        onClose={() => setTicketDetail(null)}
+        onUpdated={() => void load()}
+      />
+
+      <EscrowDisputeResolveModal
+        context={escrowResolveCtx}
+        onClose={() => setEscrowResolveCtx(null)}
+        onResolved={() => void load()}
+      />
 
       <Modal visible={rejectFor !== null} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
@@ -2108,6 +2300,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalBtnCol: { gap: spacing.sm, marginTop: spacing.sm },
+  goodwillOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  goodwillOptionLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
+  planPartialBox: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    backgroundColor: 'rgba(108, 99, 255, 0.05)',
+    gap: spacing.sm,
+  },
+  planPartialLbl: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  planPartialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  planPartialInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  planPartialPct: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.textMuted,
+  },
+  planPartialHint: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 19,
+  },
   link: { color: colors.primary, fontWeight: '700', marginTop: 0, flex: 1 },
   subhead: { fontWeight: '800', marginTop: spacing.sm, color: colors.text, fontSize: 14 },
   timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 4 },
@@ -2212,6 +2453,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
+  escrowCardPillCol: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
   escrowCardTitleCol: { flex: 1, minWidth: 0 },
   escrowCardKicker: {
     fontSize: 10,
@@ -2308,6 +2553,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     marginBottom: spacing.xs,
+  },
+  supportCardPillCol: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  conciergeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(124, 77, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(94, 53, 177, 0.28)',
+  },
+  conciergeChipTxt: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#5E35B1',
+    letterSpacing: 0.3,
   },
   supportCardSubject: { flex: 1, fontSize: 17, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
   ticketStatusPill: {

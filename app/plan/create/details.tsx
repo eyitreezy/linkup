@@ -75,7 +75,7 @@ export default function CreatePlanDetailsScreen() {
   const [gateOpen, setGateOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeFeature, setUpgradeFeature] = useState('privacy.plan_creation');
-  const { allowed: canSpotlight } = usePermission('boost.24hr');
+  const { allowed: canSpotlight } = usePermission('spotlight.profile');
 
   async function onSelectVisibility(value: PlanVisibility) {
     if (value === 'premium' && user?.id) {

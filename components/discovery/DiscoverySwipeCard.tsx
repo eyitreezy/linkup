@@ -1,7 +1,9 @@
 /**
  * Full-bleed discovery card — profile-first, fast scanning.
  */
+import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
 import { TierBadge } from '@/components/TierBadge';
+import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
@@ -68,6 +70,7 @@ function DiscoverySwipeCardInner({ row, distanceKm, presence, onPress }: Props) 
     [row]
   );
   const boosted = isPlanBoostActive(row.boosted_until);
+  const creatorSpotlighted = isCreatorSpotlightActive(row.creatorProfile?.spotlight_until);
 
   const distLine = useMemo(() => {
     const dist =
@@ -157,6 +160,9 @@ function DiscoverySwipeCardInner({ row, distanceKm, presence, onPress }: Props) 
             {name}
             {age != null ? <Text style={styles.age}> · {age}</Text> : null}
           </Text>
+          {!boosted && creatorSpotlighted ? (
+            <CreatorSpotlightChip variant="onDark" />
+          ) : null}
           {row.creatorProfile?.subscription_badge ? (
             <TierBadge tier={row.creatorProfile.subscription_badge} compact />
           ) : null}

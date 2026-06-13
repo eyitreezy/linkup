@@ -32,6 +32,7 @@ export const TIER_FEATURES: Record<SubscriptionTier, string[]> = {
     '4× 24hr boosts / month',
     '3 spotlights / month',
     'Wider discover radius',
+    'Extended plan active window (14 days)',
   ],
   GOLD: [
     'Host group plans',
@@ -44,6 +45,7 @@ export const TIER_FEATURES: Record<SubscriptionTier, string[]> = {
     'Incognito browse & privacy tools',
     'Multi-city group plans',
     'Unlimited boosts & spotlights',
+    'Longest active window (30 days)',
     'High-value escrow',
     'Concierge support',
   ],

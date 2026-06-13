@@ -71,16 +71,30 @@ export type UserTierRow = {
   silver_trial_expires_at: string | null;
   gold_trial_expires_at: string | null;
   has_been_silver_subscriber: boolean;
+  premium_until?: string | null;
 };
 
 export function resolveEffectiveTier(user: UserTierRow, now = new Date()): EffectiveTier {
-  const paid = user.subscription_tier as EffectiveTier;
-  if (
-    paid !== 'FREE' &&
+  const paidTier = user.subscription_tier as EffectiveTier;
+  const paidActive =
+    paidTier !== 'FREE' &&
     user.subscription_expires_at &&
-    new Date(user.subscription_expires_at).getTime() > now.getTime()
+    new Date(user.subscription_expires_at).getTime() > now.getTime();
+
+  if (paidActive && (paidTier === 'PLATINUM' || paidTier === 'GOLD')) {
+    return paidTier;
+  }
+
+  if (
+    user.gold_trial_expires_at &&
+    new Date(user.gold_trial_expires_at).getTime() > now.getTime() &&
+    user.has_been_silver_subscriber
   ) {
-    return paid;
+    return 'GOLD';
+  }
+
+  if (paidActive && paidTier === 'SILVER') {
+    return 'SILVER';
   }
 
   if (
@@ -91,12 +105,9 @@ export function resolveEffectiveTier(user: UserTierRow, now = new Date()): Effec
     return 'SILVER';
   }
 
-  if (
-    user.gold_trial_expires_at &&
-    new Date(user.gold_trial_expires_at).getTime() > now.getTime() &&
-    user.has_been_silver_subscriber
-  ) {
-    return 'GOLD';
+  // Legacy Paystack premium maps to SILVER-equivalent benefits at resolution time only
+  if (user.premium_until && new Date(user.premium_until).getTime() > now.getTime()) {
+    return 'SILVER';
   }
 
   return 'FREE';
@@ -130,8 +141,6 @@ export function tierMetadata(effectiveTier: EffectiveTier, feature: string): Rec
   return meta;
 }
 
-export function currentMonthYear(now = new Date()): string {
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+export function currentMonthYear(d = new Date()): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }

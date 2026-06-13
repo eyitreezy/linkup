@@ -2,6 +2,7 @@
  * Hybrid MVP wallet — ledger + goodwill; premium dating-app visuals (trust + monetization).
  */
 import { Screen } from '@/components/Screen';
+import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
 import { WalletSkeleton } from '@/components/wallet/WalletSkeleton';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +30,7 @@ export default function WalletScreen() {
   const { user } = useAuth();
   const [ledger, setLedger] = useState<DbWalletLedgerRow[]>([]);
   const [goodwill, setGoodwill] = useState<DbGoodwillCredit[]>([]);
+  const [goodwillHistory, setGoodwillHistory] = useState<DbGoodwillCredit[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,10 +38,12 @@ export default function WalletScreen() {
     if (!user?.id || !isSupabaseConfigured) {
       setLedger([]);
       setGoodwill([]);
+      setGoodwillHistory([]);
       setLoading(false);
       return;
     }
-    const [l, g] = await Promise.all([
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const [l, g, gh] = await Promise.all([
       supabase
         .from('wallet_ledger')
         .select('*')
@@ -53,9 +57,17 @@ export default function WalletScreen() {
         .gt('expires_at', new Date().toISOString())
         .order('expires_at', { ascending: true })
         .limit(40),
+      supabase
+        .from('goodwill_credits')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('created_at', ninetyDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(40),
     ]);
     setLedger((l.data ?? []) as DbWalletLedgerRow[]);
     setGoodwill((g.data ?? []) as DbGoodwillCredit[]);
+    setGoodwillHistory((gh.data ?? []) as DbGoodwillCredit[]);
     setLoading(false);
   }, [user?.id]);
 
@@ -73,11 +85,26 @@ export default function WalletScreen() {
   const balanceCents = useMemo(() => {
     let n = 0;
     for (const row of ledger) {
+      if (row.is_display_only) continue;
       if (row.type === 'credit') n += row.amount;
       else n -= row.amount;
     }
     return n;
   }, [ledger]);
+
+  const expiringSoonCredits = useMemo(() => {
+    const in7 = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    return goodwillHistory.filter((c) => {
+      const exp = new Date(c.expires_at).getTime();
+      const remaining = c.amount - c.used_amount;
+      return remaining > 0 && exp > Date.now() && exp <= in7;
+    });
+  }, [goodwillHistory]);
+
+  const expiringSoonTotal = useMemo(
+    () => expiringSoonCredits.reduce((n, c) => n + Math.max(c.amount - c.used_amount, 0), 0),
+    [expiringSoonCredits]
+  );
 
   const goodwillRemaining = useMemo(() => {
     let n = 0;
@@ -182,6 +209,32 @@ export default function WalletScreen() {
                 </Text>
               </LinearGradient>
 
+              {expiringSoonCredits.length > 0 ? (
+                <View style={styles.expiryBanner}>
+                  <Ionicons name="time-outline" size={18} color="#B45309" />
+                  <Text style={styles.expiryBannerText}>
+                    {formatMoney(expiringSoonTotal)} in goodwill credits expire within 7 days
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.sectionHead}>
+                <Ionicons name="heart-circle" size={18} color="#D97706" />
+                <Text style={styles.section}>Goodwill history</Text>
+              </View>
+
+              {goodwillHistory.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="sparkles-outline" size={32} color={colors.textMuted} />
+                  <Text style={styles.emptyTitle}>No goodwill credits yet</Text>
+                  <Text style={styles.emptySub}>
+                    Credits appear when a host cancels within 48h or no-shows on a plan.
+                  </Text>
+                </View>
+              ) : (
+                goodwillHistory.map((credit) => <GoodwillCreditRow key={credit.id} credit={credit} />)
+              )}
+
               <View style={styles.withdrawCard}>
                 <View style={styles.withdrawIcon}>
                   <Ionicons name="time-outline" size={22} color={colors.primary} />
@@ -206,26 +259,62 @@ export default function WalletScreen() {
                   <Text style={styles.emptySub}>When you complete paid plans or get refunds, they&apos;ll show here.</Text>
                 </View>
               ) : (
-                ledger.map((row) => (
+                ledger.map((row) => {
+                  const isGoodwillApplied = row.source === 'goodwill' && row.is_display_only;
+                  return (
                   <View key={row.id} style={styles.rowCard}>
-                    <View style={[styles.rowStripe, row.type === 'credit' ? styles.stripeCredit : styles.stripeDebit]} />
+                    <View
+                      style={[
+                        styles.rowStripe,
+                        isGoodwillApplied
+                          ? styles.stripeGoodwill
+                          : row.type === 'credit'
+                            ? styles.stripeCredit
+                            : styles.stripeDebit,
+                      ]}
+                    />
                     <View style={styles.rowBody}>
                       <View style={styles.rowLeft}>
                         <View style={styles.rowTypeRow}>
-                          <Text style={styles.rowType}>{row.type === 'credit' ? 'Credit' : 'Debit'}</Text>
-                          <View style={[styles.srcPill, row.type === 'credit' ? styles.srcPillPos : styles.srcPillNeg]}>
-                            <Text style={styles.srcPillTxt}>{sourcePretty(row.source)}</Text>
+                          {isGoodwillApplied ? (
+                            <Ionicons name="sparkles" size={14} color="#D97706" />
+                          ) : null}
+                          <Text style={styles.rowType}>
+                            {isGoodwillApplied
+                              ? 'Goodwill applied'
+                              : row.type === 'credit'
+                                ? 'Credit'
+                                : 'Debit'}
+                          </Text>
+                          <View
+                            style={[
+                              styles.srcPill,
+                              isGoodwillApplied || row.type === 'credit'
+                                ? styles.srcPillPos
+                                : styles.srcPillNeg,
+                            ]}
+                          >
+                            <Text style={styles.srcPillTxt}>
+                              {isGoodwillApplied ? 'fee offset' : sourcePretty(row.source)}
+                            </Text>
                           </View>
                         </View>
                         <Text style={styles.rowDate}>{new Date(row.created_at).toLocaleString()}</Text>
                       </View>
-                      <Text style={[styles.rowAmt, row.type === 'debit' && styles.rowAmtDebit]}>
-                        {row.type === 'credit' ? '+' : '−'}
+                      <Text
+                        style={[
+                          styles.rowAmt,
+                          isGoodwillApplied && styles.rowAmtGoodwill,
+                          row.type === 'debit' && styles.rowAmtDebit,
+                        ]}
+                      >
+                        {isGoodwillApplied ? '−' : row.type === 'credit' ? '+' : '−'}
                         {formatMoney(row.amount)}
                       </Text>
                     </View>
                   </View>
-                ))
+                  );
+                })
               )}
             </>
           )}
@@ -338,6 +427,18 @@ const styles = StyleSheet.create({
   goodwillTitle: { fontSize: 17, fontWeight: '900', color: colors.text },
   goodwillAmt: { fontSize: 26, fontWeight: '900', color: '#B45309', marginTop: 8 },
   goodwillHint: { fontSize: 14, color: colors.textMuted, marginTop: 8, lineHeight: 20, fontWeight: '600' },
+  expiryBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+  },
+  expiryBannerText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#B45309', lineHeight: 20 },
   withdrawCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -383,6 +484,7 @@ const styles = StyleSheet.create({
   },
   rowStripe: { width: 4 },
   stripeCredit: { backgroundColor: '#10B981' },
+  stripeGoodwill: { backgroundColor: '#F59E0B' },
   stripeDebit: { backgroundColor: colors.secondary },
   rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
   rowLeft: { flex: 1, paddingRight: 12 },
@@ -394,6 +496,7 @@ const styles = StyleSheet.create({
   srcPillTxt: { fontSize: 11, fontWeight: '800', color: colors.text, textTransform: 'capitalize' },
   rowDate: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
   rowAmt: { fontSize: 16, fontWeight: '900', color: '#059669' },
+  rowAmtGoodwill: { color: '#B45309' },
   rowAmtDebit: { color: colors.secondary },
   emptyCard: {
     alignItems: 'center',

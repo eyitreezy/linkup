@@ -5,6 +5,7 @@
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import { colors, radius, spacing } from '@/constants/theme';
+import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -169,6 +170,7 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
   const isOwnPlan = !!(currentUserId && row.creator_id === currentUserId);
   const reachLabel =
     isOwnPlan && row.mood_reach ? REACH_LABELS[row.mood_reach] ?? row.mood_reach : null;
+  const boosted = isPlanBoostActive(row.boosted_until);
 
   const [hovered, setHovered] = useState(false);
   const [chevronOpen, setChevronOpen] = useState(false);
@@ -216,6 +218,11 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
           transition={{ type: 'spring', damping: 18, stiffness: 300, mass: 0.82 }}
           style={styles.surface}
         >
+          {boosted ? (
+            <View style={styles.moodBoostBadge} pointerEvents="none">
+              <Ionicons name="flash" size={11} color={colors.secondary} />
+            </View>
+          ) : null}
           <LinearGradient
             colors={[
               'rgba(255,255,255,0.99)',
@@ -374,6 +381,20 @@ const styles = StyleSheet.create({
   surface: {
     overflow: 'hidden',
     position: 'relative',
+  },
+  moodBoostBadge: {
+    position: 'absolute',
+    top: 8,
+    right: Platform.OS !== 'web' ? 52 : 10,
+    zIndex: 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,101,132,0.35)',
   },
   rowWrap: {
     flexDirection: 'row',

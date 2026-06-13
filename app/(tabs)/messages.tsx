@@ -32,6 +32,10 @@ type InboxRow = {
   preview: string;
   timeIso: string;
   unread: boolean;
+  isGroupChat?: boolean;
+  groupAvatarUrl?: string | null;
+  memberCount?: number;
+  memberPreviews?: { avatarUrl: string | null; name: string }[];
 };
 
 function previewForLast(
@@ -103,10 +107,22 @@ export default function MessagesInboxScreen() {
       }
       const readMap = await getLastReadMap();
 
-      const { data: convs, error: ce } = await supabase
-        .from('conversations')
-        .select('id, user_a, user_b, created_at')
-        .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
+      const { data: groupMemberships } = await supabase
+        .from('group_chat_members')
+        .select('conversation_id')
+        .eq('user_id', user.id)
+        .is('removed_at', null);
+
+      const groupConvIds = [...new Set((groupMemberships ?? []).map((r) => r.conversation_id as string))];
+
+      const dmFilter = `user_a.eq.${user.id},user_b.eq.${user.id}`;
+      let convQuery = supabase.from('conversations').select('id, user_a, user_b, created_at, is_group_chat, group_name, group_avatar_url, plan_id');
+      if (groupConvIds.length > 0) {
+        convQuery = convQuery.or(`${dmFilter},id.in.(${groupConvIds.join(',')})`);
+      } else {
+        convQuery = convQuery.or(dmFilter);
+      }
+      const { data: convs, error: ce } = await convQuery;
       if (ce || !convs?.length) {
         setRows([]);
         setConvIds([]);
@@ -134,6 +150,17 @@ export default function MessagesInboxScreen() {
 
       const lastRows = [...lastByConv.values()];
       const lastMsgIds = lastRows.map((m) => m.id);
+
+      let deletedForMeIds = new Set<string>();
+      if (lastMsgIds.length > 0) {
+        const { data: myDeletions } = await supabase
+          .from('message_user_deletions')
+          .select('message_id')
+          .eq('user_id', user.id)
+          .in('message_id', lastMsgIds);
+        deletedForMeIds = new Set((myDeletions ?? []).map((d) => d.message_id as string));
+      }
+
       const lastMediaFkIds = [...new Set(lastRows.map((m) => m.media_id).filter(Boolean))] as string[];
       const mediaKindByMsg = new Map<string, 'image' | 'video'>();
       if (lastMsgIds.length > 0) {
@@ -163,7 +190,40 @@ export default function MessagesInboxScreen() {
         }
       }
 
-      const otherIds = convs.map((c) => (c.user_a === user.id ? c.user_b : c.user_a));
+      const dmConvs = convs.filter((c) => !c.is_group_chat);
+      const groupConvs = convs.filter((c) => c.is_group_chat);
+
+      const groupMemberCounts = new Map<string, number>();
+      const groupMemberPreviews = new Map<string, { avatarUrl: string | null; name: string }[]>();
+      if (groupConvs.length > 0) {
+        const gIds = groupConvs.map((c) => c.id);
+        const { data: gMembers } = await supabase
+          .from('group_chat_members')
+          .select('conversation_id, user_id')
+          .in('conversation_id', gIds)
+          .is('removed_at', null);
+        const memberUserIds = [...new Set((gMembers ?? []).map((m) => m.user_id as string))];
+        const { data: gProfiles } = memberUserIds.length
+          ? await supabase.from('profiles').select('user_id, display_name, avatar_url').in('user_id', memberUserIds)
+          : { data: [] as { user_id: string; display_name: string | null; avatar_url: string | null }[] };
+        const gProfMap = new Map((gProfiles ?? []).map((p) => [p.user_id as string, p]));
+        for (const gid of gIds) {
+          const rows = (gMembers ?? []).filter((m) => m.conversation_id === gid);
+          groupMemberCounts.set(gid, rows.length);
+          groupMemberPreviews.set(
+            gid,
+            rows.slice(0, 4).map((m) => {
+              const p = gProfMap.get(m.user_id as string);
+              return {
+                avatarUrl: (p?.avatar_url as string | null) ?? null,
+                name: (p?.display_name as string) ?? 'Member',
+              };
+            })
+          );
+        }
+      }
+
+      const otherIds = dmConvs.map((c) => (c.user_a === user.id ? c.user_b : c.user_a)).filter(Boolean) as string[];
       const uniqueOthers = [...new Set(otherIds)];
 
       const { data: profs } = await supabase
@@ -174,15 +234,18 @@ export default function MessagesInboxScreen() {
       const profByUser = new Map((profs ?? []).map((p) => [p.user_id, p]));
 
       const out: InboxRow[] = convs.map((c) => {
-        const otherId = c.user_a === user.id ? c.user_b : c.user_a;
-        const prof = profByUser.get(otherId);
+        const isGroup = !!c.is_group_chat;
+        const otherId = isGroup ? c.id : (c.user_a === user.id ? c.user_b : c.user_a)!;
+        const prof = isGroup ? null : profByUser.get(otherId);
         const last = lastByConv.get(c.id);
         const mk = last ? mediaKindByMsg.get(last.id) ?? null : null;
-        const preview = previewForLast(
-          last ? messageDisplayText(last) : null,
-          mk,
-          last?.deleted_at ?? null
-        );
+        const preview = last && deletedForMeIds.has(last.id)
+          ? 'Message deleted'
+          : previewForLast(
+              last ? messageDisplayText(last) : null,
+              mk,
+              last?.deleted_at ?? null
+            );
         const timeIso = last?.created_at ?? c.created_at;
         const readAt = readMap[c.id];
         const unread =
@@ -193,12 +256,16 @@ export default function MessagesInboxScreen() {
         return {
           id: c.id,
           otherId,
-          name: prof?.display_name ?? 'Member',
-          avatarUrl: prof?.avatar_url ?? null,
-          verified: !!prof?.verified_badge,
-          preview,
+          name: isGroup ? (c.group_name ?? 'Group chat') : (prof?.display_name ?? 'Member'),
+          avatarUrl: isGroup ? null : (prof?.avatar_url ?? null),
+          verified: isGroup ? false : !!prof?.verified_badge,
+          preview: isGroup && !last ? `${groupMemberCounts.get(c.id) ?? 0} members` : preview,
           timeIso,
           unread,
+          isGroupChat: isGroup,
+          groupAvatarUrl: c.group_avatar_url ?? null,
+          memberCount: groupMemberCounts.get(c.id),
+          memberPreviews: groupMemberPreviews.get(c.id),
         };
       });
 
@@ -211,8 +278,6 @@ export default function MessagesInboxScreen() {
 
   loadInboxRef.current = loadInbox;
 
-  const convIdsKey = useMemo(() => [...convIds].sort().join('|'), [convIds]);
-
   useEffect(() => {
     setInboxReady(false);
   }, [user?.id]);
@@ -222,42 +287,38 @@ export default function MessagesInboxScreen() {
   }, [loadInbox]);
 
   useEffect(() => {
-    if (!user?.id || !isSupabaseConfigured || convIds.length === 0) return;
+    if (!user?.id || !isSupabaseConfigured) return;
     inboxChannelRunRef.current += 1;
-    const topic = `inbox-msgs:${user.id}:${inboxChannelRunRef.current}`;
-    const ch = supabase.channel(topic);
-    const slice = convIds.slice(0, 48);
-    for (const cid of slice) {
-      ch.on(
+    const topic = `inbox-user:${user.id}:${inboxChannelRunRef.current}`;
+    const ch = supabase
+      .channel(topic)
+      .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${cid}`,
         },
         () => {
           void loadInboxRef.current();
         }
-      );
-      ch.on(
+      )
+      .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${cid}`,
         },
         () => {
           void loadInboxRef.current();
         }
-      );
-    }
-    ch.subscribe();
+      )
+      .subscribe();
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [user?.id, convIdsKey]);
+  }, [user?.id]);
 
   const unreadTotal = useMemo(() => rows.filter((r) => r.unread).length, [rows]);
 
@@ -365,7 +426,15 @@ export default function MessagesInboxScreen() {
             timeLabel={formatRelativeShort(item.timeIso)}
             unread={item.unread}
             verified={item.verified}
-            onPress={() => router.push(`/chat/${item.id}`)}
+            isGroupChat={item.isGroupChat}
+            groupAvatarUrl={item.groupAvatarUrl}
+            memberCount={item.memberCount}
+            memberPreviews={item.memberPreviews}
+            onPress={() =>
+              router.push(
+                (item.isGroupChat ? `/chat/group/${item.id}` : `/chat/${item.id}`) as Href
+              )
+            }
           />
         )}
       />

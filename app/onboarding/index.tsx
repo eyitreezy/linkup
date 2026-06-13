@@ -50,7 +50,10 @@ import {
 } from '@/lib/onboarding/persist';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { normalizeEmail, normalizePhone } from '@/lib/contacts/hashContact';
+import { hashContactValue } from '@/lib/contacts/hashContactValue';
+import * as Contacts from 'expo-contacts';
 import type { MeetingIntent, OnboardingDraft } from '@/types/onboarding';
 import { defaultOnboardingDraft } from '@/types/onboarding';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -79,6 +82,7 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
+  const [contactsImportStatus, setContactsImportStatus] = useState<'idle' | 'imported' | 'denied'>('idle');
   const hydratedUserRef = useRef<string | null>(null);
   const skipDraftHydrateRef = useRef(false);
 
@@ -250,6 +254,56 @@ export default function OnboardingScreen() {
     },
     [user?.id, draft, prefs, refreshProfile]
   );
+
+  const confirmSaveDraft = useCallback(() => {
+    Alert.alert(
+      'Save as draft?',
+      "Your profile will be saved, but you'll need to publish or skip before you can browse Discover. You can come back to finish anytime.",
+      [
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Save draft', onPress: () => void finish('draft') },
+      ]
+    );
+  }, [finish]);
+
+  const handleContactsImport = useCallback(async () => {
+    if (!user?.id) return;
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') {
+      setContactsImportStatus('denied');
+      return;
+    }
+
+    const { data } = await Contacts.getContactsAsync({
+      fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+    });
+
+    const hashPromises = data.flatMap((c) => [
+      ...(c.phoneNumbers?.map((p) =>
+        p.number ? hashContactValue(normalizePhone(p.number)) : Promise.resolve('')
+      ) ?? []),
+      ...(c.emails?.map((e) =>
+        e.email ? hashContactValue(normalizeEmail(e.email)) : Promise.resolve('')
+      ) ?? []),
+    ]);
+    const hashedContacts = (await Promise.all(hashPromises)).filter(Boolean);
+
+    const mergedPrefs = {
+      ...(prefs ?? {}),
+      contacts_imported: true,
+      contacts_hash_count: hashedContacts.length,
+    };
+    await supabase.from('profiles').update({ preferences: mergedPrefs }).eq('user_id', user.id);
+
+    if (hashedContacts.length > 0) {
+      await supabase.from('contact_hashes').upsert(
+        hashedContacts.map((hash) => ({ user_id: user.id, contact_hash: hash })),
+        { onConflict: 'user_id,contact_hash' }
+      );
+    }
+
+    setContactsImportStatus('imported');
+  }, [user?.id, prefs]);
 
   const showBootstrapSpinner = (!authReady && !activeSession?.user) || (!!activeSession?.user && authLoading);
 
@@ -623,17 +677,20 @@ export default function OnboardingScreen() {
                   </View>
                 </LinearGradient>
               ))}
-              <Pressable
-                style={styles.secondaryBtn}
-                onPress={() =>
-                  Alert.alert(
-                    'Contacts',
-                    'Contact import isn’t enabled in this build. You can block users anytime from their profile.',
-                    [{ text: 'OK' }]
-                  )
-                }
-              >
-                <Text style={styles.secondaryBtnTxt}>Import / block contacts (optional)</Text>
+              <Pressable style={styles.secondaryBtn} onPress={() => void handleContactsImport()}>
+                <View style={styles.contactsImportContent}>
+                  <Text style={styles.secondaryBtnTxt}>Import contacts (optional)</Text>
+                  <Text style={styles.contactsImportDesc}>
+                    Helps us show safety context if you match with someone in your contacts. We never store your
+                    contacts — only secure hashes for matching.
+                  </Text>
+                </View>
+                {contactsImportStatus === 'imported' ? (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                ) : null}
+                {contactsImportStatus === 'denied' ? (
+                  <Text style={styles.contactsImportDenied}>Permission denied</Text>
+                ) : null}
               </Pressable>
               <View style={styles.rowBetween}>
                 <Text style={styles.switchLabel}>I’ve read these tips</Text>
@@ -653,6 +710,13 @@ export default function OnboardingScreen() {
                 Profile.
               </Text>
               <ProfileCardPreview draft={draft} />
+              <View style={styles.trialEducationCallout}>
+                <Ionicons name="sparkles" size={16} color="#D97706" />
+                <Text style={styles.trialEducationText}>
+                  Want a free 7-day Silver trial? Verify your identity after publishing — approved verification
+                  automatically starts your trial.
+                </Text>
+              </View>
             </View>
           )}
               </View>
@@ -698,7 +762,7 @@ export default function OnboardingScreen() {
           <Button
             title="Save as draft"
             variant="secondary"
-            onPress={() => finish('draft')}
+            onPress={confirmSaveDraft}
             loading={saving}
             style={styles.previewFooterMid}
           />
@@ -859,10 +923,42 @@ const styles = StyleSheet.create({
   tipTitle: { fontSize: 16, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
   tipBody: { fontSize: 14, color: colors.textMuted, marginTop: 4, lineHeight: 20, fontWeight: '600' },
   secondaryBtn: {
-    padding: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    padding: 14,
     marginVertical: spacing.md,
     borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.2)',
+    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+  },
+  contactsImportContent: { flex: 1 },
+  contactsImportDesc: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  contactsImportDenied: { fontSize: 12, fontWeight: '700', color: colors.danger },
+  trialEducationCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+  },
+  trialEducationText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    lineHeight: 19,
   },
   secondaryBtnTxt: { fontSize: 15, fontWeight: '800', color: colors.primary },
   footer: {

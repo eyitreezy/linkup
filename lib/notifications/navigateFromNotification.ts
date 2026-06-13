@@ -11,6 +11,9 @@ export function hrefFromNotificationPayload(data: NotificationPayload | null | u
   if (typeof data.href === 'string' && data.href.startsWith('/')) {
     return data.href as Href;
   }
+  if (typeof data.ticketId === 'string' && data.ticketId.length > 0) {
+    return `/support/ticket/${data.ticketId}` as Href;
+  }
   if (data.chatId) return `/chat/${data.chatId}` as Href;
   if (data.escrowId) return `/escrow/${data.escrowId}` as Href;
   if (data.planId) return `/plan/${data.planId}` as Href;
@@ -41,6 +44,14 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
   }
   if (t === 'dispute_opened') {
     router.push('/support' as Href);
+    return;
+  }
+  if (t === 'credit_issued' || t === 'credit_expiring') {
+    router.push('/(tabs)/wallet' as Href);
+    return;
+  }
+  if (t === 'trial_started' || t === 'trial_expiring' || t === 'trial_expired') {
+    router.push('/subscription' as Href);
     return;
   }
   if (t === 'report_submitted' || t === 'moderation_flagged') {

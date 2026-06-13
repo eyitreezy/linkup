@@ -18,6 +18,8 @@ export type PlanFeedRow = DbPlan & {
     | 'bio'
     | 'onboarding_status'
     | 'preferences'
+    | 'spotlight_until'
+    | 'masked_activity_enabled'
   > | null;
   /** Always null in client feed — `users.verification_status` is not readable for other users under RLS. Use `verified_badge` on profile. */
   creatorVerification: UserVerification | null;

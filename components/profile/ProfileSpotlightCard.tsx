@@ -1,7 +1,9 @@
 /**
  * Profile spotlight — quota-aware CTA on Profile tab.
  */
+import { QuotaPipRow } from '@/components/subscription/QuotaPipRow';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { MONTHLY_SPOTLIGHTS } from '@/lib/subscription/boostQuota';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
@@ -96,6 +98,19 @@ export function ProfileSpotlightCard() {
             <Text style={styles.btnTxt}>{allowed ? 'Spotlight my profile' : 'Upgrade for spotlight'}</Text>
           )}
         </Pressable>
+        {allowed ? (
+          <QuotaPipRow
+            total={Math.max(0, MONTHLY_SPOTLIGHTS[effectiveTier])}
+            used={used}
+            unlimited={effectiveTier === 'PLATINUM'}
+            unlimitedLabel="Unlimited spotlights"
+            remainingLabel={
+              limit != null && limit > 0
+                ? `${Math.max(0, limit - used)} of ${limit} remaining`
+                : undefined
+            }
+          />
+        ) : null}
       </LinearGradient>
     </View>
   );

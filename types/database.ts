@@ -47,6 +47,9 @@ export interface ProfilePreferences {
   self_gender?: string;
   distance_unit?: 'km' | 'mi';
   safety_tips_acknowledged?: boolean;
+  /** Onboarding step 3 — contacts import completed (hashes only, never raw data). */
+  contacts_imported?: boolean;
+  contacts_hash_count?: number;
   /** Step 1 — user confirmed 18+ during onboarding. */
   adult_confirmed?: boolean;
   profile_draft?: boolean;
@@ -163,6 +166,8 @@ export interface DbProfile {
   incognito_browse_enabled?: boolean;
   /** Platinum — skip profile_views insert when true. */
   profile_view_privacy_enabled?: boolean;
+  /** Platinum — hide presence and public engagement surfaces when true. */
+  masked_activity_enabled?: boolean;
   ai_trust_score: number | null;
   /** Public “verified host” flag; kept in sync with `users.verification_status` via DB trigger — prefer updating the request/user row, not this field directly. */
   verified_badge: boolean;
@@ -231,6 +236,8 @@ export interface DbPlan {
   creator_can_manage?: boolean;
   /** Creator archived — hidden from discover; visible in Plan management. */
   archived_at?: string | null;
+  /** Standard plan listing window expiry (non-mood negotiating plans). */
+  active_expires_at?: string | null;
   mood_expires_at: string | null;
   /** UX mood category for discover */
   mood_type?: string | null;
@@ -377,6 +384,7 @@ export interface DbEscrowTransaction {
   guest_share_cents: number | null;
   funding_deadline: string | null;
   platform_fee_cents: number | null;
+  goodwill_applied_cents?: number | null;
   host_funded_at: string | null;
   guest_funded_at: string | null;
   amount_cents: number;
@@ -410,6 +418,8 @@ export interface DbDispute {
   resolution: PlanDisputeResolution | null;
   reporter_note: string | null;
   internal_notes: string | null;
+  admin_note?: string | null;
+  priority_review?: boolean;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -445,8 +455,12 @@ export interface DbEscrowDispute {
   reason: string;
   status: DisputeStatus;
   admin_resolution: string | null;
+  admin_note?: string | null;
   support_ticket_id: string | null;
   detail: string | null;
+  queue_priority?: number | null;
+  sla_deadline?: string | null;
+  opener_tier?: string | null;
   created_at: string;
   resolved_at: string | null;
 }
@@ -458,8 +472,25 @@ export interface DbSupportTicket {
   body: string;
   status: TicketStatus;
   priority: string;
+  queue_priority?: number | null;
+  sla_hours?: number | null;
+  sla_deadline?: string | null;
+  is_concierge?: boolean;
+  opener_tier?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type TicketReplyRole = 'admin' | 'member' | 'system';
+
+export interface DbTicketReply {
+  id: string;
+  ticket_id: string;
+  sender_id: string | null;
+  sender_role: TicketReplyRole;
+  body: string;
+  is_internal: boolean;
+  created_at: string;
 }
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
@@ -485,6 +516,7 @@ export type NotificationEventType =
   | 'dispute_created'
   | 'dispute_updated'
   | 'dispute_resolved'
+  | 'ticket_updated'
   | 'strike_added'
   | 'user_suspended'
   | 'user_banned'
@@ -496,6 +528,10 @@ export type NotificationEventType =
   | 'plan_cancelled'
   | 'wallet_updated'
   | 'credit_issued'
+  | 'credit_expiring'
+  | 'trial_started'
+  | 'trial_expiring'
+  | 'trial_expired'
   | string;
 
 /** JSON `data` for deep links — keep push payloads generic (no amounts). */
@@ -506,6 +542,7 @@ export interface NotificationPayload {
   escrowId?: string;
   chatId?: string;
   disputeId?: string;
+  ticketId?: string;
   /** Optional mirror of row `type` for push payloads. */
   type?: string;
   [key: string]: unknown;
@@ -563,11 +600,25 @@ export interface DbCancellation {
 
 export type GoodwillSource = 'cancellation' | 'dispute_resolution' | 'promo';
 
+export interface DbSubscriptionEvent {
+  id: string;
+  user_id: string;
+  event_type: string;
+  from_tier: SubscriptionTier | null;
+  to_tier: SubscriptionTier | null;
+  billing_cycle: 'monthly' | 'annual' | null;
+  amount_ngn: number | null;
+  flutterwave_reference: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
 export interface DbGoodwillCredit {
   id: string;
   user_id: string;
   amount: number;
   source: GoodwillSource;
+  tier_at_award: SubscriptionTier | null;
   expires_at: string;
   used_amount: number;
   created_at: string;
@@ -583,6 +634,7 @@ export interface DbWalletLedgerRow {
   source: WalletLedgerSource;
   amount: number;
   reference_id: string | null;
+  is_display_only?: boolean;
   created_at: string;
 }
 
@@ -605,6 +657,8 @@ export type FinancialEventType =
   | 'wallet_credit'
   | 'wallet_debit'
   | 'goodwill_issued'
+  | 'goodwill_applied'
+  | 'goodwill_expiry_warning'
   | 'cancellation'
   | 'reconciliation_note';
 

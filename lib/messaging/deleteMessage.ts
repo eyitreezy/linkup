@@ -1,6 +1,6 @@
 import {
   canDeleteMessageForEveryone,
-  MESSAGE_DELETE_FOR_EVERYONE_MS,
+  getDeleteForEveryoneWindowMs,
   withinMsSince,
 } from '@/lib/messaging/messageEditRules';
 import {
@@ -8,6 +8,7 @@ import {
   runMessageSelect,
   type ChatMessageRow,
 } from '@/lib/messaging/chatQueries';
+import type { SubscriptionTier } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type DeleteForEveryoneResult =
@@ -17,10 +18,14 @@ export type DeleteForEveryoneResult =
 export async function deleteMessageForEveryone(
   client: SupabaseClient,
   message: Pick<ChatMessageRow, 'id' | 'sender_id' | 'created_at' | 'deleted_at'>,
-  viewerId: string
+  viewerId: string,
+  senderTier: SubscriptionTier = 'FREE'
 ): Promise<DeleteForEveryoneResult> {
-  if (!canDeleteMessageForEveryone(message, viewerId)) {
-    const expired = !withinMsSince(message.created_at, MESSAGE_DELETE_FOR_EVERYONE_MS);
+  if (!canDeleteMessageForEveryone(message, viewerId, senderTier)) {
+    const expired = !withinMsSince(
+      message.created_at,
+      getDeleteForEveryoneWindowMs(senderTier)
+    );
     if (message.sender_id !== viewerId) {
       return { ok: false, error: 'You can only delete your own messages for everyone', code: 'not_sender' };
     }

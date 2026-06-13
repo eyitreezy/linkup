@@ -17,6 +17,7 @@ import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanne
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
+import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngagement';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
@@ -29,6 +30,7 @@ import { checkPermission } from '@/lib/subscription/checkPermission';
 import type { SubscriptionTier } from '@/types/database';
 import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
+import { createGroupChat } from '@/lib/messaging/createGroupChat';
 import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
@@ -177,6 +179,8 @@ export default function PlanOverviewScreen() {
   } | null>(null);
   const [saveUpgradeOpen, setSaveUpgradeOpen] = useState(false);
   const [saveUpgradeTier, setSaveUpgradeTier] = useState<SubscriptionTier>('SILVER');
+  const [groupChatConvId, setGroupChatConvId] = useState<string | null>(null);
+  const [groupChatBusy, setGroupChatBusy] = useState(false);
 
   const isCreatorEarly = !!(plan && user?.id && plan.creator_id === user.id);
   const { allowed: canSeeInterest } = usePermission('plans.see_all_likes', {
@@ -295,6 +299,20 @@ export default function PlanOverviewScreen() {
     return accepted != null && accepted.bidder_id === user.id;
   }, [plan, user?.id, offers]);
 
+  useEffect(() => {
+    if (!plan?.id || !plan.is_group_plan) {
+      setGroupChatConvId(null);
+      return;
+    }
+    void supabase
+      .from('conversations')
+      .select('id')
+      .eq('plan_id', plan.id)
+      .eq('is_group_chat', true)
+      .maybeSingle()
+      .then(({ data }) => setGroupChatConvId(data?.id ?? null));
+  }, [plan?.id, plan?.is_group_plan]);
+
   const shell = (inner: ReactNode) => (
     <Screen
       safeAreaEdges={['top', 'left', 'right']}
@@ -381,6 +399,34 @@ export default function PlanOverviewScreen() {
       await openDirectChat(supabase, user.id, other);
     } catch (e) {
       showFeedback('error', 'Chat', e instanceof Error ? e.message : 'Could not open chat');
+    }
+  }
+
+  async function handleOpenGroupChat() {
+    if (!user?.id || !plan || groupChatBusy) return;
+    setGroupChatBusy(true);
+    try {
+      if (groupChatConvId) {
+        router.push(`/chat/group/${groupChatConvId}` as Href);
+        return;
+      }
+      if (plan.creator_id !== user.id) {
+        showFeedback('warning', 'Group chat', 'The host has not opened the group chat yet.');
+        return;
+      }
+      const guestIds = offers.filter((o) => o.status === 'accepted').map((o) => o.bidder_id);
+      const convId = await createGroupChat({
+        planId: plan.id,
+        hostId: user.id,
+        groupName: plan.title,
+        initialMemberIds: guestIds,
+      });
+      setGroupChatConvId(convId);
+      router.push(`/chat/group/${convId}` as Href);
+    } catch (e) {
+      showFeedback('error', 'Group chat', e instanceof Error ? e.message : 'Could not open group chat');
+    } finally {
+      setGroupChatBusy(false);
     }
   }
 
@@ -592,8 +638,124 @@ export default function PlanOverviewScreen() {
       ) : null}
 
       <PlanGroupGuestsPanel plan={plan} hostUserId={plan.creator_id} currentUserId={user?.id} />
+      {plan.is_group_plan && (plan.status === 'active' || plan.status === 'agreed') &&
+      (isCreator || groupChatConvId) ? (
+        <Pressable
+          onPress={() => void handleOpenGroupChat()}
+          disabled={groupChatBusy}
+          style={({ pressed }) => [styles.groupChatBtn, pressed && { opacity: 0.92 }]}
+        >
+          <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
+          <Text style={styles.groupChatLabel}>
+            {groupChatBusy ? 'Opening…' : 'Group Chat'}
+          </Text>
+        </Pressable>
+      ) : null}
       {isCreator && user?.id ? (
         <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={user.id} />
+      ) : null}
+
+      {isCreator ? (
+        <View style={styles.planActionGrid}>
+          <PlanBoostControls
+            planId={plan.id}
+            creatorId={plan.creator_id}
+            dbUser={dbUser}
+            boosted={boosted}
+            boostedUntil={plan.boosted_until}
+            moodClosed={moodClosed}
+            onBoosted={() => void load()}
+            onShowFeedback={(title, message) => showFeedback('success', title, message)}
+            cellStyle={styles.planActionGridCell}
+            fullWidthCellStyle={styles.planActionGridCellFull}
+          />
+          <View style={styles.planActionGridCell}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                canSeeInterest
+                  ? router.push(`/plan/${id}/interest` as Href)
+                  : router.push('/subscription' as Href)
+              }
+              style={({ pressed }) => [
+                styles.planDetailBtnOuter,
+                styles.planDetailInterestBtn,
+                pressed && { opacity: 0.92 },
+              ]}
+            >
+              <LinearGradient
+                colors={
+                  canSeeInterest ? [colors.primary, colors.secondary] : [colors.border, colors.border]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.planDetailBtnPrimaryGrad, styles.planDetailInterestBtn]}
+              >
+                {!canSeeInterest ? (
+                  <Ionicons name="lock-closed" size={16} color="#fff" style={{ marginRight: 6 }} />
+                ) : null}
+                <Text style={styles.planDetailBtnPrimaryTxt} numberOfLines={1}>
+                  Interest
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+          <View style={styles.planActionGridCell}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={goNegotiate}
+              disabled={moodClosed}
+              style={({ pressed }) => [
+                styles.planDetailBtnOuter,
+                moodClosed && styles.planDetailBtnDisabled,
+                pressed && !moodClosed && { opacity: 0.92 },
+              ]}
+            >
+              <LinearGradient
+                colors={moodClosed ? [colors.border, colors.border] : [colors.primary, colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.planDetailBtnPrimaryGrad}
+              >
+                <Ionicons name="file-tray-stacked-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.planDetailBtnPrimaryTxt} numberOfLines={1}>
+                  Manage offers
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {isCreator && plan.active_expires_at && !plan.is_mood_plan ? (
+        <View
+          style={[
+            styles.activeWindowRow,
+            isPlanActiveWindowExpiringSoon(plan.active_expires_at) && styles.activeWindowRowWarn,
+          ]}
+        >
+          <Ionicons
+            name="time-outline"
+            size={14}
+            color={
+              isPlanActiveWindowExpiringSoon(plan.active_expires_at)
+                ? colors.warning
+                : colors.textMuted
+            }
+          />
+          <Text
+            style={[
+              styles.activeWindowText,
+              isPlanActiveWindowExpiringSoon(plan.active_expires_at) && styles.activeWindowTextWarn,
+            ]}
+          >
+            {isPlanActiveWindowExpiringSoon(plan.active_expires_at)
+              ? `Listing expires in ${daysUntilIso(plan.active_expires_at)} days`
+              : `Listed until ${new Date(plan.active_expires_at).toLocaleDateString(undefined, {
+                  dateStyle: 'medium',
+                })}`}
+          </Text>
+        </View>
       ) : null}
 
       <LinearGradient
@@ -731,41 +893,7 @@ export default function PlanOverviewScreen() {
         </Pressable>
       ) : null}
 
-      {isCreator ? (
-        <View style={styles.rowBtns}>
-          <PlanBoostControls
-            planId={plan.id}
-            creatorId={plan.creator_id}
-            dbUser={dbUser}
-            boosted={boosted}
-            moodClosed={moodClosed}
-            onBoosted={() => void load()}
-            onShowFeedback={(title, message) => showFeedback('success', title, message)}
-          />
-          <Pressable
-            accessibilityRole="button"
-            onPress={() =>
-              canSeeInterest
-                ? router.push(`/plan/${id}/interest` as Href)
-                : router.push('/subscription' as Href)
-            }
-            style={({ pressed }) => [styles.creatorActionFlex, pressed && { opacity: 0.92 }]}
-          >
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.dualSaveGradientRing}
-            >
-              <View style={styles.creatorOutlineInner}>
-                <Text style={styles.dualSaveLabel} numberOfLines={2} adjustsFontSizeToFit>
-                  {canSeeInterest ? 'Who is interested?' : 'Interest (Gold+)'}
-                </Text>
-              </View>
-            </LinearGradient>
-          </Pressable>
-        </View>
-      ) : agreed ? (
+      {isCreator ? null : agreed ? (
         guestAgreedCalendarSaveRow ? null : (
           <View style={styles.primaryBtn}>
             <Pressable
@@ -889,26 +1017,6 @@ export default function PlanOverviewScreen() {
             </>
           ) : null}
         </>
-      ) : isCreator ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={goNegotiate}
-          disabled={moodClosed && !isCreator}
-          style={({ pressed }) => [
-            styles.creatorManageCta,
-            pressed && !(moodClosed && !isCreator) && { opacity: 0.94, transform: [{ scale: 0.985 }] },
-          ]}
-        >
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.creatorManageGrad}
-          >
-            <Ionicons name="file-tray-stacked-outline" size={22} color="#FFFFFF" />
-            <Text style={styles.creatorManageTxt}>Manage offers</Text>
-          </LinearGradient>
-        </Pressable>
       ) : null}
 
       <View style={styles.offersSectionWrap}>
@@ -1079,6 +1187,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(108,99,255,0.15)',
   },
   groupPillTxt: { fontSize: 11, fontWeight: '900', color: colors.primary },
+  groupChatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(108,99,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  groupChatLabel: { fontSize: 15, fontWeight: '800', color: colors.primary },
   extendBtn: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
@@ -1161,27 +1285,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: spacing.lg,
-    minHeight: 54,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    minHeight: 48,
   },
   calendarBtnGradientHalf: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: spacing.sm,
-    minHeight: 52,
+    minHeight: 48,
   },
-  calendarBtnTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  calendarBtnTxtHalf: { fontSize: 13, fontWeight: '800', color: '#fff', textAlign: 'center', flexShrink: 1 },
+  calendarBtnTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  calendarBtnTxtHalf: { fontSize: 14, fontWeight: '800', color: '#fff', textAlign: 'center', flexShrink: 1 },
   agreementOutlineInner: {
     borderRadius: radius.button - 4,
     backgroundColor: colors.surface,
     flex: 1,
-    minHeight: 52,
+    minHeight: 48,
     paddingVertical: 12,
     paddingHorizontal: spacing.sm,
     flexDirection: 'row',
@@ -1201,47 +1325,84 @@ const styles = StyleSheet.create({
   agreementMessageGrad: {
     flex: 1,
     width: '100%',
-    minHeight: 56,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 15,
+    paddingVertical: 12,
     paddingHorizontal: spacing.sm,
   },
-  agreementMessageTxt: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
+  agreementMessageTxt: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
   primaryBtn: { marginBottom: spacing.sm },
-  rowBtns: {
+  planActionGrid: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+    flexWrap: 'wrap',
+    gap: spacing.sm + 4,
     marginBottom: spacing.sm,
   },
-  creatorActionFlex: {
+  activeWindowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(107, 114, 128, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(107, 114, 128, 0.14)',
+  },
+  activeWindowRowWarn: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.28)',
+  },
+  activeWindowText: {
     flex: 1,
-    minWidth: 0,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  activeWindowTextWarn: {
+    fontWeight: '800',
+    color: colors.warning,
+  },
+  planActionGridCell: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    minWidth: 148,
+  },
+  planActionGridCellFull: {
+    flexBasis: '100%',
+    width: '100%',
+  },
+  planDetailBtnOuter: {
+    width: '100%',
     borderRadius: radius.button,
     overflow: 'hidden',
   },
-  creatorActionDisabled: { opacity: 0.55 },
-  creatorRowPrimaryGrad: {
-    minHeight: 52,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.sm,
+  planDetailInterestBtn: {
+    borderRadius: 300,
+  },
+  planDetailBtnPrimaryGrad: {
+    width: '100%',
+    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
   },
-  creatorRowPrimaryTxt: {
-    fontSize: 15,
+  planDetailBtnPrimaryTxt: {
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.2,
     color: '#FFFFFF',
     textAlign: 'center',
   },
-  creatorRowPrimaryTxtMuted: {
-    color: colors.textMuted,
-  },
+  planDetailBtnDisabled: { opacity: 0.55 },
   creatorOutlineInner: {
     borderRadius: radius.button - 2,
     backgroundColor: '#FFFFFF',
@@ -1269,13 +1430,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: spacing.lg,
-    minHeight: 56,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    minHeight: 48,
   },
   creatorManageTxt: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.2,
@@ -1334,14 +1495,14 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   dualOfferGradient: {
-    minHeight: 52,
-    paddingVertical: 14,
+    minHeight: 48,
+    paddingVertical: 12,
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dualOfferLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.2,
     color: '#fff',

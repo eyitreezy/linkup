@@ -2,6 +2,7 @@
  * Inbox row — bold card, avatar-first layout, warm preview line.
  */
 import { Avatar } from '@/components/Avatar';
+import { GroupAvatar } from '@/components/messages/GroupAvatar';
 import { colors, radius, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +15,10 @@ export type ConversationCardProps = {
   timeLabel: string;
   unread: boolean;
   verified?: boolean;
+  isGroupChat?: boolean;
+  groupAvatarUrl?: string | null;
+  memberCount?: number;
+  memberPreviews?: { avatarUrl: string | null; name: string }[];
   onPress: () => void;
 };
 
@@ -26,6 +31,10 @@ export function ConversationCard({
   timeLabel,
   unread,
   verified,
+  isGroupChat,
+  groupAvatarUrl,
+  memberCount,
+  memberPreviews,
   onPress,
 }: ConversationCardProps) {
   return (
@@ -46,7 +55,16 @@ export function ConversationCard({
         ) : null}
         <View style={styles.row}>
           <View style={[styles.avatarWrap, unread && styles.avatarWrapUnread]}>
-            <Avatar uri={avatarUrl} name={name} size={AVATAR} />
+            {isGroupChat ? (
+              <GroupAvatar
+                avatarUrl={groupAvatarUrl}
+                groupName={name}
+                size={AVATAR}
+                memberPreviews={memberPreviews}
+              />
+            ) : (
+              <Avatar uri={avatarUrl} name={name} size={AVATAR} />
+            )}
           </View>
           <View style={styles.body}>
             <View style={styles.topLine}>
@@ -60,6 +78,9 @@ export function ConversationCard({
               </View>
               <Text style={[styles.time, unread && styles.timeUnread]}>{timeLabel}</Text>
             </View>
+            {isGroupChat && memberCount != null ? (
+              <Text style={styles.memberCount}>{memberCount} members</Text>
+            ) : null}
             <View style={styles.previewRow}>
               <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={2}>
                 {preview}
@@ -147,6 +168,7 @@ const styles = StyleSheet.create({
   previewRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   preview: { flex: 1, fontSize: 15, lineHeight: 21, color: colors.textMuted, fontWeight: '500' },
   previewUnread: { color: colors.text, fontWeight: '700' },
+  memberCount: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 2 },
   dot: {
     width: 9,
     height: 9,

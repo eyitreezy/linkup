@@ -1,5 +1,6 @@
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import { distanceKm } from '@/lib/location';
+import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import type { SubscriptionTier } from '@/types/database';
 
 export type RankDiscoveryOptions = {
@@ -24,7 +25,7 @@ function tierRankForRow(row: PlanFeedRow): number {
 }
 
 /**
- * Mood plans first (soonest expiry), then host tier, boost, distance, recency.
+ * Mood plans first (soonest expiry), then host tier, creator spotlight, boost, distance, recency.
  */
 export function rankDiscoveryPlans(
   rows: PlanFeedRow[],
@@ -51,6 +52,10 @@ export function rankDiscoveryPlans(
     const tierA = tierRankForRow(a);
     const tierB = tierRankForRow(b);
     if (tierA !== tierB) return tierB - tierA;
+
+    const aSpotlighted = isCreatorSpotlightActive(a.creatorProfile?.spotlight_until, now);
+    const bSpotlighted = isCreatorSpotlightActive(b.creatorProfile?.spotlight_until, now);
+    if (aSpotlighted !== bSpotlighted) return bSpotlighted ? 1 : -1;
 
     const ba = isBoosted(a) ? 1 : 0;
     const bb = isBoosted(b) ? 1 : 0;

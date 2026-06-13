@@ -7,7 +7,7 @@ import type { DbMeetType, DbPlan, DbProfile, SubscriptionTier } from '@/types/da
 export type PlanRowFromDb = DbPlan & { meet_types?: DbMeetType | null };
 
 const PROFILE_FIELDS =
-  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, subscription_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences';
+  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, subscription_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences, spotlight_until, masked_activity_enabled';
 
 type ProfileRow = Pick<
   DbProfile,
@@ -23,6 +23,8 @@ type ProfileRow = Pick<
   | 'bio'
   | 'onboarding_status'
   | 'preferences'
+  | 'spotlight_until'
+  | 'masked_activity_enabled'
 >;
 
 /** Defence-in-depth when RLS does not filter premium visibility rows. */
@@ -52,6 +54,11 @@ export async function fetchPlansPage(
     ? `is_expired.eq.false,creator_id.eq.${viewerUserId}`
     : `is_expired.eq.false`;
 
+  /** Standard plan active window — legacy rows without active_expires_at remain visible. */
+  const activeWindowOr = viewerUserId
+    ? `is_mood_plan.eq.true,active_expires_at.is.null,creator_id.eq.${viewerUserId},active_expires_at.gt.${nowQuoted}`
+    : `is_mood_plan.eq.true,active_expires_at.is.null,active_expires_at.gt.${nowQuoted}`;
+
   let connectedCreatorIds: string[] = [];
   if (viewerUserId) {
     try {
@@ -68,7 +75,8 @@ export async function fetchPlansPage(
     .is('archived_at', null)
     .in('status', ['negotiating', 'active'])
     .or(moodOr)
-    .or(notExpiredOr);
+    .or(notExpiredOr)
+    .or(activeWindowOr);
 
   if (viewerUserId) {
     const visParts = ['visibility.eq.public', 'visibility.eq.radius', `creator_id.eq.${viewerUserId}`];

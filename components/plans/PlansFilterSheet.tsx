@@ -6,7 +6,10 @@ import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
 import type { HostPresenceFilter } from '@/lib/presence/derivePresenceUi';
 import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
 import { formatFilterPriceMajor, parseFilterPriceMajor } from '@/lib/discovery/feedPriceFilter';
+import { TierBadge } from '@/components/TierBadge';
 import { isDiscoverFilterConstraintActive } from '@/lib/discovery/parseStoredFeedFilters';
+import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
+import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,6 +53,9 @@ type Props = {
   onApply: (next: FeedFilterState, nextMood: DiscoveryMood, nextFeedMode: FeedViewMode) => void;
   onUpgrade: () => void;
   baseRadiusKm: number;
+  browseRadiusKm: number;
+  hasWiderRadius: boolean;
+  effectiveTier: SubscriptionTier;
 };
 
 export function PlansFilterSheet({
@@ -62,6 +68,9 @@ export function PlansFilterSheet({
   onApply,
   onUpgrade,
   baseRadiusKm,
+  browseRadiusKm,
+  hasWiderRadius,
+  effectiveTier,
 }: Props) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -275,7 +284,7 @@ export function PlansFilterSheet({
                 <Slider
                   style={styles.slider}
                   minimumValue={5}
-                  maximumValue={Math.max(100, baseRadiusKm, maxKm)}
+                  maximumValue={Math.max(100, browseRadiusKm, baseRadiusKm, maxKm)}
                   step={1}
                   value={maxKm}
                   onValueChange={setMaxKm}
@@ -283,6 +292,25 @@ export function PlansFilterSheet({
                   maximumTrackTintColor={colors.border}
                   thumbTintColor={colors.primary}
                 />
+                {hasWiderRadius && effectiveTier !== 'FREE' ? (
+                  <Text style={styles.filterHintText}>
+                    Your {effectiveTier.charAt(0) + effectiveTier.slice(1).toLowerCase()} subscription
+                    extends your reach to{' '}
+                    <Text style={styles.filterHintBold}>
+                      {effectiveDiscoveryRadiusKm(baseRadiusKm, effectiveTier, true)} km
+                    </Text>
+                  </Text>
+                ) : (
+                  <Pressable style={styles.widerRadiusUpsell} onPress={onUpgrade}>
+                    <View style={styles.widerRadiusUpsellRow}>
+                      <Ionicons name="navigate-outline" size={18} color={colors.primary} />
+                      <Text style={styles.widerRadiusUpsellTxt}>
+                        Wider reach available on Silver and above
+                      </Text>
+                      <TierBadge tier="SILVER" compact />
+                    </View>
+                  </Pressable>
+                )}
               </View>
 
               {!isPremium ? (
@@ -634,6 +662,37 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textMuted,
     lineHeight: 18,
+  },
+  filterHintText: {
+    marginTop: spacing.sm,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
+  filterHintBold: {
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  widerRadiusUpsell: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(108,99,255,0.2)',
+    backgroundColor: 'rgba(237,232,255,0.45)',
+  },
+  widerRadiusUpsellRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  widerRadiusUpsellTxt: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
   },
   displayPillRow: {
     flexDirection: 'row',

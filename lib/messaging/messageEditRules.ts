@@ -1,11 +1,20 @@
 import type { ChatMessageRow } from '@/lib/messaging/chatQueries';
 import { messageDisplayText } from '@/lib/messaging/chatQueries';
+import type { SubscriptionTier } from '@/types/database';
 
 /** WhatsApp-style window for editing sent text messages. */
 export const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 
-/** WhatsApp-style recall window for delete-for-everyone (own sent messages). */
+/** Default recall window for delete-for-everyone (non-Platinum). */
 export const MESSAGE_DELETE_FOR_EVERYONE_MS = 15 * 60 * 1000;
+
+/** Platinum delete-for-everyone window. */
+export const PLATINUM_DELETE_FOR_EVERYONE_MS = 60 * 60 * 1000;
+
+export function getDeleteForEveryoneWindowMs(tier: SubscriptionTier): number {
+  if (tier === 'PLATINUM') return PLATINUM_DELETE_FOR_EVERYONE_MS;
+  return MESSAGE_DELETE_FOR_EVERYONE_MS;
+}
 
 export function withinMsSince(iso: string, ms: number, now = Date.now()): boolean {
   const t = new Date(iso).getTime();
@@ -41,11 +50,12 @@ export function canReplyToMessage(
 export function canDeleteMessageForEveryone(
   m: Pick<ChatMessageRow, 'sender_id' | 'created_at' | 'deleted_at'>,
   viewerId: string,
+  senderTier: SubscriptionTier,
   now = Date.now()
 ): boolean {
-  if (m.sender_id !== viewerId) return false;
+  if (!m.sender_id || m.sender_id !== viewerId) return false;
   if (m.deleted_at) return false;
-  return withinMsSince(m.created_at, MESSAGE_DELETE_FOR_EVERYONE_MS, now);
+  return withinMsSince(m.created_at, getDeleteForEveryoneWindowMs(senderTier), now);
 }
 
 /** Hide from this user's thread only — available on any non–deleted-for-everyone message. */

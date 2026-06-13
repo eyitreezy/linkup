@@ -1,7 +1,7 @@
 /**
  * PL6a — Agreement & confirmation after offer accept (trust + structured summary + CTAs).
  */
-import { CancellationSummaryCard } from '@/components/plans/CancellationSummaryCard';
+import { CancellationSummaryCard, type CancellationBandSummary } from '@/components/plans/CancellationSummaryCard';
 import { PlanAgreementCTAButton } from '@/components/plans/agreement/PlanAgreementCTAButton';
 import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgreementStatusBadge';
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
@@ -29,14 +29,19 @@ import { MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { goToDiscoveryFeed } from '@/lib/navigation/goToDiscoveryFeed';
+import {
+  goodwillCreditCents,
+  goodwillCreditCentsForTier,
+} from '@/lib/plans/cancellationPolicy';
 import { requiresVerificationGate } from '@/lib/verification/access';
-import type { DbPlan, DbPlanOffer } from '@/types/database';
+import type { DbPlan, DbPlanOffer, SubscriptionTier } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -57,6 +62,20 @@ function formatOfferExpiry(iso: string | null | undefined): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+type CancellationOutcome = {
+  goodwill_credit: number;
+  guest_credit: number;
+  host_credit: number;
+  cancel_type: 'early' | 'late' | 'no_show';
+  band: string | null;
+};
+
+function cancelBandFromOutcome(outcome: CancellationOutcome): CancellationBandSummary {
+  if (outcome.cancel_type === 'no_show') return 'no_show';
+  if (outcome.cancel_type === 'early') return 'early';
+  return 'late';
 }
 
 function AgreementTopNav({ topInset }: { topInset: number }) {
@@ -96,6 +115,13 @@ export default function PlanAgreementScreen() {
   const [loadDone, setLoadDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelOptionsOpen, setCancelOptionsOpen] = useState(false);
+  const [noShowConfirmOpen, setNoShowConfirmOpen] = useState(false);
+  const [mutualCancelOpen, setMutualCancelOpen] = useState(false);
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
+  const [cancellationOutcome, setCancellationOutcome] = useState<CancellationOutcome | null>(null);
+  const [hasVotedMutualCancel, setHasVotedMutualCancel] = useState(false);
+  const [mutualVoteCount, setMutualVoteCount] = useState(0);
   const [gateOpen, setGateOpen] = useState(false);
   const [confirmationUserIds, setConfirmationUserIds] = useState<string[]>([]);
   const [legalGateOpen, setLegalGateOpen] = useState(false);
@@ -145,7 +171,8 @@ export default function PlanAgreementScreen() {
 
       const bidderId = off?.bidder_id ?? pl.creator_id;
 
-      const [{ data: hp }, { data: bp }, { data: confRows }, { data: guestUser }] = await Promise.all([
+      const [{ data: hp }, { data: bp }, { data: confRows }, { data: guestUser }, { data: mutualVotes }] =
+        await Promise.all([
         supabase
           .from('profiles')
           .select('user_id, display_name, avatar_url, verified_badge')
@@ -158,9 +185,13 @@ export default function PlanAgreementScreen() {
           .maybeSingle(),
         supabase.from('agreement_confirmations').select('user_id').eq('plan_id', pl.id),
         supabase.from('users').select('kyc_tier').eq('id', bidderId).maybeSingle(),
+        supabase.from('mutual_plan_cancel_votes').select('user_id').eq('plan_id', pl.id),
       ]);
 
       setConfirmationUserIds((confRows ?? []).map((r) => r.user_id as string));
+      const voteIds = (mutualVotes ?? []).map((r) => r.user_id as string);
+      setMutualVoteCount(voteIds.length);
+      setHasVotedMutualCancel(!!(user?.id && voteIds.includes(user.id)));
 
       // Apply plan + offer + parties in one commit so we never render “accepted id set, offer null”.
       setPlan(pl);
@@ -185,7 +216,28 @@ export default function PlanAgreementScreen() {
     } finally {
       setLoadDone(true);
     }
-  }, [id]);
+  }, [id, user?.id]);
+
+  useEffect(() => {
+    if (!id || !isSupabaseConfigured || !hasVotedMutualCancel) return;
+    const channel = supabase
+      .channel(`plan-mutual-${id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'plans', filter: `id=eq.${id}` },
+        (payload) => {
+          const next = payload.new as { status?: string };
+          if (next.status === 'cancelled') {
+            showFeedback('success', 'Mutual cancellation', 'Plan mutually cancelled — refund processed.');
+            goToDiscoveryFeed();
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [id, hasVotedMutualCancel]);
 
   function onHighValueAction() {
     if (dbUser?.subscription_tier !== 'PLATINUM') {
@@ -410,8 +462,10 @@ export default function PlanAgreementScreen() {
     }
   }
 
-  async function onCancelConfirmed() {
+  async function handleCancel({ noShow }: { noShow: boolean }) {
     setCancelOpen(false);
+    setCancelOptionsOpen(false);
+    setNoShowConfirmOpen(false);
     if (busy || !user) return;
     setBusy(true);
     try {
@@ -422,15 +476,53 @@ export default function PlanAgreementScreen() {
           .eq('plan_id', planRow.id)
           .in('status', ['pending', 'countered']);
       }
-      const { error: rpcErr } = await supabase.rpc('submit_plan_cancellation', {
+      const { data, error: rpcErr } = await supabase.rpc('submit_plan_cancellation', {
         p_plan_id: planRow.id,
-        p_no_show: false,
+        p_no_show: noShow,
       });
-      if (rpcErr) showFeedback('error', 'Could not cancel', rpcErr.message);
-      else goToDiscoveryFeed();
+      if (rpcErr) {
+        showFeedback('error', 'Could not cancel', rpcErr.message);
+        return;
+      }
+      setCancellationOutcome(data as CancellationOutcome);
+      setOutcomeOpen(true);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onCancelConfirmed() {
+    await handleCancel({ noShow: false });
+  }
+
+  function onCancelSecondaryPress() {
+    if (isBidder) setCancelOptionsOpen(true);
+    else setCancelOpen(true);
+  }
+
+  async function handleVoteMutualCancel() {
+    if (busy) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('vote_mutual_plan_cancel', { p_plan_id: planRow.id });
+    setBusy(false);
+    if (error) {
+      showFeedback('error', 'Could not vote', error.message);
+      return;
+    }
+    const result = data as { status?: string };
+    if (result.status === 'completed') {
+      setMutualCancelOpen(false);
+      showFeedback('success', 'Mutual cancellation', 'Plan mutually cancelled — refund processed.');
+      goToDiscoveryFeed();
+      return;
+    }
+    setHasVotedMutualCancel(true);
+    setMutualVoteCount((c) => Math.max(c, 1));
+  }
+
+  function dismissOutcome() {
+    setOutcomeOpen(false);
+    goToDiscoveryFeed();
   }
 
   async function onMessageCounterpart() {
@@ -533,6 +625,21 @@ export default function PlanAgreementScreen() {
     ? 'Review the summary below. Secure payment happens on the next screen — not while you negotiate.'
     : 'Review the meetup summary and confirm when you are ready.';
 
+  const guestTier = (dbUser?.subscription_tier ?? 'FREE') as SubscriptionTier;
+  const noShowGoodwillPreview = isBidder
+    ? goodwillCreditCentsForTier(goodwillCreditCents(escrowCents ?? 0), guestTier)
+    : 0;
+
+  const outcomeCardProps = cancellationOutcome
+    ? {
+        band: cancelBandFromOutcome(cancellationOutcome),
+        refundCents: cancellationOutcome.guest_credit,
+        feeCents: cancellationOutcome.host_credit,
+        goodwillCents: cancellationOutcome.goodwill_credit,
+        roleLabel: (isBidder ? 'Guest' : 'Host') as 'Guest' | 'Host',
+      }
+    : null;
+
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
@@ -573,6 +680,95 @@ export default function PlanAgreementScreen() {
           onCancel={() => setCancelOpen(false)}
           onConfirm={() => void onCancelConfirmed()}
         />
+        <Modal visible={cancelOptionsOpen} animationType="slide" transparent onRequestClose={() => setCancelOptionsOpen(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setCancelOptionsOpen(false)}>
+            <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.sheetTitle}>Why are you cancelling?</Text>
+              <Pressable
+                style={styles.cancelOption}
+                onPress={() => void handleCancel({ noShow: false })}
+                disabled={busy}
+              >
+                <Text style={styles.cancelOptionTitle}>I want to cancel</Text>
+                <Text style={styles.cancelOptionDesc}>
+                  Standard cancellation — see refund policy below
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.cancelOption, styles.cancelOptionWarning]}
+                onPress={() => {
+                  setCancelOptionsOpen(false);
+                  setNoShowConfirmOpen(true);
+                }}
+                disabled={busy}
+              >
+                <Text style={styles.cancelOptionTitleWarning}>The host didn&apos;t show up</Text>
+                <Text style={styles.cancelOptionDesc}>
+                  Report a no-show — full refund
+                  {noShowGoodwillPreview > 0
+                    ? ` and up to ₦${(noShowGoodwillPreview / 100).toLocaleString()} goodwill credit`
+                    : ''}
+                </Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+        <PlanConfirmationModal
+          visible={noShowConfirmOpen}
+          title="Report host no-show?"
+          message="This will be recorded. False reports may affect your account standing. Continue only if the host genuinely did not show up."
+          confirmLabel="Report no-show"
+          cancelLabel="Go back"
+          onCancel={() => setNoShowConfirmOpen(false)}
+          onConfirm={() => void handleCancel({ noShow: true })}
+        />
+        <Modal visible={mutualCancelOpen} animationType="slide" transparent onRequestClose={() => setMutualCancelOpen(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setMutualCancelOpen(false)}>
+            <Pressable style={styles.sheetCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.sheetTitle}>Mutual cancellation</Text>
+              <Text style={styles.mutualCancelDesc}>
+                Both parties agree to cancel with a full refund to whoever funded escrow. No cancellation fees or
+                strikes apply. The other person must also confirm.
+              </Text>
+              <Pressable
+                style={styles.mutualCancelConfirm}
+                onPress={() => void handleVoteMutualCancel()}
+                disabled={busy || hasVotedMutualCancel}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Text style={styles.mutualCancelConfirmLabel}>
+                  {hasVotedMutualCancel ? 'Waiting for the other person…' : 'I agree to mutual cancellation'}
+                </Text>
+              </Pressable>
+              {hasVotedMutualCancel && mutualVoteCount < 2 ? (
+                <Text style={styles.mutualCancelWaiting}>
+                  Waiting for the other person to agree…
+                </Text>
+              ) : null}
+            </Pressable>
+          </Pressable>
+        </Modal>
+        <Modal visible={outcomeOpen} animationType="slide" transparent onRequestClose={dismissOutcome}>
+          <View style={styles.sheetBackdrop}>
+            <View style={styles.outcomeModalCard}>
+              <CancellationSummaryCard outcome={outcomeCardProps} />
+              <Pressable style={styles.outcomeDoneBtn} onPress={dismissOutcome}>
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <Text style={styles.outcomeDoneLabel}>Done</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
         <PreAgreementFullscreenModal
           visible={legalGateOpen}
           planTitle={planRow.title}
@@ -764,6 +960,16 @@ export default function PlanAgreementScreen() {
             </Pressable>
           ) : null}
 
+          {showCancelPlan ? (
+            <Pressable
+              onPress={() => setMutualCancelOpen(true)}
+              style={({ pressed }) => [styles.mutualCancelLink, pressed && { opacity: 0.9 }]}
+              disabled={busy}
+            >
+              <Text style={styles.mutualCancelLinkText}>Suggest mutual cancellation</Text>
+            </Pressable>
+          ) : null}
+
           {showCancelPlan || !inlineMessageAndView ? (
             <PlanAgreementCTAButton
               omitPrimary={inlineMessageAndView}
@@ -772,7 +978,7 @@ export default function PlanAgreementScreen() {
               primaryDisabled={primaryDisabled}
               primaryLoading={busy}
               secondaryLabel={showCancelPlan ? 'Cancel plan' : undefined}
-              onSecondary={showCancelPlan ? () => setCancelOpen(true) : undefined}
+              onSecondary={showCancelPlan ? onCancelSecondaryPress : undefined}
               secondaryDisabled={busy}
             />
           ) : null}
@@ -1058,4 +1264,81 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   dualViewTextMuted: { color: 'rgba(255,255,255,0.72)' },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheetCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+  },
+  sheetTitle: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: spacing.md },
+  cancelOption: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.18)',
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+  },
+  cancelOptionWarning: {
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+  },
+  cancelOptionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 4 },
+  cancelOptionTitleWarning: { fontSize: 16, fontWeight: '800', color: colors.danger, marginBottom: 4 },
+  cancelOptionDesc: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  mutualCancelLink: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  mutualCancelLinkText: { fontSize: 14, fontWeight: '800', color: colors.primary },
+  mutualCancelDesc: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 21,
+    marginBottom: spacing.md,
+  },
+  mutualCancelConfirm: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mutualCancelConfirmLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  mutualCancelWaiting: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
+  outcomeModalCard: {
+    margin: spacing.md,
+    marginTop: 'auto',
+    marginBottom: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(108, 99, 255, 0.12)',
+  },
+  outcomeDoneBtn: {
+    marginTop: spacing.sm,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outcomeDoneLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
 });
