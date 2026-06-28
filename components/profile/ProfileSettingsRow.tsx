@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -69,7 +69,8 @@ const styles = StyleSheet.create({
   iconDanger: { backgroundColor: '#FEF2F2' },
   textCol: { flex: 1 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  label: { fontSize: 16, fontWeight: '700', color: colors.text },
+  label: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   badge: {
     minWidth: 22,
     height: 22,
@@ -79,7 +80,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  badgeTxt: { color: '#fff', fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold,},
   labelDanger: { color: colors.danger },
-  sub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  sub: { fontSize: 13, color: colors.textMuted, marginTop: 2, fontFamily: fonts.regular, },
 });

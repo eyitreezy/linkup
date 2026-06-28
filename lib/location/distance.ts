@@ -19,3 +19,13 @@ export function distanceKm(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+/** Same as {@link distanceKm} but in meters — use for precise nearness sorting. */
+export function distanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  return distanceKm(lat1, lon1, lat2, lon2) * 1000;
+}

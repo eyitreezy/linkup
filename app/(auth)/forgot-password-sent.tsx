@@ -3,7 +3,7 @@
  */
 import { DatingAuthShell } from '@/components/auth/DatingAuthShell';
 import { Button } from '@/components/Button';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -60,8 +61,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
     fontWeight: '500',
+    fontFamily: fonts.regular,
   },
-  em: { fontWeight: '800', color: '#FFFFFF' },
+  em: { fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF' },
   hint: {
     fontSize: 13,
     lineHeight: 20,

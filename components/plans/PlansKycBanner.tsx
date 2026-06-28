@@ -1,7 +1,7 @@
 /**
  * Dismissible soft verification banner on Plans (non-blocking).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Href, router } from 'expo-router';
@@ -47,7 +47,7 @@ export function PlansKycBanner({ visible }: Props) {
           <Text style={styles.title}>Help others feel safe meeting you</Text>
         </View>
         <Text style={styles.body}>
-          Verification unlocks suggesting hangouts, chatting details, and optional secure holds — so real meetups feel
+          Verification unlocks suggesting hangouts, chatting details, and optional secure holds, so real meetups feel
           human, not risky.
         </Text>
         <View style={styles.actions}>
@@ -71,13 +71,14 @@ const styles = StyleSheet.create({
   inner: {
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  title: { flex: 1, fontSize: 16, fontWeight: '800', color: colors.text },
-  body: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginBottom: spacing.md },
+  title: { flex: 1, fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  body: { fontSize: 13, color: colors.textMuted, lineHeight: 19, marginBottom: spacing.md, fontFamily: fonts.regular, },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   primary: {
     paddingVertical: 10,
@@ -85,6 +86,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: colors.primary,
   },
-  primaryTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  dismiss: { fontSize: 15, fontWeight: '700', color: colors.textMuted },
+  primaryTxt: { color: '#fff', fontWeight: '800',
+    fontFamily: fonts.bold, fontSize: 15 },
+  dismiss: { fontSize: 15, fontWeight: '700', color: colors.textMuted, fontFamily: fonts.medium, },
 });

@@ -1,4 +1,4 @@
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -50,5 +50,6 @@ const styles = StyleSheet.create({
   txt: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
   },
 });

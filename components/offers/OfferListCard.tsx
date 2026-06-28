@@ -3,7 +3,7 @@
  */
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { OfferDashboardRow, OfferDisplayStatus } from '@/lib/plans/fetchOffersDashboard';
 import { getOfferDisplayStatus } from '@/lib/plans/fetchOffersDashboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +29,7 @@ function statusColors(s: OfferDisplayStatus): { bg: string; fg: string; border: 
     case 'expired':
       return { bg: 'rgba(107, 114, 128, 0.1)', fg: colors.textMuted, border: colors.border };
     case 'pending':
-      return { bg: 'rgba(108, 99, 255, 0.12)', fg: colors.primary, border: 'rgba(108, 99, 255, 0.3)' };
+      return { bg: 'rgba(94, 82, 255, 0.12)', fg: colors.primary, border: 'rgba(94, 82, 255, 0.3)' };
     default:
       return { bg: 'rgba(107, 114, 128, 0.08)', fg: colors.textMuted, border: colors.border };
   }
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 101, 132, 0.16)',
+    borderColor: 'rgba(255, 74, 114, 0.16)',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -173,15 +173,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
-  time: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  planTitle: { fontSize: 17, fontWeight: '800', color: colors.text, letterSpacing: -0.3, lineHeight: 22 },
+  badgeText: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, letterSpacing: 0.4 },
+  time: { fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
+  planTitle: { fontSize: 17, fontWeight: '800', color: colors.text, letterSpacing: -0.3, lineHeight: 22, fontFamily: fonts.bold, },
   person: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   personText: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name: { fontSize: 16, fontWeight: '800', color: colors.text, flexShrink: 1 },
-  roleHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
-  amount: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: spacing.sm },
+  name: { fontSize: 16, fontWeight: '800', color: colors.text, flexShrink: 1, fontFamily: fonts.bold, },
+  roleHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
+  amount: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: spacing.sm, fontFamily: fonts.bold, },
   actions: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
@@ -197,5 +198,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
 });

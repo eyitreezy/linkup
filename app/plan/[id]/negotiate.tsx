@@ -5,7 +5,7 @@ import { Screen } from '@/components/Screen';
 import { PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
 import { NegotiationChat } from '@/components/plans/negotiation/NegotiationChat';
 import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { peekPlanDetailSeed, setPlanDetailSeed } from '@/lib/plans/planDetailSeed';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
@@ -134,6 +134,7 @@ const styles = StyleSheet.create({
   },
   negotiateHeaderTitle: {
     fontSize: 18,
+    fontFamily: fonts.regular,
     letterSpacing: -0.5,
   },
   fill: { flex: 1 },

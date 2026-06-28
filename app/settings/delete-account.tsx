@@ -2,12 +2,12 @@ import { Input } from '@/components/Input';
 import { Screen } from '@/components/Screen';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,6 +33,11 @@ export default function DeleteAccountScreen() {
   } | null>(null);
 
   const canSubmit = confirm.trim() === CONFIRM_PHRASE;
+
+  async function finishSignOut() {
+    await signOut();
+    router.replace('/(auth)/login' as Href);
+  }
 
   async function performDelete() {
     if (!user || !isSupabaseConfigured) return;
@@ -75,7 +80,7 @@ export default function DeleteAccountScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -119,7 +124,7 @@ export default function DeleteAccountScreen() {
               <Text style={styles.sectionTitle}>Before you continue</Text>
             </View>
             <LinearGradient
-              colors={['rgba(239,68,68,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(239,68,68,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -127,7 +132,7 @@ export default function DeleteAccountScreen() {
           </View>
 
           <LinearGradient
-            colors={['rgba(239,68,68,0.14)', 'rgba(255,101,132,0.08)']}
+            colors={['rgba(239,68,68,0.14)', 'rgba(255, 74, 114,0.08)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardOuter}
@@ -150,7 +155,7 @@ export default function DeleteAccountScreen() {
               <Text style={styles.sectionTitle}>Confirm</Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -158,7 +163,7 @@ export default function DeleteAccountScreen() {
           </View>
 
           <LinearGradient
-            colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+            colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardOuter}
@@ -192,7 +197,7 @@ export default function DeleteAccountScreen() {
                   colors={
                     canSubmit
                       ? [colors.danger, colors.secondary]
-                      : ['rgba(239,68,68,0.35)', 'rgba(255,101,132,0.35)']
+                      : ['rgba(239,68,68,0.35)', 'rgba(255, 74, 114,0.35)']
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -238,7 +243,7 @@ export default function DeleteAccountScreen() {
         onClose={() => {
           if (feedback?.variant === 'success') {
             setFeedback(null);
-            void signOut();
+            void finishSignOut();
           } else {
             setFeedback(null);
           }
@@ -251,7 +256,7 @@ export default function DeleteAccountScreen() {
         onPrimary={() => {
           if (feedback?.variant === 'success') {
             setFeedback(null);
-            void signOut();
+            void finishSignOut();
           } else {
             setFeedback(null);
           }
@@ -281,7 +286,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -310,6 +315,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -318,6 +324,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.45,
     marginBottom: 6,
@@ -327,6 +334,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   sectionHead: {
     marginBottom: spacing.sm,
@@ -353,6 +361,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -397,6 +406,7 @@ const styles = StyleSheet.create({
   warnTitle: {
     fontSize: 18,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -404,6 +414,7 @@ const styles = StyleSheet.create({
   warnBody: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -429,6 +440,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
     marginBottom: spacing.sm,
     letterSpacing: -0.15,
@@ -472,6 +484,7 @@ const styles = StyleSheet.create({
   deleteCtaTxt: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: -0.2,
   },
@@ -482,6 +495,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     lineHeight: 20,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     textAlign: 'center',
   },
 });

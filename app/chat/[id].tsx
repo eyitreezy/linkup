@@ -14,12 +14,17 @@ import {
   type MessageDeleteKind,
 } from '@/components/messages/MessageDeleteConfirmModal';
 import { ChatComposer } from '@/components/messages/ChatComposer';
+import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
 import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
 import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
 import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
-import { colors, radius, spacing } from '@/constants/theme';
-import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { ChatThreadSkeleton } from '@/components/messages/ChatThreadSkeleton';
+import { CHAT_LIST_BOTTOM_PAD } from '@/lib/keyboard/constants';
+import { useChatThreadKeyboard } from '@/hooks/useChatThreadKeyboard';
+import { useKeyboardStickyFooterMode } from '@/hooks/useKeyboardStickyFooterMode';
+import { KeyboardStickyView, KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { usePermission } from '@/hooks/usePermission';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePresenceActions } from '@/contexts/PresenceContext';
@@ -75,6 +80,10 @@ import { toggleMessageReceipt } from '@/lib/messaging/toggleMessageReceipt';
 import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { fetchActiveMeetupWithPeer, type LinkedMeetup } from '@/lib/messaging/fetchActiveMeetupWithPeer';
 import {
+  buildChatSuggestionContext,
+  planSuggestionSourceFromMeetup,
+} from '@/lib/chat/buildChatSuggestionContext';
+import {
   detectOffPlatformContact,
   pairContactShareUnlocked,
 } from '@/lib/messaging/contactSharePolicy';
@@ -100,6 +109,7 @@ import {
   UNVERIFIED_DAILY_MESSAGE_CAP,
 } from '@/lib/messaging/trustCaps';
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
+import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -115,9 +125,7 @@ import {
   Alert,
   FlatList,
   ImageBackground,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -145,7 +153,7 @@ type EditModalState = { messageId: string; draft: string } | null;
 export default function ChatThreadScreen() {
   const { id: conversationId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { composerLiftStyle, chatListFooterStyle, typingBackdropStyle } = useKeyboardAnimation();
+  useKeyboardStickyFooterMode();
   const { user, dbUser, profile } = useAuth();
   const { signalTyping, clearTyping } = usePresenceActions();
   const [peer, setPeer] = useState<{
@@ -194,6 +202,14 @@ export default function ChatThreadScreen() {
   const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
   const contactBlockFromSendRef = useRef(false);
   const listRef = useRef<FlatList<UiMessage>>(null);
+  const {
+    listFooterStyle,
+    typingBackdropStyle,
+    scrollToBottomForced,
+    pinListToBottom,
+    onComposerFocus,
+    onListScroll,
+  } = useChatThreadKeyboard({ listRef });
   const verifiedUser = isMessagingFullyVerified(dbUser?.verification_status);
 
   const [appearance, setAppearance] = useState<ChatAppearanceState>(DEFAULT_CHAT_APPEARANCE);
@@ -241,6 +257,17 @@ export default function ChatThreadScreen() {
   );
 
   const showTypingIndicator = peerTyping && typingVisibleToViewer(profile, peer?.preferences);
+
+  const smartSuggestions = useMemo(
+    () =>
+      buildChatSuggestionContext(planSuggestionSourceFromMeetup(linkedMeetup), {
+        userId: user?.id,
+        isGroupChat: false,
+        messages,
+        composeValue: text,
+      }),
+    [linkedMeetup, messages, text, user?.id]
+  );
 
   const readReceiptsOn = hasReadReceiptsPerm && getVisibilityPrefs(profile).read_receipts;
 
@@ -467,6 +494,11 @@ export default function ChatThreadScreen() {
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
+
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    pinListToBottom();
+  }, [loading, messages.length, pinListToBottom]);
 
   useEffect(() => {
     if (!conversationId || !user || !isSupabaseConfigured) return;
@@ -1186,14 +1218,16 @@ export default function ChatThreadScreen() {
 
       const { data: medRow, error: medErr } = await supabase
         .from('media')
-        .insert({
-          parent_table: 'messages',
-          parent_id: msgId,
-          storage_bucket: 'chat-media',
-          storage_path: path,
-          mime_type: contentType,
-          created_by: user.id,
-        })
+        .insert(
+          buildMediaInsertPayload({
+            parent_table: 'messages',
+            parent_id: msgId,
+            storage_bucket: 'chat-media',
+            storage_path: path,
+            mime_type: contentType,
+            created_by: user.id,
+          })
+        )
         .select('id')
         .single();
 
@@ -1294,8 +1328,8 @@ export default function ChatThreadScreen() {
   }, []);
 
   const chatListFooter = useCallback(
-    () => <Animated.View style={chatListFooterStyle} />,
-    [chatListFooterStyle]
+    () => <Animated.View style={listFooterStyle} />,
+    [listFooterStyle]
   );
 
   const pinnedPreview = useMemo(() => {
@@ -1421,7 +1455,7 @@ export default function ChatThreadScreen() {
                     accessibilityLabel={`Open meetup: ${linkedMeetup.title}`}
                   >
                     <LinearGradient
-                      colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.16)']}
+                      colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.16)']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.headerMeetupPill}
@@ -1480,7 +1514,7 @@ export default function ChatThreadScreen() {
 
         {!verifiedUser ? (
           <LinearGradient
-            colors={['rgba(255, 193, 7, 0.2)', 'rgba(108, 99, 255, 0.12)']}
+            colors={['rgba(255, 193, 7, 0.2)', 'rgba(94, 82, 255, 0.12)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.trustBanner}
@@ -1492,10 +1526,9 @@ export default function ChatThreadScreen() {
           </LinearGradient>
         ) : null}
 
+        <View style={styles.threadBody}>
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
+          <ChatThreadSkeleton />
         ) : (
           <FlatList
             ref={listRef}
@@ -1504,9 +1537,13 @@ export default function ChatThreadScreen() {
             keyExtractor={(m) => m.tempKey ?? m.id}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets={false}
+            contentInsetAdjustmentBehavior="never"
             ListFooterComponent={chatListFooter}
-            contentContainerStyle={styles.list}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            contentContainerStyle={[styles.list, styles.listBottomAnchored]}
+            onContentSizeChange={() => pinListToBottom()}
+            onScroll={onListScroll}
+            scrollEventThrottle={16}
             onStartReachedThreshold={0.25}
             onStartReached={() => void loadOlder()}
             onScrollToIndexFailed={(info) => {
@@ -1598,19 +1635,25 @@ export default function ChatThreadScreen() {
           />
         )}
 
-        <ChatTypingIndicator visible={showTypingIndicator} peerName={peer?.name ?? undefined} />
+        <ChatTypingIndicator visible={!loading && showTypingIndicator} peerName={peer?.name ?? undefined} />
 
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
         <Animated.View
           style={[
             styles.composerSheet,
             {
-              paddingBottom: insets.bottom,
+              paddingBottom: Math.max(insets.bottom, spacing.sm),
               backgroundColor: chatPreset.composerBg,
               borderTopColor: chatPreset.composerBorder,
             },
-            composerLiftStyle,
           ]}
         >
+          <SmartSuggestionsBar
+            suggestions={smartSuggestions}
+            backgroundColor={chatPreset.composerBg}
+            borderColor={chatPreset.composerBorder}
+            onSelect={setText}
+          />
           <ChatComposer
             preset={chatPreset}
             threadLook={messageInputLook}
@@ -1633,8 +1676,11 @@ export default function ChatThreadScreen() {
                 : null
             }
             onCancelReply={() => setReplyTarget(null)}
+            onComposerFocus={onComposerFocus}
           />
         </Animated.View>
+        </KeyboardStickyView>
+        </View>
 
         {copyAck ? (
           <View style={[styles.copyToast, { bottom: insets.bottom + 88 }]} pointerEvents="none">
@@ -1648,10 +1694,7 @@ export default function ChatThreadScreen() {
           animationType="fade"
           onRequestClose={() => setEditModal(null)}
         >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.editOverlay}
-          >
+          <ControllerKeyboardAvoidingView behavior="padding" style={styles.editOverlay}>
             <View style={styles.editModalRoot}>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditModal(null)} />
               <View
@@ -1680,7 +1723,7 @@ export default function ChatThreadScreen() {
                 </View>
               </View>
             </View>
-          </KeyboardAvoidingView>
+          </ControllerKeyboardAvoidingView>
         </Modal>
 
         <ChatAppearanceSheet
@@ -1764,7 +1807,7 @@ const styles = StyleSheet.create({
   typingBackdrop: { backgroundColor: colors.text },
   headerGradient: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108, 99, 255, 0.1)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.1)',
   },
   header: {
     flexDirection: 'row',
@@ -1786,8 +1829,9 @@ const styles = StyleSheet.create({
   },
   headerNameCol: { flexShrink: 1, maxWidth: '64%', minWidth: 0 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
-  headerName: { fontSize: 18, fontWeight: '800', color: colors.text, letterSpacing: -0.3 },
-  headerPresenceCap: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  headerName: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
+  headerPresenceCap: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, fontFamily: fonts.medium, },
   headerMeetupPillOuter: { alignSelf: 'flex-start', marginTop: 6, borderRadius: radius.button, overflow: 'hidden' },
   headerMeetupPill: {
     flexDirection: 'row',
@@ -1802,6 +1846,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
   },
   trustBanner: {
@@ -1810,9 +1855,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108, 99, 255, 0.1)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.1)',
   },
-  trustText: { flex: 1, fontSize: 12, color: colors.text, fontWeight: '700', lineHeight: 17 },
+  trustText: { flex: 1, fontSize: 12, color: colors.text, fontWeight: '700',
+    fontFamily: fonts.medium, lineHeight: 17 },
   composerSheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
@@ -1825,11 +1871,15 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   listFlex: { flex: 1 },
+  threadBody: { flex: 1, justifyContent: 'flex-end' },
   list: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingBottom: CHAT_LIST_BOTTOM_PAD,
+  },
+  listBottomAnchored: {
     flexGrow: 1,
+    justifyContent: 'flex-end',
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   editOverlay: { flex: 1 },
@@ -1851,7 +1901,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  editTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  editTitle: { fontSize: 17, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, marginBottom: spacing.sm },
   editInput: {
     minHeight: 88,
     maxHeight: 200,
@@ -1870,7 +1921,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   editBtn: { paddingVertical: 8, paddingHorizontal: 12 },
-  editBtnTextMuted: { fontSize: 16, color: colors.textMuted, fontWeight: '600' },
+  editBtnTextMuted: { fontSize: 16, color: colors.textMuted, fontWeight: '600',
+    fontFamily: fonts.medium,},
   editBtnPrimary: { color: colors.primary },
   copyToast: {
     position: 'absolute',
@@ -1880,5 +1932,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.button,
   },
-  copyToastText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  copyToastText: { color: '#fff', fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium,},
 });

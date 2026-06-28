@@ -1,7 +1,7 @@
 /**
  * Hinge-style prompt cards on the profile hub (read-only preview).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { ProfilePreferences } from '@/types/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +22,7 @@ export function ProfilePromptShowcase({ preferences }: Props) {
           <Text style={styles.sectionTitle}>A little about you</Text>
         </View>
         <LinearGradient
-          colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+          colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.sectionRule}
@@ -31,7 +31,7 @@ export function ProfilePromptShowcase({ preferences }: Props) {
       {answers.map((p) => (
         <LinearGradient
           key={p.prompt_id}
-          colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+          colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.cardOuter}
@@ -66,6 +66,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -96,6 +97,7 @@ const styles = StyleSheet.create({
       android: { elevation: 1 },
     }),
   },
-  prompt: { fontSize: 13, fontWeight: '800', color: colors.primary, marginBottom: 6 },
-  answer: { fontSize: 16, fontWeight: '600', color: colors.text, lineHeight: 22 },
+  prompt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, marginBottom: 6 },
+  answer: { fontSize: 16, fontWeight: '600', color: colors.text, lineHeight: 22, fontFamily: fonts.medium, },
 });

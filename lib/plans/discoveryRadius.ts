@@ -1,22 +1,25 @@
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 
-/** Tier multiplier on profile `radius_km` when `discover.wider_radius` is allowed. */
-export const RADIUS_MULTIPLIER: Record<SubscriptionTier, number> = {
-  FREE: 1,
-  SILVER: 1.5,
-  GOLD: 2,
-  PLATINUM: 3,
+/** Max distance filter slider ceiling by subscription tier. */
+export const SLIDER_MAX_KM: Record<SubscriptionTier, number> = {
+  FREE: 50,
+  SILVER: 50,
+  GOLD: 100,
+  PLATINUM: 150,
 };
 
-export function radiusMultiplierForTier(tier: SubscriptionTier): number {
-  return RADIUS_MULTIPLIER[tier] ?? 1;
+export function sliderMaxKmForTier(tier: SubscriptionTier): number {
+  return SLIDER_MAX_KM[tier] ?? 50;
 }
 
-export function effectiveDiscoveryRadiusKm(
-  baseRadiusKm: number,
-  tier: SubscriptionTier,
-  hasWiderRadius: boolean
-): number {
-  if (!hasWiderRadius) return baseRadiusKm;
-  return Math.round(baseRadiusKm * radiusMultiplierForTier(tier));
+/** FREE/SILVER upsell toward Gold; Gold upsell toward Platinum. */
+export function nextTierForSliderUpsell(tier: SubscriptionTier): SubscriptionTier {
+  if (tier === 'GOLD') return 'PLATINUM';
+  return 'GOLD';
+}
+
+/** Clamp stored max distance to the current tier ceiling (e.g. after downgrade). */
+export function clampMaxDistanceKm(km: number, tier: SubscriptionTier): number {
+  const max = sliderMaxKmForTier(tier);
+  return Math.min(Math.max(km, 1), max);
 }

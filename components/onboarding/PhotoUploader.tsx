@@ -1,6 +1,6 @@
 import { authSoftLabelStyle } from '@/components/Input';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -95,7 +95,8 @@ export function PhotoUploader({
 
 const styles = StyleSheet.create({
   labelSpacing: { marginBottom: 4 },
-  hint: { fontSize: 12, color: onboarding.muted, marginBottom: onboarding.spacing.md },
+  hint: { fontSize: 12,
+    fontFamily: fonts.regular, color: onboarding.muted, marginBottom: onboarding.spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   addTileOuter: {
     borderRadius: onboarding.radius2xl,
@@ -109,7 +110,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addLabel: { fontSize: 12, fontWeight: '800', color: '#FFFFFF', marginTop: 4, letterSpacing: 0.2 },
+  addLabel: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF', marginTop: 4, letterSpacing: 0.2 },
   thumbWrap: { position: 'relative' },
   thumb: {
     width: 108,

@@ -1,9 +1,10 @@
 import { Button } from '@/components/Button';
+import { KycDualActionRow } from '@/components/kyc/KycDualActionRow';
 import { KycLeadBlock } from '@/components/kyc/KycLeadBlock';
 import { KycSectionHead } from '@/components/kyc/KycSectionHead';
 import { KycStepFooter } from '@/components/kyc/KycStepFooter';
 import { kycColors, kycInboxStyles, kycStyles } from '@/components/kyc/kycTheme';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { countryCodeToFlagEmoji } from '@/lib/kyc/countryFlagEmoji';
 import { idCaptureInstruction, idCaptureTitle } from '@/lib/kyc/documentTypeCopy';
 import { KYC_COUNTRY_OPTIONS, type KycDocumentType } from '@/types/kyc';
@@ -118,7 +119,8 @@ export function K2IdCapture({
         contentContainerStyle={kycInboxStyles.scrollContent}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        automaticallyAdjustKeyboardInsets={false}
+        contentInsetAdjustmentBehavior="never"
         showsVerticalScrollIndicator={false}
       >
         <KycLeadBlock
@@ -173,7 +175,7 @@ export function K2IdCapture({
             ) : (
               <View style={styles.permBox}>
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.16)', 'rgba(255,101,132,0.08)']}
+                  colors={['rgba(94, 82, 255,0.16)', 'rgba(255, 74, 114,0.08)']}
                   style={styles.permIconWrap}
                 >
                   <Ionicons name="scan-outline" size={36} color={kycColors.primary} />
@@ -187,12 +189,16 @@ export function K2IdCapture({
 
         <View style={styles.btnRow}>
           {idUri ? (
-            <Button title="Retake" variant="secondary" onPress={() => onIdChange(null)} />
+            <Button title="Retake" variant="ghost" onPress={() => onIdChange(null)} pill fullWidth />
           ) : (
-            <>
-              <Button title={capturing ? 'Capturing…' : 'Capture'} onPress={capturePhoto} disabled={capturing} />
-              <Button title="Upload instead" variant="ghost" onPress={pickFromLibrary} />
-            </>
+            <KycDualActionRow
+              secondaryLabel="Upload instead"
+              onSecondary={() => void pickFromLibrary()}
+              primaryLabel={capturing ? 'Capturing…' : 'Capture'}
+              onPrimary={() => void capturePhoto()}
+              primaryDisabled={!camPerm?.granted || !ready}
+              primaryBusy={capturing}
+            />
           )}
         </View>
         {capturing ? <ActivityIndicator color={kycColors.primary} style={{ marginTop: spacing.sm }} /> : null}
@@ -285,6 +291,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   countryTrigger: {
     flexDirection: 'row',
@@ -293,7 +300,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     borderRadius: radius.xl,
     paddingVertical: 16,
     paddingHorizontal: spacing.md,
@@ -310,9 +317,10 @@ const styles = StyleSheet.create({
   },
   countryTriggerPressed: { opacity: 0.96 },
   countryTriggerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, gap: 12 },
-  countryTriggerFlag: { fontSize: 28, lineHeight: 32 },
-  countryTriggerLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: kycColors.text },
-  countryTriggerPlaceholder: { color: kycColors.muted, fontWeight: '600' },
+  countryTriggerFlag: { fontSize: 28, lineHeight: 32, fontFamily: fonts.regular, },
+  countryTriggerLabel: { flex: 1, fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: kycColors.text },
+  countryTriggerPlaceholder: { color: kycColors.muted, fontWeight: '600', fontFamily: fonts.medium, },
   previewBox: {
     height: 256,
     borderRadius: radius.lg,
@@ -351,8 +359,9 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxWidth: 280,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
-  btnRow: { gap: spacing.sm, marginBottom: spacing.md, paddingHorizontal: spacing.md },
+  btnRow: { marginBottom: spacing.md, paddingHorizontal: spacing.md },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(26, 29, 38, 0.45)' },
   modalSheet: {
@@ -364,14 +373,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     borderWidth: 1,
     borderBottomWidth: 0,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   modalGrabber: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(108, 99, 255, 0.25)',
+    backgroundColor: 'rgba(94, 82, 255, 0.25)',
     marginBottom: spacing.md,
   },
   modalHeader: {
@@ -382,17 +391,18 @@ const styles = StyleSheet.create({
   },
   modalAccent: { width: 5, height: 44, borderRadius: 3 },
   modalHeaderText: { flex: 1 },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: kycColors.text, letterSpacing: -0.3 },
-  modalHint: { fontSize: 14, color: kycColors.muted, marginTop: 4, fontWeight: '600' },
+  modalTitle: { fontSize: 22, fontWeight: '900',
+    fontFamily: fonts.bold, color: kycColors.text, letterSpacing: -0.3 },
+  modalHint: { fontSize: 14, color: kycColors.muted, marginTop: 4, fontWeight: '600', fontFamily: fonts.medium, },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   searchIcon: { marginRight: spacing.sm },
   searchInput: {
@@ -401,10 +411,11 @@ const styles = StyleSheet.create({
     color: kycColors.text,
     paddingVertical: Platform.OS === 'ios' ? 12 : 10,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   countryList: { maxHeight: 380 },
   countryListContent: { paddingBottom: spacing.sm },
-  countrySep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(108, 99, 255, 0.1)' },
+  countrySep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(94, 82, 255, 0.1)' },
   countryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -413,9 +424,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingHorizontal: spacing.sm,
   },
-  countryRowOn: { backgroundColor: 'rgba(108, 99, 255, 0.08)' },
-  countryRowFlag: { fontSize: 26, width: 40, textAlign: 'center' },
-  countryRowLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: kycColors.text },
+  countryRowOn: { backgroundColor: 'rgba(94, 82, 255, 0.08)' },
+  countryRowFlag: { fontSize: 26, width: 40, textAlign: 'center', fontFamily: fonts.regular, },
+  countryRowLabel: { flex: 1, fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: kycColors.text },
   countryRowCode: {
     fontSize: 13,
     fontWeight: '700',
@@ -429,5 +441,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
 });

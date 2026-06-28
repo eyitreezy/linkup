@@ -2,26 +2,31 @@
  * Modal editor for plan management — fields respect `getCreatorEditCapabilities`.
  * Visual language aligned with the create-plan wizard (gradients, Inputs, cards).
  */
-import { Button } from '@/components/Button';
 import { Input, authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/Input';
 import { EscrowTrustExplainerCard } from '@/components/plans/create/EscrowTrustExplainerCard';
 import { FundingPatternCard } from '@/components/plans/create/FundingPatternCard';
 import { PlanLocationSection } from '@/components/plans/create/PlanLocationSection';
+import { CreatePlanWizardFooter } from '@/components/plans/create/CreatePlanWizardFooter';
 import { VisibilityPickCard } from '@/components/plans/create/VisibilityPickCard';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   buildCreatorPlanPatch,
   getCreatorEditCapabilities,
   type BuildPatchInput,
 } from '@/lib/plans/planCreatorEditPolicy';
 import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
+import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
+import { getFourthVisibilityOptionCopy, canCreatorSelectPremiumVisibility } from '@/lib/plans/tierRelativePremiumVisibility';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan, EscrowPattern } from '@/types/database';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Href, router } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -34,8 +39,8 @@ import {
   Switch,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function clampScheduledNotPast(d: Date): Date {
   const now = new Date();
@@ -65,7 +70,7 @@ const VISIBILITY_OPTIONS: {
   {
     value: 'radius',
     title: 'Within radius',
-    description: 'Shown to people roughly within your discovery radius.',
+    description: 'Only visible to people within 50km of your meetup location.',
     icon: 'navigate-outline',
   },
   {
@@ -74,7 +79,9 @@ const VISIBILITY_OPTIONS: {
     description: 'Only your connections see this (once friends ship, this tightens automatically).',
     icon: 'people-outline',
   },
-];
+] as const;
+
+const PREMIUM_VISIBILITY_ICON = 'diamond-outline' as const;
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -92,11 +99,11 @@ const ESCROW_PATTERNS: {
 
 function priceHint(ngn: number): string {
   if (!Number.isFinite(ngn) || ngn <= 0) {
-    return 'Add an amount — we’ll size hints from your number.';
+    return 'Add an amount and we’ll size hints from your number.';
   }
   if (ngn < 8000) return 'Coffee & chill plans often land ₦5k–₦12k.';
   if (ngn < 25000) return 'Dinner meetups usually range ₦8k–₦25k.';
-  return 'Premium social plans often start ₦10k+ — make sure the story matches the ask.';
+  return 'Premium social plans often start ₦10k+. Make sure the story matches the ask.';
 }
 
 type Props = {
@@ -108,7 +115,11 @@ type Props = {
 };
 
 export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSaved }: Props) {
-  const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+  const sheetHeight = winH * 0.92;
+  const { user, dbUser } = useAuth();
+  const creatorEffectiveTier = resolveClientEffectiveTier(dbUser);
+  const fourthVisibilityCopy = getFourthVisibilityOptionCopy(creatorEffectiveTier);
   const caps = useMemo(
     () => (plan ? getCreatorEditCapabilities(plan, offersCount) : null),
     [plan, offersCount]
@@ -136,6 +147,7 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
   } | null>(null);
   const [iosPickerOpen, setIosPickerOpen] = useState(false);
   const [androidPick, setAndroidPick] = useState<'idle' | 'date' | 'time'>('idle');
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   useEffect(() => {
     if (!visible || !plan) return;
@@ -223,11 +235,22 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
     onClose();
   }, [plan, caps, offersCount, form, onClose, onSaved]);
 
+  const onSelectVisibility = useCallback(
+    (value: DbPlan['visibility']) => {
+      if (value === 'premium' && !canCreatorSelectPremiumVisibility(creatorEffectiveTier)) {
+        setUpgradeOpen(true);
+        return;
+      }
+      setVisibility(value);
+    },
+    [creatorEffectiveTier]
+  );
+
   if (!plan) return null;
 
   const hintPostAccept =
     plan.accepted_offer_id != null
-      ? 'Agreement details stay tied to the accepted offer — you can only refresh how this plan reads in the app.'
+      ? 'Agreement details stay tied to the accepted offer. You can only refresh how this plan reads in the app.'
       : null;
 
   const ngn = startingPriceNgn.trim() ? Number(startingPriceNgn) : NaN;
@@ -245,15 +268,27 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
         title={feedback?.title ?? ''}
         message={feedback?.message ?? ''}
       />
+      <UpgradePrompt
+        visible={upgradeOpen}
+        feature="visibility.tier_audience"
+        requiredTier="SILVER"
+        title="Tier-targeted visibility"
+        message="Upgrade to Silver to choose who can discover this plan based on membership tier."
+        onUpgrade={() => {
+          setUpgradeOpen(false);
+          router.push('/subscription' as Href);
+        }}
+        onDismiss={() => setUpgradeOpen(false)}
+      />
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Dismiss" />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) + 8 }]}>
+        <View style={[styles.sheet, { height: sheetHeight, maxHeight: sheetHeight }]}>
           <LinearGradient
-            colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.surface]}
+            colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.surface]}
             locations={[0, 0.2, 0.5, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -261,13 +296,14 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
             pointerEvents="none"
           />
           <View style={styles.sheetContent}>
+            <View style={styles.sheetInner}>
             <View style={styles.handle} />
             <View style={styles.sheetHeader}>
               <View style={{ flex: 1, marginRight: spacing.sm }}>
                 <Text style={styles.sheetKicker}>Plan management</Text>
                 <Text style={styles.sheetTitle}>Edit your listing</Text>
                 <Text style={styles.sheetSub}>
-                  Same polish as create — update what guests see before you save.
+                  Same polish as create. Update what guests see before you save.
                 </Text>
               </View>
               <Pressable
@@ -282,7 +318,7 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
             </View>
             {hintPostAccept ? (
               <LinearGradient
-                colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.08)']}
+                colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.08)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.hintBannerOuter}
@@ -300,6 +336,7 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
               </View>
             ) : (
               <ScrollView
+                style={styles.scrollFlex}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scroll}
@@ -319,7 +356,7 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
                 {caps?.titleDescriptionCategory ? (
                   <>
                     <LinearGradient
-                      colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.1)']}
+                      colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.1)']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.examplesOuter}
@@ -380,9 +417,17 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
                           description={opt.description}
                           icon={opt.icon}
                           selected={visibility === opt.value}
-                          onPress={() => setVisibility(opt.value)}
+                          onPress={() => onSelectVisibility(opt.value)}
                         />
                       ))}
+                      <VisibilityPickCard
+                        title={fourthVisibilityCopy.label}
+                        description={fourthVisibilityCopy.description}
+                        icon={PREMIUM_VISIBILITY_ICON}
+                        selected={visibility === 'premium'}
+                        onPress={() => onSelectVisibility('premium')}
+                        badge={fourthVisibilityCopy.tierBadge}
+                      />
                     </View>
                   </>
                 ) : null}
@@ -520,7 +565,7 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
 
                 {caps?.moodPresentation ? (
                   <LinearGradient
-                    colors={['rgba(108,99,255,0.1)', 'rgba(255,101,132,0.06)']}
+                    colors={['rgba(94, 82, 255,0.1)', 'rgba(255, 74, 114,0.06)']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.moodCardOuter}
@@ -546,7 +591,7 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
                   <View style={styles.escrowSection}>
                     <Text style={styles.escrowLead}>Commitment & plan security</Text>
                     <Text style={styles.escrowSublead}>
-                      Same controls as create — secure commitment reduces flakes and builds trust.
+                      Same controls as create. Secure commitment reduces flakes and builds trust.
                     </Text>
                     <EscrowTrustExplainerCard />
                     <View style={styles.paidRow}>
@@ -610,15 +655,17 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
                     ) : null}
                   </View>
                 ) : null}
-
-                <Button
-                  title={saving ? 'Saving…' : 'Save changes'}
-                  onPress={() => void save()}
-                  disabled={saving || !caps?.canEdit}
-                  style={styles.saveBtn}
-                />
               </ScrollView>
             )}
+            </View>
+            {caps?.canEdit ? (
+              <CreatePlanWizardFooter
+                title={saving ? 'Saving…' : 'Save changes'}
+                onPress={() => void save()}
+                disabled={saving}
+                loading={saving}
+              />
+            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -636,7 +683,6 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    maxHeight: '92%',
     overflow: 'hidden',
     position: 'relative',
   },
@@ -646,9 +692,16 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 22,
   },
   sheetContent: {
+    flex: 1,
+    minHeight: 0,
+  },
+  sheetInner: {
+    flex: 1,
+    minHeight: 0,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
+  scrollFlex: { flex: 1, minHeight: 0 },
   handle: {
     alignSelf: 'center',
     width: 40,
@@ -666,6 +719,7 @@ const styles = StyleSheet.create({
   sheetKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -674,6 +728,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
     marginBottom: 6,
@@ -683,6 +738,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 20,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   closeBtn: {
     width: 40,
@@ -692,7 +748,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.85)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.15)',
+    borderColor: 'rgba(94, 82, 255, 0.15)',
   },
   hintBannerOuter: {
     borderRadius: radius.xl,
@@ -711,6 +767,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     lineHeight: 20,
   },
@@ -728,10 +785,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 22,
   },
-  scroll: { paddingBottom: spacing.xl * 2 },
+  scroll: { paddingBottom: spacing.lg },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -748,6 +806,7 @@ const styles = StyleSheet.create({
   lead: {
     fontSize: 24,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.4,
     marginBottom: 6,
@@ -757,6 +816,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   examplesOuter: {
     borderRadius: radius.xl,
@@ -771,6 +831,7 @@ const styles = StyleSheet.create({
   exLabel: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.primary,
     marginBottom: 10,
     letterSpacing: 0.3,
@@ -783,12 +844,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
-  exChipTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
+  exChipTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -796,8 +858,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '900', color: colors.text },
-  visList: { marginTop: spacing.xs },
+  sectionTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  visList: { marginTop: spacing.xs, paddingHorizontal: spacing.md },
   sectionKicker: {
     fontSize: 13,
     fontWeight: '900',
@@ -810,6 +873,7 @@ const styles = StyleSheet.create({
   sectionSmall: {
     fontSize: 13,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.primary,
     marginBottom: 8,
     marginTop: spacing.sm,
@@ -817,11 +881,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   dateField: {
-    borderColor: 'rgba(255, 101, 132, 0.35)',
+    borderColor: 'rgba(255, 74, 114, 0.35)',
     backgroundColor: 'rgba(255,255,255,0.92)',
   },
   datePressed: { opacity: 0.96 },
-  dateTxt: { fontSize: 16, fontWeight: '700', color: colors.text },
+  dateTxt: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   durRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   durChipWrap: { borderRadius: radius.button, overflow: 'hidden' },
   durChipGrad: {
@@ -833,11 +898,12 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: radius.button,
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
     backgroundColor: 'rgba(255,255,255,0.85)',
   },
-  durTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
-  durTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  durTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  durTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
   moodCardOuter: {
     borderRadius: radius.xl,
     padding: 2,
@@ -852,6 +918,7 @@ const styles = StyleSheet.create({
   moodCardKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -860,6 +927,7 @@ const styles = StyleSheet.create({
   moodNote: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     marginTop: spacing.sm,
     lineHeight: 19,
@@ -868,6 +936,7 @@ const styles = StyleSheet.create({
   escrowLead: {
     fontSize: 22,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
     marginBottom: 6,
@@ -878,6 +947,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: spacing.md,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   paidRow: {
     flexDirection: 'row',
@@ -885,8 +955,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
-  paidSectionLabel: { fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  paidHint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600' },
+  paidSectionLabel: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  paidHint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600', fontFamily: fonts.medium, },
   patternList: { gap: spacing.sm, marginBottom: spacing.sm, marginTop: spacing.sm },
   splitBlock: { marginBottom: spacing.md },
   slider: { width: '100%', height: 40 },
@@ -895,17 +966,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.18)',
+    borderColor: 'rgba(94, 82, 255,0.18)',
     marginTop: spacing.sm,
   },
   hintStrong: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  hintCardTxt: { fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600' },
-  saveBtn: { marginTop: spacing.lg },
+  hintCardTxt: { fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600',
+    fontFamily: fonts.medium,},
 });

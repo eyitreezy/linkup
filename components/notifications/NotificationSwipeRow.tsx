@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { notificationIcon } from '@/lib/notifications/notificationIcon';
 import type { DbNotification } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,7 +90,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     marginLeft: spacing.sm,
   },
-  actionTxt: { color: '#fff', fontWeight: '700', fontSize: 12, marginTop: 4 },
+  actionTxt: { color: '#fff', fontWeight: '700',
+    fontFamily: fonts.medium, fontSize: 12, marginTop: 4 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,7 +114,8 @@ const styles = StyleSheet.create({
   },
   textCol: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  title: { flex: 1, fontSize: 16, fontWeight: '800', color: colors.text },
+  title: { flex: 1, fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   unreadDot: {
     width: 8,
     height: 8,
@@ -121,6 +123,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     marginTop: 6,
   },
-  body: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4 },
-  time: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
+  body: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, fontFamily: fonts.regular, },
+  time: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600',
+    fontFamily: fonts.medium,},
 });

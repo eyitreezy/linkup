@@ -1,7 +1,7 @@
 /**
  * Live countdown for escrow funding deadline (mood plans = 1h window).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -53,7 +53,7 @@ export const FundingDeadlineUrgencyBanner = memo(function FundingDeadlineUrgency
       <Ionicons name="flash-outline" size={22} color={isMoodPlan ? '#fff' : colors.primary} />
       <View style={styles.textCol}>
         <Text style={[styles.title, isMoodPlan && styles.titleOnDark]}>
-          {isMoodPlan ? 'Mood plan — fund escrow soon' : 'Complete funding'}
+          {isMoodPlan ? 'Mood plan: fund escrow soon' : 'Complete funding'}
         </Text>
         <Text style={[styles.sub, isMoodPlan && styles.subOnDark]}>
           <Text style={[styles.mono, isMoodPlan && styles.monoOnDark]}>{label}</Text> remaining to fund escrow on this
@@ -74,9 +74,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   normal: {
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.28)',
+    borderColor: 'rgba(94, 82, 255, 0.28)',
   },
   mood: {
     backgroundColor: 'rgba(220, 72, 56, 0.92)',
@@ -88,12 +88,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.35)',
   },
-  expiredTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  expiredTxt: { flex: 1, fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 20 },
   textCol: { flex: 1, minWidth: 0 },
-  title: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 },
+  title: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4, fontFamily: fonts.bold, },
   titleOnDark: { color: '#fff' },
-  sub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 18 },
+  sub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 18, fontFamily: fonts.medium, },
   subOnDark: { color: 'rgba(255,255,255,0.92)' },
-  mono: { fontVariant: ['tabular-nums'], fontWeight: '900', color: colors.primary },
+  mono: { fontVariant: ['tabular-nums'], fontWeight: '900', color: colors.primary, fontFamily: fonts.bold, },
   monoOnDark: { color: '#fff' },
 });

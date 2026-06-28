@@ -1,7 +1,7 @@
 /**
  * Debounced search field for the plans feed (title, description, category).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
@@ -139,6 +139,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     paddingVertical: 2,
   },
   clear: { marginLeft: 4 },

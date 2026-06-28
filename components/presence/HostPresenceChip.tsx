@@ -1,7 +1,7 @@
 /**
  * Compact online / offline label for discover cards.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -46,8 +46,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipOnLight: {
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   chipOnDark: {
     backgroundColor: 'rgba(0,0,0,0.42)',
@@ -58,7 +58,8 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  txt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2 },
+  txt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, letterSpacing: 0.2 },
   txtOnLight: { color: colors.text },
   txtOnDark: { color: '#fff' },
 });

@@ -1,7 +1,7 @@
 /**
  * 3-step wizard progress — Bumble structure + gradient active step (Tinder/Hinge energy).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { StyleSheet, Text, View } from 'react-native';
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.72)',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108, 99, 255, 0.12)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.12)',
     zIndex: 2,
   },
   wrap: { width: '100%' },
@@ -82,6 +82,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.2,
   },

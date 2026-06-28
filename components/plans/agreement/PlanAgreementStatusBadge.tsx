@@ -1,7 +1,7 @@
 /**
  * PL6a — dual-line status (inbox-style gradient pill + subcopy).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -41,7 +41,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button - 2,
     backgroundColor: 'rgba(255,255,255,0.98)',
   },
-  primary: { fontSize: 13, fontWeight: '900', color: colors.primary, letterSpacing: 0.5, textAlign: 'center' },
+  primary: { fontSize: 13, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary, letterSpacing: 0.5, textAlign: 'center' },
   secondary: {
     fontSize: 15,
     fontWeight: '600',

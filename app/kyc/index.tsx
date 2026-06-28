@@ -9,7 +9,8 @@ import { KycShell } from '@/components/kyc/KycShell';
 import { kycColors, kycCtaShadow, kycInboxStyles, kycStyles } from '@/components/kyc/kycTheme';
 import { K2IdCapture } from '@/components/kyc/steps/K2IdCapture';
 import { K3Liveness } from '@/components/kyc/steps/K3Liveness';
-import { colors, radius, spacing } from '@/constants/theme';
+import { KycStepFooter } from '@/components/kyc/KycStepFooter';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { clearKycDraft, loadKycDraft, saveKycDraft } from '@/lib/verification/kycDraftStorage';
@@ -272,89 +273,63 @@ export default function KycWizardScreen() {
       )}
 
       {step === 5 && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={kycInboxStyles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <KycLeadBlock
-            kicker="Final step"
-            title="Consent"
-            subtitle="We use your ID and video only to verify identity, prevent fraud, and comply with law — never on your public profile."
-          />
-          <Pressable
-            style={[styles.checkRow, consent && styles.checkRowOn]}
-            onPress={() => setConsent((c) => !c)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: consent }}
+        <View style={kycStyles.screen}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={kycInboxStyles.scrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            <View style={[styles.checkbox, consent && styles.checkboxOn]}>
-              {consent ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-            </View>
-            <Text style={styles.checkLabel}>
-              I agree to LinkUp processing my verification documents as described in the Privacy Policy.
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => void onSubmitConsent()}
-            disabled={!consent || busy}
-            style={({ pressed }) => [
-              styles.ctaOuter,
-              kycCtaShadow,
-              (!consent || busy) && { opacity: 0.55 },
-              pressed && consent && !busy && styles.ctaPressed,
-            ]}
-          >
-            <LinearGradient
-              colors={!consent || busy ? [colors.border, colors.border] : [colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGrad}
+            <KycLeadBlock
+              kicker="Final step"
+              title="Consent"
+              subtitle="We use your ID and video only to verify identity, prevent fraud, and comply with law — never on your public profile."
+            />
+            <Pressable
+              style={[styles.checkRow, consent && styles.checkRowOn]}
+              onPress={() => setConsent((c) => !c)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: consent }}
             >
-              {busy ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.ctaTxt}>Submit for review</Text>
-              )}
-            </LinearGradient>
-          </Pressable>
-          <Button title="Back" variant="ghost" onPress={() => setStep(4)} style={{ marginTop: spacing.sm }} />
-        </ScrollView>
+              <View style={[styles.checkbox, consent && styles.checkboxOn]}>
+                {consent ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+              </View>
+              <Text style={styles.checkLabel}>
+                I agree to LinkUp processing my verification documents as described in the Privacy Policy.
+              </Text>
+            </Pressable>
+          </ScrollView>
+          <KycStepFooter
+            onBack={() => setStep(4)}
+            onContinue={() => void onSubmitConsent()}
+            continueLabel="Submit for review"
+            continueDisabled={!consent}
+            continueBusy={busy}
+          />
+        </View>
       )}
 
       {step === 6 && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={kycInboxStyles.scrollContent}>
-          <KycLeadBlock
-            kicker="Almost there"
-            title="Verification in progress"
-            subtitle="Our team usually reviews within a few hours. Keep browsing — we'll notify you when it's done."
+        <View style={kycStyles.screen}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={kycInboxStyles.scrollContent}>
+            <KycLeadBlock
+              kicker="Almost there"
+              title="Verification in progress"
+              subtitle="Our team usually reviews within a few hours. Keep browsing — we'll notify you when it's done."
+            />
+            <View style={kycInboxStyles.frostedCard}>
+              <Text style={styles.eta}>Estimated time: under 24 hours</Text>
+              <Text style={styles.etaMuted}>
+                Some cases take a little longer — we&apos;ll let you know if we need more detail.
+              </Text>
+            </View>
+          </ScrollView>
+          <KycStepFooter
+            onBack={exitToApp}
+            onContinue={() => void refreshProfile()}
+            backLabel="Back to LinkUp"
+            continueLabel="Refresh status"
           />
-          <View style={kycInboxStyles.frostedCard}>
-            <Text style={styles.eta}>Estimated time: under 24 hours</Text>
-            <Text style={styles.etaMuted}>
-              Some cases take a little longer — we&apos;ll let you know if we need more detail.
-            </Text>
-          </View>
-          <Pressable
-            onPress={exitToApp}
-            style={({ pressed }) => [styles.ctaOuter, kycCtaShadow, pressed && styles.ctaPressed]}
-          >
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGrad}
-            >
-              <Text style={styles.ctaTxt}>Back to LinkUp</Text>
-            </LinearGradient>
-          </Pressable>
-          <Button
-            title="Refresh status"
-            variant="ghost"
-            onPress={() => void refreshProfile()}
-            style={{ marginTop: spacing.sm }}
-          />
-        </ScrollView>
+        </View>
       )}
 
       {step === 7 && dbUser?.verification_status === 'verified' && (
@@ -368,7 +343,7 @@ export default function KycWizardScreen() {
           </View>
           <View style={styles.step7Middle}>
             <LinearGradient
-              colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+              colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.successRing}
@@ -401,31 +376,25 @@ export default function KycWizardScreen() {
       )}
 
       {step === 7 && dbUser?.verification_status === 'rejected' && (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={kycInboxStyles.scrollContent}>
-          <KycLeadBlock
-            kicker="Try again"
-            title="Needs another look"
-            subtitle="We couldn't confirm your documents this time — often lighting or glare hides details."
+        <View style={kycStyles.screen}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={kycInboxStyles.scrollContent}>
+            <KycLeadBlock
+              kicker="Try again"
+              title="Needs another look"
+              subtitle="We couldn't confirm your documents this time — often lighting or glare hides details."
+            />
+            <View style={[kycInboxStyles.frostedCard, styles.rejectCard]}>
+              <Text style={styles.rejectLabel}>Reason</Text>
+              <Text style={styles.rejectBody}>{rejectReason ?? 'Please try again with clearer images.'}</Text>
+            </View>
+          </ScrollView>
+          <KycStepFooter
+            onBack={exitToApp}
+            onContinue={onRetryRejected}
+            backLabel="Back to LinkUp"
+            continueLabel="Try again"
           />
-          <View style={[kycInboxStyles.frostedCard, styles.rejectCard]}>
-            <Text style={styles.rejectLabel}>Reason</Text>
-            <Text style={styles.rejectBody}>{rejectReason ?? 'Please try again with clearer images.'}</Text>
-          </View>
-          <Pressable
-            onPress={onRetryRejected}
-            style={({ pressed }) => [styles.ctaOuter, kycCtaShadow, pressed && styles.ctaPressed]}
-          >
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGrad}
-            >
-              <Text style={styles.ctaTxt}>Try again</Text>
-            </LinearGradient>
-          </Pressable>
-          <Button title="Back to LinkUp" variant="ghost" onPress={exitToApp} style={{ marginTop: spacing.sm }} />
-        </ScrollView>
+        </View>
       )}
     </KycShell>
   );
@@ -433,8 +402,9 @@ export default function KycWizardScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  hint: { marginTop: spacing.sm, color: kycColors.muted, fontWeight: '600' },
-  cardNote: { fontSize: 14, color: kycColors.muted, lineHeight: 22, fontWeight: '600' },
+  hint: { marginTop: spacing.sm, color: kycColors.muted, fontWeight: '600',
+    fontFamily: fonts.medium,},
+  cardNote: { fontSize: 14, color: kycColors.muted, lineHeight: 22, fontWeight: '600', fontFamily: fonts.medium, },
   ctaOuter: {
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
@@ -450,7 +420,8 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: spacing.lg,
   },
-  ctaTxt: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+  ctaTxt: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF' },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -458,12 +429,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     backgroundColor: colors.surface,
     gap: spacing.md,
     marginBottom: spacing.md,
   },
-  checkRowOn: { borderColor: colors.primary, backgroundColor: 'rgba(108, 99, 255, 0.06)' },
+  checkRowOn: { borderColor: colors.primary, backgroundColor: 'rgba(94, 82, 255, 0.06)' },
   checkbox: {
     width: 26,
     height: 26,
@@ -475,9 +446,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkboxOn: { backgroundColor: kycColors.primary, borderColor: kycColors.primary },
-  checkLabel: { flex: 1, fontSize: 15, color: kycColors.text, lineHeight: 22, fontWeight: '600' },
-  eta: { fontSize: 17, fontWeight: '800', color: kycColors.text },
-  etaMuted: { marginTop: spacing.sm, fontSize: 14, color: kycColors.muted, lineHeight: 20, fontWeight: '600' },
+  checkLabel: { flex: 1, fontSize: 15, color: kycColors.text, lineHeight: 22, fontWeight: '600',
+    fontFamily: fonts.medium,},
+  eta: { fontSize: 17, fontWeight: '800', color: kycColors.text, fontFamily: fonts.bold, },
+  etaMuted: { marginTop: spacing.sm, fontSize: 14, color: kycColors.muted, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   step7Root: { flex: 1, paddingHorizontal: spacing.md },
   step7Top: { paddingTop: spacing.xs },
   step7Middle: {
@@ -506,7 +478,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  successTxt: { fontSize: 19, fontWeight: '900', color: kycColors.text, textAlign: 'center' },
+  successTxt: { fontSize: 19, fontWeight: '900',
+    fontFamily: fonts.bold, color: kycColors.text, textAlign: 'center' },
   successHint: {
     marginTop: spacing.sm,
     fontSize: 14,
@@ -517,6 +490,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   rejectCard: { borderLeftWidth: 4, borderLeftColor: kycColors.secondary },
-  rejectLabel: { fontSize: 12, fontWeight: '900', color: kycColors.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
-  rejectBody: { marginTop: spacing.sm, fontSize: 16, color: kycColors.text, lineHeight: 24, fontWeight: '600' },
+  rejectLabel: { fontSize: 12, fontWeight: '900',
+    fontFamily: fonts.bold, color: kycColors.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
+  rejectBody: { marginTop: spacing.sm, fontSize: 16, color: kycColors.text, lineHeight: 24, fontWeight: '600', fontFamily: fonts.medium, },
 });

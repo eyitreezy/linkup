@@ -2,7 +2,7 @@
  * Large selectable card for KYC document type — inbox frosted card + gradient ring when selected.
  */
 import { kycColors } from '@/components/kyc/kycTheme';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps } from 'react';
@@ -31,8 +31,8 @@ export function KycSelectionCard({ icon, title, helper, selected, onPress, testI
       <LinearGradient
         colors={
           selected
-            ? ['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']
-            : ['rgba(108,99,255,0.06)', 'rgba(255,101,132,0.03)']
+            ? ['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']
+            : ['rgba(94, 82, 255,0.06)', 'rgba(255, 74, 114,0.03)']
         }
         style={styles.iconWrap}
       >
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     backgroundColor: colors.surface,
     ...cardShadow,
   },
@@ -106,9 +106,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textCol: { flex: 1, minWidth: 0 },
-  title: { fontSize: 17, fontWeight: '800', color: kycColors.text, marginBottom: 4 },
+  title: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: kycColors.text, marginBottom: 4 },
   titleOn: { color: colors.primary },
-  helper: { fontSize: 14, color: kycColors.muted, lineHeight: 20, fontWeight: '600' },
+  helper: { fontSize: 14, color: kycColors.muted, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   radio: {
     width: 28,
     height: 28,

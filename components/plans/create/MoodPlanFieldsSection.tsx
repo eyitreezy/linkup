@@ -4,7 +4,7 @@
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/Input';
 import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { usePermission } from '@/hooks/usePermission';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow } from '@/lib/plans/moodPlanStart';
 import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
+import { MOOD_REACH_LABELS_BY_TIER } from '@/lib/plans/moodReachFilter';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
@@ -56,13 +57,6 @@ const WINDOW_CAP_HOURS: Record<SubscriptionTier, number> = {
   SILVER: 36,
   GOLD: 48,
   PLATINUM: 48,
-};
-
-const REACH_LABELS: Record<SubscriptionTier, string> = {
-  FREE: 'City-wide',
-  SILVER: 'City + adjacent zones',
-  GOLD: 'Widest city reach',
-  PLATINUM: 'All active Nigerian cities',
 };
 
 /** Tier required to unlock listing hours above cap (informational). */
@@ -274,7 +268,7 @@ export function MoodPlanFieldsSection({ visible }: Props) {
       <View style={styles.rowBetween}>
         <View style={{ flex: 1, paddingRight: spacing.sm }}>
           <Text style={styles.sectionLabel}>Mood plan</Text>
-          <Text style={styles.hint}>Short visibility window, urgency in Discover — same rules as before, richer config.</Text>
+          <Text style={styles.hint}>Short visibility window with urgency in Discover. Same rules as before, with richer config.</Text>
         </View>
         <Switch
           value={draft.isMoodPlan}
@@ -289,7 +283,7 @@ export function MoodPlanFieldsSection({ visible }: Props) {
             <View style={styles.weekendChip}>
               <Text style={styles.weekendChipTitle}>Weekend Plan</Text>
               <Text style={styles.weekendChipSub}>
-                Activating today labels this as a Weekend Plan — visible through the weekend.
+                Activating today labels this as a Weekend Plan, visible through the weekend.
               </Text>
             </View>
           ) : null}
@@ -436,7 +430,7 @@ export function MoodPlanFieldsSection({ visible }: Props) {
             })}
           </View>
 
-          <Text style={styles.reachLabel}>Your reach: {REACH_LABELS[effectiveTier]}</Text>
+          <Text style={styles.reachLabel}>Your reach: {MOOD_REACH_LABELS_BY_TIER[effectiveTier]}</Text>
 
           {bounds ? (
             <Text style={styles.meta}>
@@ -468,17 +462,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-  sectionLabel: { fontSize: 15, fontWeight: '800', color: colors.text },
-  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginTop: 4 },
-  subLabel: { fontSize: 12, fontWeight: '800', color: colors.textMuted, marginTop: spacing.md, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.6 },
+  sectionLabel: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginTop: 4, fontFamily: fonts.regular, },
+  subLabel: { fontSize: 12, fontWeight: '800', color: colors.textMuted, marginTop: spacing.md, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.6, fontFamily: fonts.bold, },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  meta: { fontSize: 12, color: colors.textMuted, marginTop: spacing.sm, fontWeight: '600' },
+  meta: { fontSize: 12, color: colors.textMuted, marginTop: spacing.sm, fontWeight: '600', fontFamily: fonts.medium, },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.sm },
-  previewTxt: { fontSize: 13, fontWeight: '700', color: colors.text, flex: 1 },
-  customFieldTxt: { fontSize: 15, fontWeight: '700', color: colors.text },
+  previewTxt: { fontSize: 13, fontWeight: '700', color: colors.text, flex: 1, fontFamily: fonts.medium, },
+  customFieldTxt: { fontSize: 15, fontWeight: '700', color: colors.text, fontFamily: fonts.medium, },
   datePressed: { opacity: 0.92 },
   iosDoneRow: { alignSelf: 'flex-start', marginBottom: spacing.sm },
-  iosDoneTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  iosDoneTxt: { fontSize: 13, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
   cooldownBanner: {
     padding: spacing.sm,
     marginBottom: spacing.sm,
@@ -487,8 +482,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.35)',
   },
-  cooldownTxt: { fontSize: 13, fontWeight: '700', color: '#92400E', lineHeight: 18 },
-  cooldownLink: { fontSize: 13, fontWeight: '800', color: colors.primary, marginTop: 6 },
+  cooldownTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#92400E', lineHeight: 18 },
+  cooldownLink: { fontSize: 13, fontWeight: '800', color: colors.primary, marginTop: 6, fontFamily: fonts.bold, },
   weekendChip: {
     padding: spacing.sm,
     marginBottom: spacing.sm,
@@ -497,8 +493,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.3)',
   },
-  weekendChipTitle: { fontSize: 13, fontWeight: '900', color: '#B45309' },
-  weekendChipSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+  weekendChipTitle: { fontSize: 13, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#B45309' },
+  weekendChipSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 17, fontFamily: fonts.medium, },
   expiryChipWrap: { borderRadius: radius.button },
   lockedChip: {
     flexDirection: 'row',
@@ -511,7 +508,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  lockedChipTxt: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  lockedTierBadge: { fontSize: 9, fontWeight: '900', color: colors.primary, marginLeft: 4 },
-  reachLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: spacing.sm },
+  lockedChipTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  lockedTierBadge: { fontSize: 9, fontWeight: '900', color: colors.primary, marginLeft: 4, fontFamily: fonts.bold, },
+  reachLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: spacing.sm, fontFamily: fonts.medium, },
 });

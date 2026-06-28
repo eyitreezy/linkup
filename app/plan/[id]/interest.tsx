@@ -4,7 +4,7 @@
 import { PlanInterestEngagementCard } from '@/components/plans/PlanInterestEngagementCard';
 import { PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
 import { fetchHiddenEngagementUserIds } from '@/lib/plans/incognitoEngagement';
@@ -33,7 +33,7 @@ type Row = {
   avatar_url: string | null;
 };
 
-const GRADIENT_COLORS = ['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom] as const;
+const GRADIENT_COLORS = ['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom] as const;
 const HEADER_BAR = { backgroundColor: 'transparent', borderBottomWidth: 0 } as const;
 
 function InterestShell({ children }: { children: ReactNode }) {
@@ -83,7 +83,7 @@ function InterestLeadBlock({
         <View style={styles.statRow}>
           <View style={styles.statPill}>
             <LinearGradient
-              colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.1)']}
+              colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.1)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
@@ -95,7 +95,7 @@ function InterestLeadBlock({
           </View>
           <View style={[styles.statPill, styles.statPillSave]}>
             <LinearGradient
-              colors={['rgba(255,101,132,0.14)', 'rgba(108,99,255,0.08)']}
+              colors={['rgba(255, 74, 114,0.14)', 'rgba(94, 82, 255,0.08)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
@@ -162,7 +162,7 @@ function InterestEmptyState() {
   return (
     <View style={styles.emptyOuter}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+        colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.emptyBorder}
@@ -189,7 +189,7 @@ function PremiumGateCard() {
       showsVerticalScrollIndicator={false}
     >
       <LinearGradient
-        colors={['rgba(108,99,255,0.22)', 'rgba(255,101,132,0.14)']}
+        colors={['rgba(94, 82, 255,0.22)', 'rgba(255, 74, 114,0.14)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gateBorder}
@@ -334,7 +334,7 @@ export default function PlanInterestScreen() {
         <PlanStackScreenHeader title="Interest" barStyle={HEADER_BAR} titleStyle={styles.headerTitle} />
         <View style={styles.centerState}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+            colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.centerBorder}
@@ -410,7 +410,8 @@ export default function PlanInterestScreen() {
 const styles = StyleSheet.create({
   screenRoot: { backgroundColor: 'transparent', flex: 1 },
   flex: { flex: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '800' },
+  headerTitle: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold,},
   listFlex: { flex: 1 },
   listContent: { paddingBottom: spacing.xl * 2, flexGrow: 1 },
   leadBlock: {
@@ -432,6 +433,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -440,6 +442,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -447,6 +450,7 @@ const styles = StyleSheet.create({
   leadSub: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 21,
     marginBottom: spacing.md,
@@ -462,10 +466,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
-  statPillSave: { borderColor: 'rgba(255, 101, 132, 0.25)' },
-  statTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
+  statPillSave: { borderColor: 'rgba(255, 74, 114, 0.25)' },
+  statTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   emptyOuter: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
@@ -490,6 +495,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -497,6 +503,7 @@ const styles = StyleSheet.create({
   emptySub: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -527,6 +534,7 @@ const styles = StyleSheet.create({
   gateTitle: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     letterSpacing: -0.35,
@@ -535,6 +543,7 @@ const styles = StyleSheet.create({
   gateSub: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -547,7 +556,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.22,
         shadowRadius: 14,
@@ -565,7 +574,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: spacing.lg,
   },
-  gateCtaTxt: { fontSize: 17, fontWeight: '800', color: '#fff' },
+  gateCtaTxt: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   centerState: {
     flex: 1,
     justifyContent: 'center',
@@ -580,7 +590,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.96)',
     gap: spacing.sm,
   },
-  centerTitle: { fontSize: 20, fontWeight: '900', color: colors.text, textAlign: 'center' },
+  centerTitle: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, textAlign: 'center' },
   centerSub: {
     fontSize: 15,
     fontWeight: '600',
@@ -603,26 +614,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
   skeletonAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
   skeletonBody: { flex: 1, gap: 8 },
   skeletonLineWide: {
     height: 14,
     width: '55%',
     borderRadius: 6,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
   },
   skeletonLine: {
     height: 12,
     width: '40%',
     borderRadius: 6,
-    backgroundColor: 'rgba(255, 101, 132, 0.1)',
+    backgroundColor: 'rgba(255, 74, 114, 0.1)',
   },
   leadAccentSkeleton: {
     width: 5,
@@ -630,40 +641,40 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     alignSelf: 'stretch',
     minHeight: 52,
-    backgroundColor: 'rgba(108, 99, 255, 0.15)',
+    backgroundColor: 'rgba(94, 82, 255, 0.15)',
   },
   skeletonKicker: {
     width: 88,
     height: 10,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 101, 132, 0.18)',
+    backgroundColor: 'rgba(255, 74, 114, 0.18)',
     marginBottom: 8,
   },
   skeletonTitle: {
     width: '72%',
     height: 26,
     borderRadius: 8,
-    backgroundColor: 'rgba(108, 99, 255, 0.14)',
+    backgroundColor: 'rgba(94, 82, 255, 0.14)',
     marginBottom: 10,
   },
   skeletonSubWide: {
     width: '100%',
     height: 12,
     borderRadius: 6,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     marginBottom: 6,
   },
   skeletonSub: {
     width: '85%',
     height: 12,
     borderRadius: 6,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     marginBottom: spacing.md,
   },
   skeletonStatPill: {
     width: 108,
     height: 34,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
   },
 });

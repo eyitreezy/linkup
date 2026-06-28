@@ -10,7 +10,7 @@ import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContex
 
 import { useTabBarVisibilityOptional } from '@/contexts/TabBarVisibilityContext';
 
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
@@ -58,7 +58,12 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
 
   const bottomPad = Platform.OS === 'android' ? Math.max(insets.bottom, 8) : insets.bottom;
 
+  const visibleRoutes = state.routes.filter((route) => {
+    const options = descriptors[route.key].options;
+    return typeof options.tabBarIcon === 'function';
+  });
 
+  const focusedRouteKey = state.routes[state.index]?.key;
 
   const barBody = (
 
@@ -72,9 +77,9 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
 
       <View style={styles.indicatorRow} accessibilityRole="tablist">
 
-        {state.routes.map((route, index) => {
+        {visibleRoutes.map((route) => {
 
-          const focused = state.index === index;
+          const focused = route.key === focusedRouteKey;
 
           return (
 
@@ -92,11 +97,11 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
 
       <View style={styles.tabsRow}>
 
-        {state.routes.map((route, index) => {
+        {visibleRoutes.map((route) => {
 
           const { options } = descriptors[route.key];
 
-          const focused = state.index === index;
+          const focused = route.key === focusedRouteKey;
 
           const tint = focused ? colors.primary : INACTIVE_TAB;
 
@@ -340,6 +345,10 @@ const styles = StyleSheet.create({
 
     position: 'relative',
 
+    width: 28,
+
+    height: 28,
+
     alignItems: 'center',
 
     justifyContent: 'center',
@@ -387,6 +396,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
 
     fontWeight: '600',
+
+    fontFamily: fonts.medium,
 
     letterSpacing: -0.1,
 

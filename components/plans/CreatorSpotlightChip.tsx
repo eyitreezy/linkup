@@ -1,7 +1,7 @@
 /**
  * Subtle creator spotlight indicator — host row, not boost corner badge.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -40,6 +40,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 9,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#B45309',
     letterSpacing: 0.35,
     textTransform: 'uppercase',

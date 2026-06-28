@@ -2,7 +2,7 @@
  * Bottom sheet shell for “Drop your idea” — pan on header, scrollable body, keyboard-safe.
  */
 import { KeyboardAwareContainer } from '@/components/KeyboardAwareContainer';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { DraggableSheetController } from '@/hooks/useDraggableSheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   dragHeader: {
     paddingHorizontal: spacing.lg,
@@ -173,6 +173,7 @@ const styles = StyleSheet.create({
   composerTitle: {
     fontSize: 24,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.6,
   },
@@ -187,14 +188,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
   a11yBtnPressed: { opacity: 0.88 },
   a11yBtnTxt: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.primary,
     letterSpacing: -0.1,
   },

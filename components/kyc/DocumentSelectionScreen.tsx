@@ -6,7 +6,7 @@ import { KycSectionHead } from '@/components/kyc/KycSectionHead';
 import { KycSelectionCard, type KycIonName } from '@/components/kyc/KycSelectionCard';
 import { KycStepFooter } from '@/components/kyc/KycStepFooter';
 import { kycColors, kycInboxStyles, kycStyles } from '@/components/kyc/kycTheme';
-import { spacing } from '@/constants/theme';
+import { spacing, fonts } from '@/constants/theme';
 import type { KycDocumentType } from '@/types/kyc';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -102,5 +102,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     paddingHorizontal: spacing.md,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
 });

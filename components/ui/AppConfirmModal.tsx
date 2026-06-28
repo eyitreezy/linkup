@@ -1,16 +1,16 @@
 /**
  * Inbox-grade two-action modal — confirmations (logout, boost, archive, etc.).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type IonName = ComponentProps<typeof Ionicons>['name'];
 
-export type AppConfirmIconVariant = 'default' | 'logout' | 'boost' | 'warning' | 'danger';
+export type AppConfirmIconVariant = 'default' | 'logout' | 'boost' | 'warning' | 'danger' | 'verification';
 
 type Props = {
   visible: boolean;
@@ -31,6 +31,8 @@ type Props = {
   busyOn?: 'primary' | 'secondary';
   /** Side-by-side CTAs (default) or stacked */
   actionsLayout?: 'row' | 'stack';
+  /** When stacked, show the gradient CTA above the secondary button */
+  stackPrimaryFirst?: boolean;
 };
 
 function iconMeta(variant: AppConfirmIconVariant): {
@@ -46,6 +48,8 @@ function iconMeta(variant: AppConfirmIconVariant): {
       return { icon: 'information-circle-outline', grad: ['#F59E0B', '#FBBF24'] };
     case 'danger':
       return { icon: 'alert-circle-outline', grad: [colors.danger, '#F87171'] };
+    case 'verification':
+      return { icon: 'shield-checkmark-outline', grad: [colors.primary, colors.secondary] };
     default:
       return { icon: 'help-circle-outline', grad: [colors.primary, colors.secondary] };
   }
@@ -66,6 +70,7 @@ export function AppConfirmModal({
   dismissOnBackdrop = true,
   busyOn = 'secondary',
   actionsLayout = 'row',
+  stackPrimaryFirst = false,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const meta = iconMeta(iconVariant);
@@ -91,6 +96,64 @@ export function AppConfirmModal({
     }
   }, [busy, busyOn, onSecondary, onClose]);
 
+  const secondaryButton = (
+    <Pressable
+      key="secondary"
+      onPress={() => void runSecondary()}
+      disabled={busy}
+      style={({ pressed }) => [
+        styles.secondaryBtn,
+        actionsLayout === 'row' ? styles.actionFit : styles.actionStretch,
+        secondaryTone === 'danger' && styles.secondaryBtnDanger,
+        pressed && !busy && styles.ctaPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={secondaryLabel}
+    >
+      {busy && busyOn === 'secondary' ? (
+        <ActivityIndicator color={secondaryTone === 'danger' ? colors.danger : colors.primary} />
+      ) : (
+        <Text
+          style={[styles.secondaryTxt, secondaryTone === 'danger' && styles.secondaryTxtDanger]}
+          numberOfLines={1}
+        >
+          {secondaryLabel}
+        </Text>
+      )}
+    </Pressable>
+  );
+
+  const primaryButton = (
+    <Pressable
+      key="primary"
+      onPress={() => void runPrimary()}
+      disabled={busy}
+      style={({ pressed }) => [
+        styles.ctaOuter,
+        actionsLayout === 'row' ? styles.actionFit : styles.actionStretch,
+        actionsLayout === 'stack' && styles.ctaStacked,
+        pressed && !busy && styles.ctaPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={primaryLabel}
+    >
+      <LinearGradient
+        colors={[colors.primary, colors.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.ctaGrad}
+      >
+        {busy && busyOn === 'primary' ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.ctaTxt} numberOfLines={1}>
+            {primaryLabel}
+          </Text>
+        )}
+      </LinearGradient>
+    </Pressable>
+  );
+
   return (
     <Modal
       visible={visible}
@@ -107,7 +170,7 @@ export function AppConfirmModal({
       >
         <Pressable style={styles.sheetHit} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.45)', 'rgba(255,101,132,0.28)']}
+            colors={['rgba(94, 82, 255,0.45)', 'rgba(255, 74, 114,0.28)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ring}
@@ -119,7 +182,13 @@ export function AppConfirmModal({
 
               <Text style={styles.kicker}>{kicker}</Text>
               <Text style={styles.title}>{title}</Text>
-              <Text style={styles.message}>{message}</Text>
+              <ScrollView
+                style={styles.messageScroll}
+                contentContainerStyle={styles.messageScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.message}>{message}</Text>
+              </ScrollView>
 
               <View
                 style={[
@@ -127,60 +196,17 @@ export function AppConfirmModal({
                   actionsLayout === 'stack' && styles.actionsStack,
                 ]}
               >
-                <Pressable
-                  onPress={() => void runSecondary()}
-                  disabled={busy}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    actionsLayout === 'row' ? styles.actionFit : styles.actionStretch,
-                    secondaryTone === 'danger' && styles.secondaryBtnDanger,
-                    pressed && !busy && styles.ctaPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={secondaryLabel}
-                >
-                  {busy && busyOn === 'secondary' ? (
-                    <ActivityIndicator color={secondaryTone === 'danger' ? colors.danger : colors.primary} />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.secondaryTxt,
-                        secondaryTone === 'danger' && styles.secondaryTxtDanger,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {secondaryLabel}
-                    </Text>
-                  )}
-                </Pressable>
-
-                <Pressable
-                  onPress={() => void runPrimary()}
-                  disabled={busy}
-                  style={({ pressed }) => [
-                    styles.ctaOuter,
-                    actionsLayout === 'row' ? styles.actionFit : styles.actionStretch,
-                    actionsLayout === 'stack' && styles.ctaStacked,
-                    pressed && !busy && styles.ctaPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={primaryLabel}
-                >
-                  <LinearGradient
-                    colors={[colors.primary, colors.secondary]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.ctaGrad}
-                  >
-                    {busy && busyOn === 'primary' ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.ctaTxt} numberOfLines={1}>
-                        {primaryLabel}
-                      </Text>
-                    )}
-                  </LinearGradient>
-                </Pressable>
+                {actionsLayout === 'stack' && stackPrimaryFirst ? (
+                  <>
+                    {primaryButton}
+                    {secondaryButton}
+                  </>
+                ) : (
+                  <>
+                    {secondaryButton}
+                    {primaryButton}
+                  </>
+                )}
               </View>
             </View>
           </LinearGradient>
@@ -207,7 +233,7 @@ const styles = StyleSheet.create({
     padding: 2,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.22,
         shadowRadius: 24,
@@ -233,6 +259,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -241,6 +268,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.35,
     textAlign: 'center',
@@ -249,11 +277,18 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 22,
     textAlign: 'center',
-    marginBottom: spacing.lg,
+  },
+  messageScroll: {
     alignSelf: 'stretch',
+    maxHeight: 200,
+    marginBottom: spacing.lg,
+  },
+  messageScrollContent: {
+    paddingHorizontal: 2,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -280,7 +315,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.24,
         shadowRadius: 14,
@@ -305,6 +340,7 @@ const styles = StyleSheet.create({
   ctaTxt: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     letterSpacing: -0.2,
   },
@@ -312,7 +348,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     borderRadius: radius.button,
     borderWidth: 1.5,
-    borderColor: 'rgba(108,99,255,0.35)',
+    borderColor: 'rgba(94, 82, 255,0.35)',
     backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -326,6 +362,7 @@ const styles = StyleSheet.create({
   secondaryTxt: {
     fontSize: 15,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: -0.15,
     textAlign: 'center',

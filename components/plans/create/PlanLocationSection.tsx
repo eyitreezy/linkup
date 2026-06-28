@@ -3,7 +3,7 @@
  */
 import { ONBOARDING_FIELD_MIN_HEIGHT } from '@/components/Input';
 import { LocationSearchField } from '@/components/location/LocationSearchField';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { formatGeocodedAddress } from '@/lib/location/locationGeocode';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -233,5 +233,6 @@ const styles = StyleSheet.create({
   },
   currentLocIcon: { width: 28, alignItems: 'center', marginRight: spacing.sm },
   currentLocPressed: { opacity: 0.92 },
-  currentLocText: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text },
+  currentLocText: { flex: 1, fontSize: 16, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text },
 });

@@ -1,7 +1,7 @@
 /**
  * Bumble-style fullscreen legal gate before escrow / activation — no swipe-to-dismiss.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { CancellationPolicyRowGroups } from '@/components/plans/CancellationPolicyRows';
 import { AGREEMENT_CANCELLATION_POLICY_GROUPS } from '@/lib/plans/cancellationPolicy';
 import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
@@ -75,7 +75,7 @@ export function PreAgreementFullscreenModal({
           <Ionicons name="document-text-outline" size={28} color={colors.primary} />
           <Text style={styles.headerTitle}>Review & confirm</Text>
           <Text style={styles.headerSub}>
-            Both people confirm this summary before money moves — structured, transparent, enforced on our servers.
+            Both people confirm this summary before money moves. Outcomes are structured, transparent, and enforced on our servers.
           </Text>
         </View>
 
@@ -100,7 +100,7 @@ export function PreAgreementFullscreenModal({
                   <View style={styles.nextPayCallout}>
                     <Text style={styles.nextPayTitle}>After you confirm</Text>
                     <Text style={styles.nextPayBody}>
-                      The next screen opens secure payment — you&apos;ll pay{' '}
+                      The next screen opens secure payment. You&apos;ll pay{' '}
                       {currencyLabel === 'NGN' ? '₦' : `${currencyLabel} `}
                       {((userPaysCents ?? escrowAmountCents) / 100).toLocaleString()} via Flutterwave. Nothing is
                       charged on this review screen.
@@ -132,13 +132,13 @@ export function PreAgreementFullscreenModal({
 
           <Section title="Cancellation policy" icon="shield-checkmark-outline">
             <Text style={[styles.muted, styles.policyIntro]}>
-              Role- and timing-based rules — calculated from meetup time vs when someone cancels in-app.
+              Role- and timing-based rules, calculated from meetup time vs when someone cancels in-app.
             </Text>
             <CancellationPolicyRowGroups groups={AGREEMENT_CANCELLATION_POLICY_GROUPS} dense />
             <View style={styles.policyCallout}>
               <Ionicons name="server-outline" size={16} color={colors.primary} />
               <Text style={styles.policyCalloutTxt}>
-                Outcomes are enforced on LinkUp servers after escrow funding — not editable in chat.
+                Outcomes are enforced on LinkUp servers after escrow funding and are not editable in chat.
               </Text>
             </View>
           </Section>
@@ -211,8 +211,9 @@ function Row({ k, v }: { k: string; v: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
-  headerSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 8 },
+  headerTitle: { fontSize: 22, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm },
+  headerSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 8, fontFamily: fonts.regular, },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   section: {
     backgroundColor: colors.surface,
@@ -223,21 +224,23 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
-  bold: { fontSize: 16, fontWeight: '800', color: colors.text },
-  line: { fontSize: 14, color: colors.text, marginTop: 6, lineHeight: 20 },
-  muted: { fontSize: 13, color: colors.textMuted, marginTop: 8, lineHeight: 18 },
-  mutedSmall: { fontSize: 12, color: colors.textMuted, marginTop: 10, lineHeight: 17 },
+  sectionTitle: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  bold: { fontSize: 16, fontWeight: '800', color: colors.text, fontFamily: fonts.bold, },
+  line: { fontSize: 14, color: colors.text, marginTop: 6, lineHeight: 20, fontFamily: fonts.regular, },
+  muted: { fontSize: 13, color: colors.textMuted, marginTop: 8, lineHeight: 18, fontFamily: fonts.regular, },
+  mutedSmall: { fontSize: 12, color: colors.textMuted, marginTop: 10, lineHeight: 17, fontFamily: fonts.regular, },
   nextPayCallout: {
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  nextPayTitle: { fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 6 },
-  nextPayBody: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  nextPayTitle: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, marginBottom: 6 },
+  nextPayBody: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19, fontFamily: fonts.medium, },
   policyIntro: { marginBottom: spacing.sm },
   policyCallout: {
     flexDirection: 'row',
@@ -246,19 +249,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  policyCalloutTxt: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textMuted, lineHeight: 17 },
+  policyCalloutTxt: { flex: 1, fontSize: 12, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted, lineHeight: 17 },
   feeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
     marginTop: 6,
   },
-  feeK: { flex: 1, fontSize: 13, color: colors.textMuted },
-  feeV: { fontSize: 13, fontWeight: '800', color: colors.text },
+  feeK: { flex: 1, fontSize: 13, color: colors.textMuted, fontFamily: fonts.regular, },
+  feeV: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -278,8 +283,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   boxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tick: { color: '#fff', fontSize: 13, fontWeight: '900' },
-  checkLabel: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600' },
+  tick: { color: '#fff', fontSize: 13, fontWeight: '900',
+    fontFamily: fonts.bold,},
+  checkLabel: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   cta: {
     backgroundColor: colors.primary,
     borderRadius: radius.button,
@@ -290,5 +296,6 @@ const styles = StyleSheet.create({
   },
   ctaDisabled: { opacity: 0.45 },
   ctaPressed: { opacity: 0.92 },
-  ctaTxt: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  ctaTxt: { color: '#fff', fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold,},
 });

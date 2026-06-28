@@ -2,28 +2,32 @@
  * LinkUp design tokens — primary UI theme for Expo screens & shared components.
  */
 export const colors = {
-  primary: '#6C63FF',
-  secondary: '#FF6584',
-  background: '#F5F6FA',
+  primary: '#5E52FF',
+  secondary: '#FF4A72',
+  background: '#EEF1FA',
   surface: '#FFFFFF',
   text: '#1A1D26',
-  textMuted: '#6B7280',
-  border: '#E5E7EB',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
+  textMuted: '#5B6577',
+  border: '#D8DCE6',
+  success: '#0EA872',
+  warning: '#E89008',
+  danger: '#E83838',
   /** Tinder-style pass / dismiss control */
-  passAction: '#FF5A5F',
+  passAction: '#FF4757',
   /** Login / signup gradient (dating-app style) */
   authGradientTop: '#2D1B4E',
-  authGradientMid: '#6C63FF',
-  authGradientBottom: '#FF6584',
+  authGradientMid: '#5E52FF',
+  authGradientBottom: '#FF4A72',
   authCard: '#FFFFFF',
-  authInputBg: '#F8F9FC',
+  authInputBg: '#F5F7FC',
   /** Discovery / dating-mode surfaces */
-  discoveryGradientTop: '#F5F6FA',
-  discoveryGradientMid: '#EDE8FF',
-  discoveryGradientBottom: '#FFF5F8',
+  discoveryGradientTop: '#EEF1FA',
+  discoveryGradientMid: '#D2C9FF',
+  discoveryGradientBottom: '#FFD6E8',
+  /** 4-stop shell gradient (lavender → rose → mint → blush) */
+  discoveryShellLavender: '#D2C9FF',
+  discoveryShellRose: '#FFD1E3',
+  discoveryShellMint: '#B8EDD9',
   overlayDark: 'rgba(26, 29, 38, 0.55)',
 } as const;
 
@@ -53,9 +57,9 @@ export const authSoftFieldFill = {
   paddingHorizontal: spacing.md,
 } as const;
 
+/** Plus Jakarta Sans — loaded in `app/_layout.tsx` via @expo-google-fonts/plus-jakarta-sans */
 export const fonts = {
-  /** Load via @expo-google-fonts/inter or use system fallback */
-  regular: 'System',
-  medium: 'System',
-  bold: 'System',
+  regular: 'PlusJakartaSans_400Regular',
+  medium: 'PlusJakartaSans_600SemiBold',
+  bold: 'PlusJakartaSans_800ExtraBold',
 } as const;

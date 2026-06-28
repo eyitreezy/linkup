@@ -3,9 +3,10 @@
  */
 import { KycNoticeModal } from '@/components/kyc/KycNoticeModal';
 import { AdminGoodwillPanel } from '@/components/admin/AdminGoodwillPanel';
+import { AdminListSkeleton } from '@/components/admin/AdminListSkeleton';
 import { AdminTrialPanel } from '@/components/admin/AdminTrialPanel';
 import { PlanShelfActionConfirmModal } from '@/components/plans/PlanShelfActionConfirmModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { AccountStatus, DbProfile, DbUser, UserVerification } from '@/types/database';
@@ -65,7 +66,7 @@ const cardStyles = StyleSheet.create({
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     borderTopRightRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
   },
@@ -87,10 +88,16 @@ function statusPillStyle(kind: AccountStatus | UserVerification): { bg: string; 
   if (kind === 'rejected') {
     return { bg: 'rgba(239,68,68,0.1)', fg: colors.danger, bd: 'rgba(239,68,68,0.25)' };
   }
-  return { bg: 'rgba(108,99,255,0.1)', fg: colors.primary, bd: 'rgba(108,99,255,0.22)' };
+  return { bg: 'rgba(94, 82, 255,0.1)', fg: colors.primary, bd: 'rgba(94, 82, 255,0.22)' };
 }
 
-export function AdminUsersPanel() {
+export function AdminUsersPanel({
+  refreshing = false,
+  registerReload,
+}: {
+  refreshing?: boolean;
+  registerReload?: (reload: (() => Promise<void>) | null) => void;
+} = {}) {
   const { user: authUser } = useAuth();
   const [rows, setRows] = useState<AdminUserListRow[]>([]);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
@@ -104,9 +111,9 @@ export function AdminUsersPanel() {
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!isSupabaseConfigured) return;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     const [{ data: usersData, error: uErr }, { data: admData }] = await Promise.all([
       supabase.from('users').select('*, profiles(*)').order('created_at', { ascending: false }).limit(300),
       supabase.from('admins').select('user_id'),
@@ -118,8 +125,13 @@ export function AdminUsersPanel() {
       setRows((usersData ?? []) as AdminUserListRow[]);
     }
     setAdminIds(new Set((admData ?? []).map((r) => r.user_id as string)));
-    setLoading(false);
+    if (!options?.silent) setLoading(false);
   }, []);
+
+  useEffect(() => {
+    registerReload?.(() => load({ silent: true }));
+    return () => registerReload?.(null);
+  }, [load, registerReload]);
 
   useEffect(() => {
     void load();
@@ -326,8 +338,8 @@ export function AdminUsersPanel() {
         Showing {filtered.length} of {rows.length} loaded
       </Text>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: spacing.lg }} color={colors.primary} size="large" />
+      {refreshing || (loading && rows.length === 0) ? (
+        <AdminListSkeleton count={5} />
       ) : (
         <FlatList
           data={filtered}
@@ -351,7 +363,7 @@ export function AdminUsersPanel() {
                 <Pressable onPress={() => editSet(u)} style={styles.cardPress}>
                   <View style={styles.cardTop}>
                     <LinearGradient
-                      colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.25)', '#34D39933']}
+                      colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.25)', '#34D39933']}
                       style={styles.avatarRing}
                     >
                       {pr?.avatar_url ? (
@@ -611,8 +623,9 @@ function UserEditModal({ userRow, busy, onClose, onSave }: UserEditModalProps) {
 }
 
 const styles = StyleSheet.create({
-  head: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: 4 },
-  sub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 },
+  head: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  sub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20, fontFamily: fonts.regular, },
   searchShell: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -620,14 +633,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
     paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
-  searchInp: { flex: 1, paddingVertical: 12, color: colors.text, fontSize: 15 },
+  searchInp: { flex: 1, paddingVertical: 12, color: colors.text, fontSize: 15, fontFamily: fonts.regular, },
   filterLabel: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -639,12 +653,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
   },
   chipOn: { backgroundColor: colors.primary },
-  chipTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  chipTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   chipTxtOn: { color: '#fff' },
-  countHint: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: spacing.sm },
+  countHint: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: spacing.sm, fontFamily: fonts.medium, },
   cardPress: { marginBottom: spacing.xs },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   avatarRing: {
@@ -665,8 +680,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardHeadText: { flex: 1, minWidth: 0 },
-  name: { fontSize: 17, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
-  email: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
+  name: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
+  email: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   adminBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -676,7 +692,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  adminBadgeTxt: { fontSize: 10, fontWeight: '900', color: '#fff' },
+  adminBadgeTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff' },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
   pill: {
     paddingHorizontal: 10,
@@ -684,11 +701,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  pillTxt: { fontSize: 11, fontWeight: '800' },
-  pillHost: { backgroundColor: 'rgba(108,99,255,0.12)', borderColor: 'rgba(108,99,255,0.25)' },
-  pillHostTxt: { fontSize: 11, fontWeight: '800', color: colors.primary },
+  pillTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold,},
+  pillHost: { backgroundColor: 'rgba(94, 82, 255,0.12)', borderColor: 'rgba(94, 82, 255,0.25)' },
+  pillHostTxt: { fontSize: 11, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  meta: { fontSize: 12, fontWeight: '600', color: colors.textMuted, flex: 1 },
+  meta: { fontSize: 12, fontWeight: '600', color: colors.textMuted, flex: 1, fontFamily: fonts.medium, },
   rowActions: { flexDirection: 'row', gap: 8, marginTop: spacing.sm },
   miniBtn: {
     flex: 1,
@@ -698,20 +716,22 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
   },
-  miniTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
-  miniTxtDanger: { fontSize: 13, fontWeight: '800', color: colors.danger },
+  miniTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
+  miniTxtDanger: { fontSize: 13, fontWeight: '800', color: colors.danger, fontFamily: fonts.bold, },
   empty: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
     backgroundColor: 'rgba(255,255,255,0.65)',
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
   },
-  emptyTitle: { fontSize: 17, fontWeight: '900', color: colors.text, marginTop: spacing.sm },
-  emptySub: { fontSize: 14, color: colors.textMuted, marginTop: 4, textAlign: 'center' },
+  emptyTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm },
+  emptySub: { fontSize: 14, color: colors.textMuted, marginTop: 4, textAlign: 'center', fontFamily: fonts.regular, },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(26,29,38,0.5)',
@@ -725,12 +745,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     maxHeight: '88%',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
   },
   modalAccent: { height: 4, borderRadius: 2, marginBottom: spacing.md },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: colors.text },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
   monoSmall: { fontSize: 11, color: colors.textMuted, fontFamily: 'monospace', marginTop: 4 },
-  modalHint: { fontSize: 13, color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.md },
+  modalHint: { fontSize: 13, color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.md, fontFamily: fonts.regular, },
   fieldLbl: {
     fontSize: 11,
     fontWeight: '800',
@@ -741,7 +761,7 @@ const styles = StyleSheet.create({
   },
   inp: {
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
     borderRadius: radius.md,
     padding: spacing.sm,
     marginTop: 6,
@@ -754,12 +774,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
     borderWidth: 1,
     borderColor: 'transparent',
   },
   choiceOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  choiceTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  choiceTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   choiceTxtOn: { color: '#fff' },
   toggleRow: {
     flexDirection: 'row',
@@ -774,7 +795,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(107,114,128,0.15)',
   },
   toggleOn: { backgroundColor: 'rgba(16,185,129,0.2)' },
-  toggleTxt: { fontWeight: '800', color: colors.text },
+  toggleTxt: { fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   modalActions: { gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.md },
   btnGhostFull: {
     alignItems: 'center',
@@ -783,7 +805,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  btnGhostTxt: { fontWeight: '800', color: colors.text },
+  btnGhostTxt: { fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   btnPrimaryFull: {
     alignItems: 'center',
     paddingVertical: 14,
@@ -791,5 +814,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  btnPrimaryTxt: { fontWeight: '900', color: '#fff', zIndex: 1 },
+  btnPrimaryTxt: { fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff', zIndex: 1 },
 });

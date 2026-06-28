@@ -1,7 +1,7 @@
 import { TierBadge } from '@/components/TierBadge';
 import { TIER_THEME } from '@/components/subscription/tierTheme';
 import { APP_CTA_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { tierDisplayName } from '@/lib/subscription/featureLabels';
 import {
   type BillingCycle,
@@ -57,7 +57,10 @@ export function SubscriptionTierCard({
 }: Props) {
   const theme = TIER_THEME[tier];
   const price = parsePrice(tier, cycle);
-  const showGradientCta = cta.variant !== 'ghost' && !cta.disabled && tier !== 'FREE';
+  const showGradientCta =
+    cta.variant !== 'ghost' && tier !== 'FREE' && (!cta.disabled || !!loading);
+  const showCurrentPlanCta =
+    isCurrent || (cta.disabled && cta.label.toLowerCase().includes('current plan'));
 
   return (
     <MotiView
@@ -81,7 +84,7 @@ export function SubscriptionTierCard({
                     ? ['#FEF3C7', '#F59E0B']
                     : tier === 'SILVER'
                       ? ['#F3F4F6', '#9CA3AF']
-                      : ['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.1)']
+                      : ['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.1)']
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -136,17 +139,26 @@ export function SubscriptionTierCard({
           </View>
 
           <Pressable
-            disabled={cta.disabled || loading}
+            disabled={cta.disabled || loading || showCurrentPlanCta}
             onPress={cta.action}
             style={({ pressed }) => [
-              showGradientCta ? styles.ctaOuter : styles.ctaPlain,
-              cta.disabled && styles.ctaDisabled,
-              pressed && !cta.disabled && !loading && styles.ctaPressed,
+              showCurrentPlanCta
+                ? styles.ctaCurrent
+                : showGradientCta
+                  ? styles.ctaOuter
+                  : styles.ctaPlain,
+              !showCurrentPlanCta && cta.disabled && !loading && styles.ctaDisabled,
+              pressed && !cta.disabled && !loading && !showCurrentPlanCta && styles.ctaPressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel={cta.label}
           >
-            {showGradientCta ? (
+            {showCurrentPlanCta ? (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color={theme.accent} />
+                <Text style={[styles.ctaCurrentTxt, { color: theme.accent }]}>Current plan</Text>
+              </>
+            ) : showGradientCta ? (
               <LinearGradient
                 colors={[...APP_CTA_GRADIENT]}
                 start={{ x: 0, y: 0 }}
@@ -198,17 +210,19 @@ const styles = StyleSheet.create({
   },
   titleCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  tierName: { fontSize: 20, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
-  tagline: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
+  tierName: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
+  tagline: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   currentBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.12)',
+    backgroundColor: 'rgba(94, 82, 255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.25)',
+    borderColor: 'rgba(94, 82, 255,0.25)',
   },
-  currentBadgeTxt: { fontSize: 10, fontWeight: '900', color: colors.primary, letterSpacing: 0.4 },
+  currentBadgeTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary, letterSpacing: 0.4 },
   popularBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -218,13 +232,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: colors.secondary,
   },
-  popularBadgeTxt: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 0.4 },
+  popularBadgeTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff', letterSpacing: 0.4 },
   priceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  currency: { fontSize: 14, fontWeight: '800', color: colors.textMuted, marginBottom: 4 },
-  amount: { fontSize: 32, fontWeight: '900', color: colors.text, letterSpacing: -1 },
-  period: { fontSize: 14, fontWeight: '700', color: colors.textMuted, marginBottom: 5 },
-  saving: { fontSize: 13, fontWeight: '800', color: colors.success, marginTop: 4 },
-  trialNote: { fontSize: 13, fontWeight: '700', color: colors.secondary, marginTop: spacing.xs },
+  currency: { fontSize: 14, fontWeight: '800', color: colors.textMuted, marginBottom: 4, fontFamily: fonts.bold, },
+  amount: { fontSize: 32, fontWeight: '900', color: colors.text, letterSpacing: -1, fontFamily: fonts.bold, },
+  period: { fontSize: 14, fontWeight: '700', color: colors.textMuted, marginBottom: 5, fontFamily: fonts.medium, },
+  saving: { fontSize: 13, fontWeight: '800', color: colors.success, marginTop: 4, fontFamily: fonts.bold, },
+  trialNote: { fontSize: 13, fontWeight: '700', color: colors.secondary, marginTop: spacing.xs, fontFamily: fonts.medium, },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
@@ -239,12 +254,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 19 },
+  featureTxt: { flex: 1, fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 19 },
   ctaOuter: {
     borderRadius: radius.button,
     overflow: 'hidden',
     ...Platform.select({
-      ios: { shadowColor: '#6C63FF', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12 },
+      ios: { shadowColor: '#5E52FF', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12 },
       android: { elevation: 3 },
     }),
   },
@@ -254,13 +270,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108,99,255,0.18)',
+    borderColor: 'rgba(94, 82, 255,0.18)',
+  },
+  ctaCurrent: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(94, 82, 255,0.22)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  ctaCurrentTxt: {
+    fontSize: 16,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    letterSpacing: -0.2,
   },
   ctaDisabled: { opacity: 0.55 },
   ctaPressed: { opacity: 0.94, transform: [{ scale: 0.985 }] },
-  ctaTxt: { fontSize: 16, fontWeight: '900', color: '#fff' },
-  ctaTxtPlain: { fontSize: 16, fontWeight: '800', color: colors.primary },
+  ctaTxt: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff' },
+  ctaTxtPlain: { fontSize: 16, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
   ctaTxtDisabled: { color: colors.textMuted },
 });

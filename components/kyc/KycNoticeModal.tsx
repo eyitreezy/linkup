@@ -2,7 +2,7 @@
  * KYC-style notice — inbox-grade modal with gradient ring + primary CTA.
  */
 import { kycColors } from '@/components/kyc/kycTheme';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -21,7 +21,7 @@ export function KycNoticeModal({ visible, onClose, title, message, actionLabel =
       <Pressable style={styles.overlay} onPress={onClose} accessibilityRole="button" accessibilityLabel="Dismiss">
         <Pressable style={styles.sheetHit} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.45)', 'rgba(255,101,132,0.28)']}
+            colors={['rgba(94, 82, 255,0.45)', 'rgba(255, 74, 114,0.28)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ring}
@@ -58,7 +58,7 @@ export function KycNoticeModal({ visible, onClose, title, message, actionLabel =
 
 const ctaShadow = Platform.select({
   ios: {
-    shadowColor: '#6C63FF',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.22,
     shadowRadius: 14,
@@ -93,6 +93,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -101,6 +102,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: kycColors.text,
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -113,6 +115,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     textAlign: 'center',
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   ctaOuter: {
     width: '100%',
@@ -127,5 +130,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  ctaTxt: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  ctaTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF' },
 });

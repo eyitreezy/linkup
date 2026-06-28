@@ -5,7 +5,7 @@ import { NotificationListSkeleton } from '@/components/notifications/Notificatio
 import { NotificationSwipeRow } from '@/components/notifications/NotificationSwipeRow';
 import { Screen } from '@/components/Screen';
 import { useNotificationInbox } from '@/contexts/NotificationInboxContext';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { FILTER_LABELS, type NotificationFilterTab, notificationTab } from '@/lib/notifications/categories';
 import { navigateFromNotification } from '@/lib/notifications/navigateFromNotification';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -70,7 +70,7 @@ export default function NotificationsScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -107,17 +107,23 @@ export default function NotificationsScreen() {
           </View>
         </View>
 
-        <View style={styles.leadBlock}>
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.leadAccent}
-          />
-          <View style={styles.leadTextCol}>
-            <Text style={styles.leadKicker}>Inbox</Text>
-            <Text style={styles.leadTitle}>Notifications</Text>
-            <Text style={styles.leadSub}>Offers, escrow, and updates — sorted by what matters first.</Text>
+        <View style={styles.heroHeader}>
+          <View style={styles.heroLeft}>
+            <LinearGradient
+              colors={[colors.primary, '#8B7CFF', colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroBadge}
+            >
+              <Ionicons name="notifications" size={22} color="#fff" />
+            </LinearGradient>
+            <View style={styles.heroText}>
+              <Text style={styles.heroKicker}>Inbox</Text>
+              <Text style={styles.heroTitle}>Notifications</Text>
+              <Text style={styles.heroSub}>
+                Offers, escrow, and updates sorted by what matters first.
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -160,7 +166,7 @@ export default function NotificationsScreen() {
         ) : sections.length === 0 ? (
           <View style={styles.emptyCardOuter}>
             <LinearGradient
-              colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+              colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.emptyCardBorder}
@@ -171,7 +177,7 @@ export default function NotificationsScreen() {
                 </LinearGradient>
                 <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
                 <Text style={styles.emptySub}>
-                  We&apos;ll ping you for offers, escrow, and verification — never noise.
+                  We will ping you for offers, escrow, and verification. Never noise.
                 </Text>
               </View>
             </LinearGradient>
@@ -192,7 +198,7 @@ export default function NotificationsScreen() {
                   <Text style={styles.sectionTitle}>{section.title}</Text>
                 </View>
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                  colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.sectionRule}
@@ -241,7 +247,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -253,42 +259,51 @@ const styles = StyleSheet.create({
     }),
   },
   pressed: { opacity: 0.92 },
-  markAll: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  markAll: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   markAllDisabled: { opacity: 0.35 },
-  leadBlock: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
+  heroHeader: {
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
   },
-  leadAccent: {
-    width: 5,
-    marginTop: 8,
-    borderRadius: 3,
-    height: 52,
+  heroLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  heroBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  leadTextCol: { flex: 1, minWidth: 0 },
-  leadKicker: {
+  heroText: { flex: 1, minWidth: 0 },
+  heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
-  leadTitle: {
-    fontSize: 28,
+  heroTitle: {
+    fontSize: 30,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
-    letterSpacing: -0.5,
-    marginBottom: 6,
+    letterSpacing: -0.7,
   },
-  leadSub: {
+  heroSub: {
     fontSize: 15,
-    color: colors.textMuted,
-    lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 6,
+    lineHeight: 21,
   },
   tabs: {
     flexDirection: 'row',
@@ -312,10 +327,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  tabTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
-  tabTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  tabTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  tabTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
   list: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xl * 2,
@@ -339,6 +355,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -353,6 +370,7 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -383,6 +401,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -394,5 +413,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
 });

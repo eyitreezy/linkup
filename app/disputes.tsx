@@ -2,7 +2,7 @@
  * Disputes — escrow-linked rows and plan-based safety disputes.
  */
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbDispute, PlanDisputeStatus } from '@/types/database';
@@ -39,7 +39,7 @@ function planStatusStyle(status: PlanDisputeStatus): { bg: string; fg: string } 
   switch (status) {
     case 'pending':
     case 'reviewing':
-      return { bg: 'rgba(108, 99, 255, 0.14)', fg: colors.primary };
+      return { bg: 'rgba(94, 82, 255, 0.14)', fg: colors.primary };
     case 'resolved':
       return { bg: 'rgba(52, 211, 153, 0.16)', fg: '#047857' };
     case 'rejected':
@@ -51,7 +51,7 @@ function planStatusStyle(status: PlanDisputeStatus): { bg: string; fg: string } 
 
 function escrowStatusStyle(status: string): { bg: string; fg: string } {
   const open = status === 'open' || status === 'under_review';
-  if (open) return { bg: 'rgba(108, 99, 255, 0.14)', fg: colors.primary };
+  if (open) return { bg: 'rgba(94, 82, 255, 0.14)', fg: colors.primary };
   if (status === 'resolved') return { bg: 'rgba(52, 211, 153, 0.16)', fg: '#047857' };
   return { bg: 'rgba(107, 114, 128, 0.12)', fg: colors.textMuted };
 }
@@ -122,7 +122,7 @@ export default function DisputesScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -160,7 +160,7 @@ export default function DisputesScreen() {
               <Text style={styles.leadKicker}>Resolution center</Text>
               <Text style={styles.leadTitle}>Disputes</Text>
               <Text style={styles.leadSub}>
-                Plan safety issues and escrow holds you&apos;re part of — in one place, same polish as your inbox.
+                Plan safety issues and escrow holds you are part of, all in one place.
               </Text>
             </View>
           </View>
@@ -202,7 +202,7 @@ export default function DisputesScreen() {
           ) : bothEmpty ? (
             filter === 'all' ? (
               <LinearGradient
-                colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+                colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.emptyOuter}
@@ -220,7 +220,7 @@ export default function DisputesScreen() {
               </LinearGradient>
             ) : (
               <LinearGradient
-                colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.06)']}
+                colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.06)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.emptyOuter}
@@ -240,7 +240,7 @@ export default function DisputesScreen() {
                       <Text style={styles.sectionTitle}>Plan issues</Text>
                     </View>
                     <LinearGradient
-                      colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                      colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.sectionRule}
@@ -255,7 +255,7 @@ export default function DisputesScreen() {
                         return (
                           <LinearGradient
                             key={item.id}
-                            colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+                            colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={styles.rowOuter}
@@ -306,7 +306,7 @@ export default function DisputesScreen() {
                       <Text style={styles.sectionTitle}>Escrow</Text>
                     </View>
                     <LinearGradient
-                      colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                      colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.sectionRule}
@@ -321,7 +321,7 @@ export default function DisputesScreen() {
                         return (
                           <LinearGradient
                             key={item.id}
-                            colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+                            colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={styles.rowOuter}
@@ -359,7 +359,7 @@ export default function DisputesScreen() {
 
           <Pressable style={styles.supportLink} onPress={() => router.push('/support' as Href)}>
             <LinearGradient
-              colors={['rgba(108,99,255,0.1)', 'rgba(255,101,132,0.06)']}
+              colors={['rgba(94, 82, 255,0.1)', 'rgba(255, 74, 114,0.06)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.supportLinkGrad}
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -424,6 +424,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -432,6 +433,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.45,
     marginBottom: 6,
@@ -441,6 +443,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   tabs: {
     flexDirection: 'row',
@@ -463,10 +466,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  tabTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
-  tabTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  tabTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  tabTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
   hint: {
     textAlign: 'center',
     color: colors.textMuted,
@@ -494,6 +498,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -506,6 +511,7 @@ const styles = StyleSheet.create({
   sectionEmpty: {
     color: colors.textMuted,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     fontSize: 15,
     lineHeight: 22,
     marginBottom: spacing.md,
@@ -536,7 +542,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowText: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
+  rowTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   rowMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -549,8 +556,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  pillTxt: { fontSize: 12, fontWeight: '800' },
-  rowDate: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
+  pillTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold,},
+  rowDate: { fontSize: 12, color: colors.textMuted, fontWeight: '600', fontFamily: fonts.medium, },
   emptyOuter: {
     borderRadius: radius.xl,
     padding: 2,
@@ -576,6 +584,7 @@ const styles = StyleSheet.create({
   filterEmptyTxt: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -591,6 +600,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -602,6 +612,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   supportLink: {
     borderRadius: radius.lg,
@@ -616,9 +627,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     borderRadius: radius.lg,
     backgroundColor: 'rgba(255,255,255,0.85)',
   },
-  supportLinkTxt: { fontSize: 16, fontWeight: '800', color: colors.primary },
+  supportLinkTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
 });

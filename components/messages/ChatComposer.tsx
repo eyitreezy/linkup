@@ -7,8 +7,8 @@ import { ReplyPreviewBar } from '@/components/messages/ReplyPreviewBar';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, View, type NativeSyntheticEvent, type TextInputSelectionChangeEventData } from 'react-native';
 
 type Props = {
   preset: ChatAppearancePreset;
@@ -26,6 +26,10 @@ type Props = {
   placeBusy?: boolean;
   replyTo?: { senderLabel: string; preview: string } | null;
   onCancelReply?: () => void;
+  onComposerFocus?: () => void;
+  mentionPicker?: ReactNode;
+  selection?: { start: number; end: number };
+  onSelectionChange?: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
 };
 
 export function ChatComposer({
@@ -44,6 +48,10 @@ export function ChatComposer({
   placeBusy,
   replyTo,
   onCancelReply,
+  onComposerFocus,
+  mentionPicker,
+  selection,
+  onSelectionChange,
 }: Props) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const iconColor = threadLook?.attachIcon ?? preset.composerAttachIcon;
@@ -59,6 +67,7 @@ export function ChatComposer({
           onCancel={onCancelReply}
         />
       ) : null}
+      {mentionPicker}
       {toolsOpen ? (
         <ChatQuickActionsBar
           preset={preset}
@@ -103,6 +112,9 @@ export function ChatComposer({
             attachDisabled={attachDisabled}
             placeholder={placeholder}
             hideLeadingAttach
+            onComposerFocus={onComposerFocus}
+            selection={selection}
+            onSelectionChange={onSelectionChange}
           />
         </View>
       </View>
@@ -123,7 +135,7 @@ const styles = StyleSheet.create({
   },
   togglePressed: { opacity: 0.85 },
   toggleActive: {
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
   inputFlex: { flex: 1, minWidth: 0 },
 });

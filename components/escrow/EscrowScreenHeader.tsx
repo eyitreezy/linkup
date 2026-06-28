@@ -1,17 +1,16 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
-  topInset: number;
   title?: string;
   helpHref?: Href;
 };
 
-export function EscrowScreenHeader({ topInset, title = 'Secure payment', helpHref = '/support' }: Props) {
+export function EscrowScreenHeader({ title = 'Secure payment', helpHref = '/support' }: Props) {
   return (
-    <View style={[styles.wrap, { paddingTop: Math.max(topInset, spacing.xs) }]}>
+    <View style={styles.wrap}>
       <Pressable
         onPress={() => router.back()}
         style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
@@ -43,6 +42,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
     marginBottom: spacing.sm,
     gap: spacing.sm,
   },
@@ -51,6 +51,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.2,
   },
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: { shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
       android: { elevation: 2 },
@@ -74,8 +75,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
-  helpTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  helpTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   pressed: { opacity: 0.92 },
 });

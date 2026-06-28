@@ -1,7 +1,7 @@
 /**
  * Centered loading / empty-in-progress state for plan detail routes.
  */
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -34,12 +34,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.2,
   },
   sub: {
     marginTop: spacing.sm,
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,

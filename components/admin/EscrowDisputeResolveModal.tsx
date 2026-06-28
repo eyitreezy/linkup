@@ -1,6 +1,6 @@
 import { Button } from '@/components/Button';
 import { AppDetailModal } from '@/components/ui/AppDetailModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
   lead: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 21,
     marginBottom: spacing.md,
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
   option: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     backgroundColor: 'rgba(255,255,255,0.96)',
     padding: spacing.md,
     marginBottom: spacing.sm,
@@ -231,6 +232,7 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: 4,
   },
@@ -240,6 +242,7 @@ const styles = StyleSheet.create({
   optionDesc: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 19,
   },
@@ -248,33 +251,37 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
-    backgroundColor: 'rgba(108, 99, 255, 0.05)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
+    backgroundColor: 'rgba(94, 82, 255, 0.05)',
     gap: spacing.sm,
   },
   splitLbl: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
   },
   splitInput: {
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.surface,
   },
   splitHint: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
   noteLbl: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
@@ -282,11 +289,12 @@ const styles = StyleSheet.create({
   noteInput: {
     minHeight: 88,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.surface,
   },
@@ -297,5 +305,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
-  goodwillOptionLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
+  goodwillOptionLabel: { flex: 1, fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
 });

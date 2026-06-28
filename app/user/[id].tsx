@@ -4,9 +4,10 @@
 import { TierBadge } from '@/components/TierBadge';
 import { Screen } from '@/components/Screen';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import { openDirectChat } from '@/lib/messaging/openDirectChat';
+import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
+import { OfferRequiredBeforeChatError, openDirectChat } from '@/lib/messaging/openDirectChat';
 import { HostMediaGallery } from '@/components/plans/HostMediaGallery';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
 import {
@@ -21,7 +22,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbProfile, DbUserPresence } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Href, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,7 +38,7 @@ import {
 function InboxGradientBg() {
   return (
     <LinearGradient
-      colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+      colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
       locations={[0, 0.32, 0.62, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -54,7 +55,7 @@ function SectionHead({ title }: { title: string }) {
         <Text style={styles.sectionLabel}>{title}</Text>
       </View>
       <LinearGradient
-        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.sectionRule}
@@ -71,6 +72,8 @@ export default function PublicUserScreen() {
   const [theirPresence, setTheirPresence] = useState<DbUserPresence | null>(null);
   const [profileVideo, setProfileVideo] = useState<ProfileVideoRecord | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [offerGateOpen, setOfferGateOpen] = useState(false);
+  const [offerGatePlanId, setOfferGatePlanId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id || !isSupabaseConfigured) {
@@ -144,6 +147,11 @@ export default function PublicUserScreen() {
     try {
       await openDirectChat(supabase, user.id, id);
     } catch (e) {
+      if (e instanceof OfferRequiredBeforeChatError) {
+        setOfferGatePlanId(e.planId);
+        setOfferGateOpen(true);
+        return;
+      }
       Alert.alert('Chat', e instanceof Error ? e.message : 'Could not open chat');
     } finally {
       setChatBusy(false);
@@ -376,6 +384,25 @@ export default function PublicUserScreen() {
           ) : null}
         </ScrollView>
       </View>
+
+      <AppConfirmModal
+        visible={offerGateOpen}
+        onClose={() => setOfferGateOpen(false)}
+        kicker="Messaging"
+        title="Make an offer first"
+        message={`Send an offer on one of ${name}'s meetups before starting a chat — it keeps plans intentional and safe.`}
+        primaryLabel={offerGatePlanId ? 'Make an offer' : 'Browse meetups'}
+        onPrimary={() => {
+          setOfferGateOpen(false);
+          if (offerGatePlanId) {
+            router.push(`/plan/${offerGatePlanId}/negotiate` as Href);
+          } else {
+            router.push('/(tabs)' as Href);
+          }
+        }}
+        secondaryLabel="Not now"
+        iconVariant="warning"
+      />
     </Screen>
   );
 }
@@ -399,7 +426,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -432,6 +459,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -440,6 +468,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 28,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -451,6 +480,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   profileCard: {
     alignItems: 'center',
@@ -460,7 +490,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
@@ -489,7 +519,8 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: spacing.xs,
   },
-  cardName: { fontSize: 22, fontWeight: '900', color: colors.text },
+  cardName: { fontSize: 22, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
   verifiedPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -498,7 +529,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.button,
   },
-  verifiedPillTxt: { fontSize: 11, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
+  verifiedPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff', letterSpacing: 0.3 },
   presenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -506,24 +538,27 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   presenceDot: { width: 8, height: 8, borderRadius: 4 },
-  presenceCap: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  presenceCap: { fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   bioBlock: {
     alignSelf: 'stretch',
     marginTop: spacing.sm,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.14)',
+    borderTopColor: 'rgba(94, 82, 255, 0.14)',
   },
   bioLabel: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 6,
   },
-  bio: { fontSize: 16, lineHeight: 24, color: colors.text, fontWeight: '600' },
-  bioMuted: { fontSize: 15, lineHeight: 22, color: colors.textMuted, fontStyle: 'italic', fontWeight: '600' },
+  bio: { fontSize: 16, lineHeight: 24, color: colors.text, fontWeight: '600',
+    fontFamily: fonts.medium,},
+  bioMuted: { fontSize: 15, lineHeight: 22, color: colors.textMuted, fontStyle: 'italic', fontWeight: '600', fontFamily: fonts.medium, },
   sectionHead: { marginBottom: spacing.sm, marginTop: spacing.xs },
   sectionHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   sectionDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
@@ -541,7 +576,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.26,
         shadowRadius: 18,
@@ -558,7 +593,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: spacing.lg,
   },
-  primaryCtaTxt: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+  primaryCtaTxt: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF' },
   blockOuter: {
     borderRadius: radius.button,
     overflow: 'hidden',
@@ -585,7 +621,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: spacing.lg,
   },
-  blockTxt: { fontSize: 16, fontWeight: '800', color: colors.danger },
+  blockTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.danger },
   safetyFoot: {
     fontSize: 13,
     fontWeight: '600',
@@ -603,10 +640,11 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     gap: spacing.sm,
   },
-  unavailableTitle: { fontSize: 20, fontWeight: '900', color: colors.text, marginTop: spacing.sm },
+  unavailableTitle: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm },
   unavailableSub: {
     fontSize: 15,
     fontWeight: '600',

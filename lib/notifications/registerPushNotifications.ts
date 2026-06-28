@@ -15,7 +15,7 @@ async function ensureAndroidNotificationChannel(): Promise<void> {
     name: 'LinkUp',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 120, 80, 120],
-    lightColor: '#6C63FF',
+    lightColor: '#5E52FF',
   });
 }
 
@@ -26,7 +26,6 @@ function permissionsGranted(r: Notifications.NotificationPermissionsStatus): boo
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,

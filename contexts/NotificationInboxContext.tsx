@@ -2,6 +2,7 @@
  * Notification inbox: list, unread count, Realtime, optional push registration.
  */
 import { useAuth } from '@/contexts/AuthContext';
+import { isAdminOnlyNotificationType } from '@/lib/notifications/adminOnlyNotificationTypes';
 import { navigateFromNotification } from '@/lib/notifications/navigateFromNotification';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { DbNotification, NotificationPayload } from '@/types/database';
@@ -23,7 +24,7 @@ type Ctx = {
 const NotificationInboxCtx = createContext<Ctx | undefined>(undefined);
 
 export function NotificationInboxProvider({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, isAdmin } = useAuth();
   const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +33,7 @@ export function NotificationInboxProvider({ children }: { children: React.ReactN
       setNotifications([]);
       return;
     }
+    if (authLoading) return;
     setLoading(true);
     const { data, error } = await supabase
       .from('notifications')
@@ -44,8 +46,12 @@ export function NotificationInboxProvider({ children }: { children: React.ReactN
       if (__DEV__) console.warn('[notifications]', error.message);
       return;
     }
-    setNotifications((data ?? []) as DbNotification[]);
-  }, [user?.id]);
+    const rows = ((data ?? []) as DbNotification[]).filter((n) => {
+      if (!isAdminOnlyNotificationType(n.type)) return true;
+      return isAdmin;
+    });
+    setNotifications(rows);
+  }, [user?.id, isAdmin, authLoading]);
 
   useEffect(() => {
     void refresh();

@@ -2,7 +2,7 @@
  * Instagram-style horizontal strip: ongoing meetups, negotiations, chats.
  * Tap → open DM · Long press → plan / agreement detail.
  */
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import type { EngagementCarouselItem, EngagementStripKind } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { memo, useCallback } from 'react';
 import { FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MessagesActiveStripSkeleton } from '@/components/messages/MessagesInboxSkeleton';
+import { MessagesActiveEmptyState } from '@/components/messages/MessagesActiveEmptyState';
 
 const AVATAR = 56;
 const RING = 3;
@@ -83,9 +84,7 @@ function PlanEngagementStripInner({ items, loading, presenceByUser }: Props) {
       <View style={styles.section}>
         <View style={styles.glass}>
           <Text style={styles.title}>Active</Text>
-          <View style={styles.emptyRow}>
-            <Text style={styles.emptyTxt}>Chats & meetups in progress show here</Text>
-          </View>
+          <MessagesActiveEmptyState />
         </View>
       </View>
     );
@@ -162,11 +161,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(237, 232, 255, 0.72)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108, 99, 255, 0.16)',
+    borderColor: 'rgba(94, 82, 255, 0.16)',
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
         shadowRadius: 16,
@@ -180,6 +179,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -224,7 +224,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPhTxt: { fontSize: 20, fontWeight: '800', color: colors.primary },
+  avatarPhTxt: { fontSize: 20, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   onlineDot: {
     position: 'absolute',
     bottom: 4,
@@ -266,18 +267,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  badgeEmoji: { fontSize: 11 },
+  badgeEmoji: { fontSize: 11, fontFamily: fonts.regular, },
   name: {
     marginTop: 6,
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
     textAlign: 'center',
     maxWidth: AVATAR + 20,
   },
-  emptyRow: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  emptyTxt: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
 });

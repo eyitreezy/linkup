@@ -1,7 +1,7 @@
 /**
  * Small premium pill — Badoo-style monetization cue without clutter.
  */
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -30,14 +30,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.25)',
+    borderColor: 'rgba(94, 82, 255, 0.25)',
   },
   wrapCompact: {
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  txt: { fontSize: 12, fontWeight: '800', color: colors.primary },
-  txtCompact: { fontSize: 10 },
+  txt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
+  txtCompact: { fontSize: 10, fontFamily: fonts.regular, },
 });

@@ -3,7 +3,7 @@
  */
 import { Button } from '@/components/Button';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { fetchLatestVerificationRequest } from '@/lib/verification/submitVerification';
@@ -55,7 +55,7 @@ function statusVisual(v: VerificationUiStatus): {
         pillBg: 'rgba(16,185,129,0.14)',
         pillBorder: 'rgba(16,185,129,0.4)',
         pillFg: '#047857',
-        ringColors: ['rgba(16,185,129,0.35)', 'rgba(108,99,255,0.28)'],
+        ringColors: ['rgba(16,185,129,0.35)', 'rgba(94, 82, 255,0.28)'],
         heroIcon: 'shield-checkmark',
         trailAccent: colors.success,
       };
@@ -64,7 +64,7 @@ function statusVisual(v: VerificationUiStatus): {
         pillBg: 'rgba(245,158,11,0.16)',
         pillBorder: 'rgba(245,158,11,0.4)',
         pillFg: '#B45309',
-        ringColors: ['rgba(245,158,11,0.4)', 'rgba(255,101,132,0.22)'],
+        ringColors: ['rgba(245,158,11,0.4)', 'rgba(255, 74, 114,0.22)'],
         heroIcon: 'time',
         trailAccent: colors.warning,
       };
@@ -79,10 +79,10 @@ function statusVisual(v: VerificationUiStatus): {
       };
     default:
       return {
-        pillBg: 'rgba(108,99,255,0.12)',
-        pillBorder: 'rgba(108,99,255,0.35)',
+        pillBg: 'rgba(94, 82, 255,0.12)',
+        pillBorder: 'rgba(94, 82, 255,0.35)',
         pillFg: colors.primary,
-        ringColors: ['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.22)'],
+        ringColors: ['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.22)'],
         heroIcon: 'finger-print-outline',
         trailAccent: colors.primary,
       };
@@ -154,7 +154,7 @@ export default function VerificationStatusScreen() {
             </View>
           </View>
 
-          <LinearGradient colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.1)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statusCardOuter}>
+          <LinearGradient colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.1)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statusCardOuter}>
             <View style={styles.statusCardInner}>
               <View style={styles.statusTop}>
                 <View style={styles.statusTitleCol}>
@@ -285,6 +285,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.9,
@@ -293,6 +294,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: 28,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.6,
     marginBottom: 6,
@@ -300,6 +302,7 @@ const styles = StyleSheet.create({
   screenSub: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 22,
   },
@@ -328,6 +331,7 @@ const styles = StyleSheet.create({
   cardEyebrow: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -336,6 +340,7 @@ const styles = StyleSheet.create({
   statusHeadline: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
   },
@@ -350,7 +355,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusPillTxt: { fontSize: 12, fontWeight: '900', letterSpacing: 0.2 },
+  statusPillTxt: { fontSize: 12, fontWeight: '900',
+    fontFamily: fonts.bold, letterSpacing: 0.2 },
   cardBody: {
     fontSize: 15,
     fontWeight: '600',
@@ -364,15 +370,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
     marginBottom: spacing.md,
   },
   infoCalloutTxt: {
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     lineHeight: 21,
   },
@@ -391,8 +398,9 @@ const styles = StyleSheet.create({
   },
   verifiedIcon: { zIndex: 1 },
   verifiedTextCol: { flex: 1, zIndex: 1 },
-  verifiedTitle: { fontSize: 16, fontWeight: '900', color: '#047857' },
-  verifiedSub: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 20 },
+  verifiedTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#047857' },
+  verifiedSub: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 20, fontFamily: fonts.medium, },
   trailSectionHead: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -401,13 +409,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   trailHeadText: { flex: 1 },
-  trailTitle: { fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
-  trailSubtitle: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 20 },
+  trailTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
+  trailSubtitle: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 20, fontFamily: fonts.medium, },
   trailCard: {
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.14)',
+    borderColor: 'rgba(94, 82, 255,0.14)',
     padding: spacing.lg,
     marginBottom: spacing.md,
     shadowColor: '#1A1D26',
@@ -422,14 +431,15 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.12)',
+    borderColor: 'rgba(94, 82, 255,0.12)',
   },
-  trailEmptyTitle: { fontSize: 17, fontWeight: '900', color: colors.text, marginBottom: 6 },
+  trailEmptyTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 6 },
   trailEmptySub: {
     fontSize: 14,
     fontWeight: '600',
@@ -454,7 +464,7 @@ const styles = StyleSheet.create({
     width: 2,
     flex: 1,
     minHeight: 20,
-    backgroundColor: 'rgba(108,99,255,0.2)',
+    backgroundColor: 'rgba(94, 82, 255,0.2)',
     marginVertical: 4,
     borderRadius: 1,
   },
@@ -467,9 +477,11 @@ const styles = StyleSheet.create({
   timelineLabel: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'capitalize',
     letterSpacing: -0.1,
   },
-  timelineTime: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  timelineTime: { fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted, marginTop: 4 },
 });

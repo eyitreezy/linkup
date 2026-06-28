@@ -1,7 +1,7 @@
 /**
  * Bottom sheet: chat thread theme — color presets, wallpaper, text size & weight.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
   CHAT_APPEARANCE_PRESETS,
   CHAT_APPEARANCE_PRESET_ORDER,
@@ -236,6 +236,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
   },
@@ -243,6 +244,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 20,
     marginBottom: spacing.md,
@@ -252,6 +254,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
@@ -262,6 +265,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     marginBottom: spacing.sm,
     marginTop: -4,
   },
@@ -283,7 +287,7 @@ const styles = StyleSheet.create({
   presetCellSelected: {
     borderColor: colors.primary,
     borderWidth: 2,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   presetCellPressed: { opacity: 0.9 },
   presetSwatch: {
@@ -294,6 +298,7 @@ const styles = StyleSheet.create({
   presetLabel: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
   },
@@ -312,7 +317,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: radius.button,
   },
-  primaryBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  primaryBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold,},
   secondaryBtn: {
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -321,7 +327,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: 'rgba(15,23,42,0.04)',
   },
-  secondaryBtnTxt: { fontSize: 15, fontWeight: '700', color: colors.text },
+  secondaryBtnTxt: { fontSize: 15, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   segmentRow: {
     flexDirection: 'row',
     gap: 8,
@@ -338,9 +345,10 @@ const styles = StyleSheet.create({
   },
   segmentActive: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
   },
-  segmentTxt: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  segmentTxt: { fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   segmentTxtActive: { color: colors.text },
   footerRow: {
     flexDirection: 'row',
@@ -353,7 +361,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   footerGhost: { paddingVertical: 12, paddingHorizontal: 8 },
-  footerGhostTxt: { fontSize: 16, fontWeight: '700', color: colors.textMuted },
+  footerGhostTxt: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   footerDone: { borderRadius: radius.button, overflow: 'hidden' },
   footerDoneGrad: {
     paddingVertical: 14,
@@ -362,6 +371,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.button,
   },
-  footerDoneTxt: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  footerDoneTxt: { color: '#fff', fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold,},
   btnPressed: { opacity: 0.88 },
 });

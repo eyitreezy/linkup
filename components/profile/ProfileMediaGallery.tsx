@@ -1,5 +1,5 @@
 import { KycLivenessVideoPreview } from '@/components/kyc/KycLivenessVideoPreview';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { resolveOrderedProfilePhotos } from '@/lib/profile/displayMedia';
 import type { DbProfile } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +47,8 @@ export function ProfileMediaGallery({ profile, videoUrl }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { marginTop: spacing.md },
-  label: { fontSize: 11, fontWeight: '900', color: colors.textMuted, textTransform: 'uppercase', marginBottom: 8 },
+  label: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.textMuted, textTransform: 'uppercase', marginBottom: 8 },
   row: { gap: 10, paddingVertical: 4 },
   tileWrap: { position: 'relative' },
   photo: { width: 120, height: 150, borderRadius: radius.lg, backgroundColor: '#eee' },
@@ -63,7 +64,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  primaryTxt: { fontSize: 10, fontWeight: '900', color: '#fff' },
+  primaryTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff' },
   videoTile: { width: 120, height: 150, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#0F172A' },
   video: { width: '100%', height: '100%' },
   videoBadge: {
@@ -73,10 +75,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,101,132,0.9)',
+    backgroundColor: 'rgba(255, 74, 114,0.9)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  videoBadgeTxt: { fontSize: 10, fontWeight: '900', color: '#fff' },
+  videoBadgeTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff' },
 });

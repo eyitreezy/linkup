@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
   sub: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 20,
     marginBottom: spacing.sm,
@@ -53,7 +54,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.26,
         shadowRadius: 18,
@@ -68,6 +69,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  txt: { color: '#fff', fontSize: 17, fontWeight: '800', textAlign: 'center' },
+  txt: { color: '#fff', fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, textAlign: 'center' },
   txtMuted: { color: 'rgba(255,255,255,0.72)' },
 });

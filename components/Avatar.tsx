@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 
 export function Avatar({
   uri,
@@ -33,5 +33,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fallback: { color: colors.text, fontWeight: '700' },
+  fallback: { color: colors.text, fontWeight: '700',
+    fontFamily: fonts.medium,},
 });

@@ -1,6 +1,8 @@
 import { authSoftLabelStyle } from '@/components/Input';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius } from '@/constants/theme';
+import { ProfilePhotoPreviewModal } from '@/components/profile/ProfilePhotoPreviewModal';
+import { colors, radius, fonts } from '@/constants/theme';
+import { useDoubleTap } from '@/hooks/useDoubleTap';
 import { PROFILE_MIN_PHOTOS_ONBOARDING } from '@/lib/profile/media/constants';
 import {
   defaultPrimaryRef,
@@ -13,8 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
-import { useMemo } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const ADD_TILE_GRADIENT = [colors.primary, '#8B7CE8', colors.secondary] as const;
 
@@ -58,10 +60,16 @@ export function ProfilePhotoGallery({
     () => orderedPhotoTiles(remoteUrls, localUris, primaryRef),
     [remoteUrls, localUris, primaryRef]
   );
+  const previewUris = useMemo(() => photoTiles.map((tile) => tile.uri), [photoTiles]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   async function pick() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') {
+      Alert.alert('Photos access needed', 'Allow photo library access to add profile photos.');
+      return;
+    }
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
@@ -83,7 +91,7 @@ export function ProfilePhotoGallery({
     <View>
       <Text style={[authSoftLabelStyle, styles.labelSpacing]}>Photos</Text>
       <Text style={styles.hint}>
-        Add at least {minPhotosHint} — tap a photo and choose Set as Primary for your main look.
+        Add at least {minPhotosHint} — tap to set Primary, double-tap to preview full size.
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         <Pressable
@@ -101,7 +109,7 @@ export function ProfilePhotoGallery({
           </LinearGradient>
         </Pressable>
 
-        {photoTiles.map((tile) => (
+        {photoTiles.map((tile, tileIndex) => (
           <PhotoTile
             key={`${tile.kind}-${tile.index}-${tile.uri}`}
             uri={tile.uri}
@@ -111,6 +119,10 @@ export function ProfilePhotoGallery({
                 ? setPrimary('remote', tile.index, tile.uri)
                 : setPrimary('local', tile.index)
             }
+            onPreview={() => {
+              setPreviewIndex(tileIndex);
+              setPreviewOpen(true);
+            }}
             onRemove={() => {
               const nextRef = primaryRefAfterRemove(primaryRef, remoteUrls, localUris, {
                 kind: tile.kind,
@@ -128,6 +140,13 @@ export function ProfilePhotoGallery({
           Primary: {resolvePhotoUrl(primaryRef, remoteUrls, localUris) ? '✓ set' : 'pick a photo'}
         </Text>
       ) : null}
+
+      <ProfilePhotoPreviewModal
+        visible={previewOpen}
+        uris={previewUris}
+        initialIndex={previewIndex}
+        onClose={() => setPreviewOpen(false)}
+      />
     </View>
   );
 }
@@ -136,20 +155,24 @@ function PhotoTile({
   uri,
   primary,
   onSetPrimary,
+  onPreview,
   onRemove,
 }: {
   uri: string;
   primary: boolean;
   onSetPrimary: () => void;
+  onPreview: () => void;
   onRemove: () => void;
 }) {
+  const onPress = useDoubleTap({ onSingle: onSetPrimary, onDouble: onPreview });
+
   return (
     <MotiView
       from={{ opacity: 0, scale: 0.92 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ type: 'timing', duration: 220 }}
     >
-      <Pressable onPress={onSetPrimary} style={({ pressed }) => [pressed && styles.tilePressed]}>
+      <Pressable onPress={onPress} style={({ pressed }) => [pressed && styles.tilePressed]}>
         <View style={[styles.thumbWrap, primary && styles.thumbWrapPrimary]}>
           {primary ? (
             <LinearGradient
@@ -181,13 +204,14 @@ function PhotoTile({
 
 const styles = StyleSheet.create({
   labelSpacing: { marginBottom: 4 },
-  hint: { fontSize: 12, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18 },
+  hint: { fontSize: 12, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18, fontFamily: fonts.regular, },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   addTileOuter: { borderRadius: onboarding.radius2xl, overflow: 'hidden' },
   addTilePressed: { opacity: 0.92, transform: [{ scale: 0.98 }] },
   addTileDisabled: { opacity: 0.4 },
   addTile: { width: 108, height: 132, alignItems: 'center', justifyContent: 'center' },
-  addLabel: { fontSize: 12, fontWeight: '800', color: '#FFFFFF', marginTop: 4 },
+  addLabel: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF', marginTop: 4 },
   thumbWrap: { position: 'relative', borderRadius: onboarding.radius2xl, padding: 2 },
   thumbWrapPrimary: { padding: 3 },
   primaryRing: {
@@ -215,12 +239,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: 'rgba(108,99,255,0.92)',
+    backgroundColor: 'rgba(94, 82, 255,0.92)',
     borderRadius: radius.button,
     paddingVertical: 5,
     paddingHorizontal: 8,
   },
-  primaryBadgeTxt: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
+  primaryBadgeTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff', letterSpacing: 0.3 },
   setPrimaryBadge: {
     position: 'absolute',
     bottom: 8,
@@ -231,7 +256,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 6,
   },
-  setPrimaryTxt: { fontSize: 9, fontWeight: '800', color: '#fff', textAlign: 'center' },
+  setPrimaryTxt: { fontSize: 9, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff', textAlign: 'center' },
   remove: {
     position: 'absolute',
     top: 6,
@@ -239,5 +265,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: radius.button,
   },
-  primaryHint: { marginTop: 8, fontSize: 12, fontWeight: '700', color: colors.primary },
+  primaryHint: { marginTop: 8, fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary },
 });

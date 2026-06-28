@@ -19,6 +19,7 @@ export function SplashGate({ children }: Props) {
   const { loading: authLoading } = useAuth();
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(true);
+  const [splashDismissed, setSplashDismissed] = useState(false);
   const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
   const fade = useRef(new Animated.Value(1)).current;
 
@@ -28,6 +29,7 @@ export function SplashGate({ children }: Props) {
   }, []);
 
   useEffect(() => {
+    if (splashDismissed) return;
     if (!minTimeElapsed || authLoading) return;
 
     Animated.timing(fade, {
@@ -35,9 +37,12 @@ export function SplashGate({ children }: Props) {
       duration: 420,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (finished) setOverlayVisible(false);
+      if (finished) {
+        setOverlayVisible(false);
+        setSplashDismissed(true);
+      }
     });
-  }, [authLoading, fade, minTimeElapsed]);
+  }, [authLoading, fade, minTimeElapsed, splashDismissed]);
 
   const onSplashLayout = () => {
     if (nativeSplashHidden) return;
@@ -48,13 +53,13 @@ export function SplashGate({ children }: Props) {
   return (
     <View style={styles.root}>
       {children}
-      {overlayVisible ? (
+      {overlayVisible && !splashDismissed ? (
         <Animated.View
           pointerEvents="auto"
           onLayout={onSplashLayout}
           style={[styles.overlay, { opacity: fade }]}
         >
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <AppSplashScreen />
         </Animated.View>
       ) : (

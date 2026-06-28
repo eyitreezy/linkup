@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
   heroTxt: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: 0.2,
     textShadowColor: 'rgba(0,0,0,0.22)',
@@ -69,7 +70,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
-  subtleTxt: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  subtleTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -77,7 +79,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
-  chipTxt: { fontSize: 11, fontWeight: '800', color: colors.primary },
+  chipTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
 });

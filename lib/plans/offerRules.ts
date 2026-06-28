@@ -20,6 +20,24 @@ export function countOffersTowardLimit(offers: DbPlanOffer[]): number {
   return offers.filter((o) => offerCountsTowardLimit(o) && !isOfferExpired(o)).length;
 }
 
+/** Group plans: offer round cap is per bidder, not shared across guests. */
+export function countOffersTowardLimitForBidder(offers: DbPlanOffer[], bidderId: string): number {
+  return offers.filter(
+    (o) => o.bidder_id === bidderId && offerCountsTowardLimit(o) && !isOfferExpired(o)
+  ).length;
+}
+
+export function bidderHasActiveGroupSlotOffer(
+  offers: DbPlanOffer[],
+  bidderId: string
+): DbPlanOffer | undefined {
+  return offers.find(
+    (o) =>
+      o.bidder_id === bidderId &&
+      (o.status === 'pending' || o.status === 'countered' || o.status === 'accepted')
+  );
+}
+
 export function nextOfferRound(offers: DbPlanOffer[]): number {
   if (offers.length === 0) return 1;
   return Math.max(...offers.map((o) => o.round), 0) + 1;

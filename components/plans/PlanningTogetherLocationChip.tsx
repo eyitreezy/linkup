@@ -1,7 +1,7 @@
 /**
  * Profile base location pill inside the “Planning together” card (`profiles.location_label`).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, StyleSheet, Text, View } from 'react-native';
@@ -16,7 +16,7 @@ export function PlanningTogetherLocationChip({ prefix, location }: Props) {
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.22)', 'rgba(255,101,132,0.16)']}
+        colors={['rgba(94, 82, 255,0.22)', 'rgba(255, 74, 114,0.16)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.ring}
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     padding: 1.5,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.12,
         shadowRadius: 10,
@@ -89,6 +89,7 @@ const styles = StyleSheet.create({
   prefix: {
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.9,
@@ -97,6 +98,7 @@ const styles = StyleSheet.create({
   location: {
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     lineHeight: 19,
     letterSpacing: -0.15,

@@ -1,6 +1,7 @@
 /**
  * Discovery feed — swipe-first meetup ideas + list mode; filters live in the filter sheet.
  */
+import { DiscoverInlineEmpty } from '@/components/discovery/DiscoverInlineEmpty';
 import { MoodTimelineCarousel } from '@/components/discovery/MoodTimelineCarousel';
 import { PlansSwipeDeck, type PlansSwipeDeckRef } from '@/components/discovery/PlansSwipeDeck';
 import { SwipeActionButtons } from '@/components/discovery/SwipeActionButtons';
@@ -19,27 +20,46 @@ import { SoftKycPrompt } from '@/components/kyc/SoftKycPrompt';
 import { SilverTrialWelcomeModal } from '@/components/subscription/SilverTrialWelcomeModal';
 import { GoldTrialWelcomeModal } from '@/components/subscription/GoldTrialWelcomeModal';
 import { TrialBanner } from '@/components/TrialBanner';
+import { PrivacyReconsentBanner } from '@/components/PrivacyReconsentBanner';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PremiumFeaturePaywallModal } from '@/components/premium/PremiumFeaturePaywallModal';
 import { PlansSearchBar } from '@/components/plans/PlansSearchBar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { parseStoredFeedFilters } from '@/lib/discovery/parseStoredFeedFilters';
+import {
+  discoverPriceFilterForQuery,
+  hasDiscoverPriceFilter,
+  planPassesDiscoverPriceFilter,
+} from '@/lib/discovery/discoverPriceFilter';
 import { swipeFabBottomOffset } from '@/lib/discovery/swipeLayout';
+import { consumePendingMeetTypeFilter } from '@/lib/discovery/pendingMeetTypeFilter';
+import { subscribeDiscoverPlansRealtime } from '@/lib/discovery/subscribeDiscoverPlansRealtime';
+import { subscribeDiscoverOffersRealtime } from '@/lib/discovery/subscribeDiscoverOffersRealtime';
+import { subscribeDiscoverHiddenPlansRealtime } from '@/lib/discovery/subscribeDiscoverHiddenPlansRealtime';
+import { subscribeDiscoverPresenceRealtime } from '@/lib/discovery/subscribeDiscoverPresenceRealtime';
 import { filterPlansByMood, type DiscoveryMood } from '@/lib/discovery/moodFilter';
-import { distanceKm } from '@/lib/location';
+import { distanceKm, loadCachedViewerCoords, normalizeViewerCoordinate, resolveDiscoverViewerLocation, resolveDiscoverViewerOrigin, saveCachedViewerCoords, viewerDiscoverOriginReady } from '@/lib/location';
 import { fetchLatestBidderOffersByPlanIds } from '@/lib/plans/fetchLatestBidderOffersByPlans';
 import {
   fetchPlansPage,
   fetchProfilesForCreators,
   filterPremiumVisibilityPlans,
+  filterRadiusVisibilityPlans,
   mergePlansWithProfiles,
   type PlanRowFromDb,
 } from '@/lib/plans/planFeedMerge';
-import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
-import { rankDiscoveryPlans } from '@/lib/plans/feedRanking';
+import { clampMaxDistanceKm } from '@/lib/plans/discoveryRadius';
+import {
+  filterDiscoverRowsByDistance,
+  isDistanceFilterActive,
+  planWithinMaxDistanceKm,
+  resolveDiscoverMaxDistanceKm,
+  sortDiscoverByDistanceAsc,
+} from '@/lib/plans/discoverDistanceFilter';
+import { rankDiscoveryPlans, rankMoodTimelinePlans } from '@/lib/plans/feedRanking';
 import {
   fetchHiddenPlanIds,
   persistHiddenPlan,
@@ -51,22 +71,25 @@ import { prefetchPlanDetail, seedPlanDetailFromFeed } from '@/lib/plans/planDeta
 import { derivePresenceUi, hostPresenceMatchesFilter, resolveHostPresenceKind } from '@/lib/presence/derivePresenceUi';
 import { fetchPresenceMap } from '@/lib/presence/presenceHeartbeat';
 import { usePermission } from '@/hooks/usePermission';
-import { hasActiveGoldTrial, hasActiveSilverTrial } from '@/lib/subscription/effectiveTier';
+import { hasActiveGoldTrial, hasActiveSilverTrial, resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { peekSoftKycPromptPending, consumeSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 import type { SubscriptionTier } from '@/types/database';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { isUserVerified, requiresVerificationGate } from '@/lib/verification/access';
 import type { DbPlanOffer, DbProfile, DbUserPresence } from '@/types/database';
+import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
 import * as Location from 'expo-location';
 import { DEFAULT_TAB_BAR_INSET, useTabBarVisibilityOptional } from '@/contexts/TabBarVisibilityContext';
 import { useShowTabBarOnFocus, useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
 import { useFocusEffect } from '@react-navigation/native';
+import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   type ListRenderItemInfo,
   Platform,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -89,6 +112,7 @@ function dedupePlans(existing: PlanRowFromDb[], incoming: PlanRowFromDb[]): Plan
 type DiscoverPlanListRowProps = {
   row: PlanFeedRow;
   distanceKm: number | null;
+  viewerHasLocation: boolean;
   currentUserId: string | undefined;
   userOffer: DbPlanOffer | undefined;
   viewerProfile: DbProfile | null;
@@ -103,6 +127,7 @@ type DiscoverPlanListRowProps = {
 const DiscoverPlanListRow = memo(function DiscoverPlanListRow({
   row,
   distanceKm: dist,
+  viewerHasLocation,
   currentUserId,
   userOffer,
   viewerProfile,
@@ -122,6 +147,7 @@ const DiscoverPlanListRow = memo(function DiscoverPlanListRow({
     <PlanCard
       row={row}
       distanceKm={dist}
+      viewerHasLocation={viewerHasLocation}
       currentUserId={currentUserId}
       userOffer={userOffer}
       viewerProfile={viewerProfile}
@@ -139,13 +165,18 @@ const DiscoverPlanListRow = memo(function DiscoverPlanListRow({
 export default function PlansScreen() {
   useShowTabBarOnFocus();
   const tabBarScroll = useTabBarScrollProps();
-  const tabBarInset = useTabBarVisibilityOptional()?.tabBarInset ?? DEFAULT_TAB_BAR_INSET;
-  const { user, profile, dbUser } = useAuth();
+  const tabBarVisibility = useTabBarVisibilityOptional();
+  const tabBarInset = tabBarVisibility?.tabBarInset ?? DEFAULT_TAB_BAR_INSET;
+  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
+  const { user, profile, dbUser, refreshProfile } = useAuth();
   const [rows, setRows] = useState<PlanFeedRow[]>([]);
   const [perm, setPerm] = useState<Location.PermissionStatus | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [cityLabel, setCityLabel] = useState('Near you');
   const [locPromptDismissed, setLocPromptDismissed] = useState(false);
+  const [locPromptBusy, setLocPromptBusy] = useState(false);
+  const locPromptBusyRef = useRef(false);
+  const autoLocateInFlightRef = useRef(false);
 
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,38 +189,55 @@ export default function PlansScreen() {
 
   const pageRef = useRef(0);
   const accRef = useRef<PlanRowFromDb[]>([]);
+  const distancePrefetchPagesRef = useRef(0);
+  const feedFiltersHydratedRef = useRef(false);
 
   const radiusKm = profile?.radius_km ? Number(profile.radius_km) : 50;
-  const userLat = coords?.lat ?? profile?.latitude ?? null;
-  const userLng = coords?.lng ?? profile?.longitude ?? null;
   const { allowed: canAdvancedFilters } = usePermission('discover.advanced_filters');
   const { allowed: canTravelMode } = usePermission('discover.travel_mode');
   const { allowed: canUndoSwipe } = usePermission('discover.undo_swipe');
-  const { allowed: hasWiderRadius, effectiveTier: discoverTier } = usePermission('discover.wider_radius');
-  const browseRadiusKm = useMemo(
-    () => effectiveDiscoveryRadiusKm(radiusKm, discoverTier, hasWiderRadius),
-    [radiusKm, discoverTier, hasWiderRadius]
-  );
   const canDismissSwipe = canUndoSwipe;
   const travel = profile?.preferences?.travel_mode ?? null;
-  const effectiveLat =
-    canTravelMode && travel?.latitude != null ? travel.latitude : userLat;
-  const effectiveLng =
-    canTravelMode && travel?.longitude != null ? travel.longitude : userLng;
+  const { lat: effectiveLat, lng: effectiveLng } = useMemo(
+    () =>
+      resolveDiscoverViewerOrigin({
+        deviceLat: coords?.lat,
+        deviceLng: coords?.lng,
+        profileLat: profile?.latitude,
+        profileLng: profile?.longitude,
+        canTravelMode,
+        travelLat: travel?.latitude,
+        travelLng: travel?.longitude,
+        travelLabel: travel?.label,
+      }),
+    [
+      coords?.lat,
+      coords?.lng,
+      profile?.latitude,
+      profile?.longitude,
+      canTravelMode,
+      travel?.latitude,
+      travel?.longitude,
+      travel?.label,
+    ]
+  );
   const headerLocationLabel =
     canTravelMode && travel?.label ? `${travel.label} · Travel` : cityLabel;
 
   const [feedFilter, setFeedFilter] = useState<FeedFilterState>({
-    maxDistanceKm: radiusKm,
+    maxDistanceKm: null,
     minPriceCents: null,
     maxPriceCents: null,
     verifiedHostsOnly: false,
     hostPresence: 'all',
     clientFiltersActive: false,
+    distanceFilterActive: false,
   });
   const [filterOpen, setFilterOpen] = useState(false);
   const [travelPaywallOpen, setTravelPaywallOpen] = useState(false);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
+  const [needsPrivacyReconsent, setNeedsPrivacyReconsent] = useState(false);
+  const [reconsentBannerDismissed, setReconsentBannerDismissed] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeFeature, setUpgradeFeature] = useState('discover.travel_mode');
   const [upgradeTier, setUpgradeTier] = useState<SubscriptionTier>('GOLD');
@@ -206,14 +254,19 @@ export default function PlansScreen() {
   const [bidderOffersByPlan, setBidderOffersByPlan] = useState<Record<string, DbPlanOffer>>({});
   const [presenceByUser, setPresenceByUser] = useState<Record<string, DbUserPresence>>({});
   const offerFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibleCreatorIdsRef = useRef<Set<string>>(new Set());
+  const fetchDiscoverPageRef = useRef(fetchDiscoverPage);
+  fetchDiscoverPageRef.current = fetchDiscoverPage;
 
   const [feedMode, setFeedMode] = useState<FeedViewMode>('swipe');
   const [discoveryMood, setDiscoveryMood] = useState<DiscoveryMood>('all');
-  const [swipeIndex, setSwipeIndex] = useState(0);
+  const [meetTypeFilter, setMeetTypeFilter] = useState<{ id: string; name: string } | null>(null);
+  /** Plans already swiped off the deck this session — instant removal, one action per card. */
+  const [deckDismissedPlanIds, setDeckDismissedPlanIds] = useState<Set<string>>(() => new Set());
   const swipeDeckRef = useRef<PlansSwipeDeckRef>(null);
 
   const unverified = !!(dbUser && !isUserVerified(dbUser.verification_status));
-  const viewerTier = (dbUser?.subscription_tier ?? 'FREE') as SubscriptionTier;
+  const viewerTier = resolveClientEffectiveTier(dbUser);
   const isIncognitoActive =
     viewerTier === 'PLATINUM' && !!profile?.incognito_browse_enabled;
 
@@ -222,6 +275,24 @@ export default function PlansScreen() {
       if (v === 'true') setLocPromptDismissed(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (coords) return;
+    void (async () => {
+      const cached = await loadCachedViewerCoords();
+      if (cached) {
+        setCoords(cached);
+        return;
+      }
+      const lat = normalizeViewerCoordinate(profile?.latitude);
+      const lng = normalizeViewerCoordinate(profile?.longitude);
+      if (lat != null && lng != null) {
+        setCoords({ lat, lng });
+        const label = profile?.location_label?.trim();
+        if (label) setCityLabel(label);
+      }
+    })();
+  }, [coords, profile?.latitude, profile?.longitude, profile?.location_label]);
 
   useEffect(() => {
     if (!user?.id || !canUndoSwipe) return;
@@ -236,22 +307,64 @@ export default function PlansScreen() {
     });
   }, []);
 
-  const persistFeedMode = useCallback((mode: FeedViewMode) => {
-    setFeedMode(mode);
-    void AsyncStorage.setItem(FEED_MODE_STORAGE_KEY, mode);
-  }, []);
+  const persistFeedMode = useCallback(
+    (mode: FeedViewMode) => {
+      setFeedMode(mode);
+      void AsyncStorage.setItem(FEED_MODE_STORAGE_KEY, mode);
+      if (mode === 'swipe') {
+        tabBarVisibility?.showTabBar();
+      }
+    },
+    [tabBarVisibility]
+  );
+
+  useEffect(() => {
+    if (feedMode === 'swipe') {
+      tabBarVisibility?.showTabBar();
+    }
+  }, [feedMode, tabBarVisibility]);
 
   const onDebouncedSearchChange = useCallback((q: string) => {
     setDebouncedSearchQuery(q);
   }, []);
 
   useEffect(() => {
-    const f = profile?.preferences?.feed_filters;
+    if (feedFiltersHydratedRef.current || !profile?.preferences) return;
+    const f = profile.preferences.feed_filters;
     if (f && typeof f === 'object') {
-      const parsed = parseStoredFeedFilters(f, browseRadiusKm);
-      setFeedFilter(parsed);
+      const parsed = parseStoredFeedFilters(f, radiusKm);
+      if (parsed.clientFiltersActive || parsed.distanceFilterActive) {
+        setFeedFilter({
+          ...parsed,
+          maxDistanceKm:
+            parsed.maxDistanceKm != null
+              ? clampMaxDistanceKm(parsed.maxDistanceKm, viewerTier)
+              : null,
+        });
+      }
     }
-  }, [profile?.preferences, browseRadiusKm]);
+    feedFiltersHydratedRef.current = true;
+  }, [profile?.preferences, radiusKm, viewerTier]);
+
+  const distanceFilterActive = isDistanceFilterActive(feedFilter);
+
+  const discoverQueryPriceFilter = useMemo(
+    () => discoverPriceFilterForQuery(feedFilter),
+    [feedFilter.clientFiltersActive, feedFilter.minPriceCents, feedFilter.maxPriceCents]
+  );
+
+  const discoverPriceFilterKey = useMemo(
+    () =>
+      `${discoverQueryPriceFilter?.minPriceCents ?? ''}:${discoverQueryPriceFilter?.maxPriceCents ?? ''}`,
+    [discoverQueryPriceFilter]
+  );
+
+  const fetchDiscoverPage = useCallback(
+    async (from: number, to: number) => {
+      return fetchPlansPage(from, to, user?.id ?? null, discoverQueryPriceFilter);
+    },
+    [user?.id, discoverQueryPriceFilter]
+  );
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return;
@@ -271,7 +384,7 @@ export default function PlansScreen() {
     let merged = mergePlansWithProfiles(accRef.current, profMap);
     const blocked = new Set(blockedIds);
     const hidden = new Set(hiddenPlanIds);
-    const maxKm = feedFilter.maxDistanceKm ?? browseRadiusKm;
+    const maxKm = resolveDiscoverMaxDistanceKm(feedFilter, radiusKm, distanceFilterActive);
 
     merged = merged.filter((row) => {
       if (row.is_mood_plan && isPlanMoodWindowClosed(row)) return false;
@@ -279,61 +392,112 @@ export default function PlansScreen() {
       if (row.archived_at != null) return false;
       if (hidden.has(row.id)) return false;
       if (blocked.has(row.creator_id)) return false;
-      if (user?.id && row.creator_id === user.id) return true;
+      if (row.is_group_plan) {
+        const accepted = row.accepted_guest_count ?? 0;
+        const max = row.max_guests;
+        if (max != null && accepted >= max) return false;
+      }
+      if (user?.id && row.creator_id === user.id && !distanceFilterActive) return true;
+      if (
+        distanceFilterActive &&
+        !planWithinMaxDistanceKm(
+          row,
+          user?.id ?? null,
+          effectiveLat,
+          effectiveLng,
+          maxKm,
+          true,
+          false
+        )
+      ) {
+        return false;
+      }
       if (
         row.is_mood_plan &&
-        !moodReachVisibleToViewer(row, user?.id ?? null, effectiveLat, effectiveLng, maxKm)
+        !moodReachVisibleToViewer(row, user?.id ?? null, effectiveLat, effectiveLng)
       ) {
         return false;
       }
       if (feedFilter.clientFiltersActive) {
         if (feedFilter.verifiedHostsOnly && !row.creatorProfile?.verified_badge) return false;
-        const price = row.starting_price_cents;
-        if (feedFilter.minPriceCents != null) {
-          if (price == null || price < feedFilter.minPriceCents) return false;
-        }
-        if (feedFilter.maxPriceCents != null) {
-          if (price != null && price > feedFilter.maxPriceCents) return false;
-        }
         if (
-          row.latitude != null &&
-          row.longitude != null &&
-          effectiveLat != null &&
-          effectiveLng != null
+          hasDiscoverPriceFilter(feedFilter) &&
+          !planPassesDiscoverPriceFilter(row, feedFilter)
         ) {
-          const d = distanceKm(effectiveLat, effectiveLng, row.latitude, row.longitude);
-          if (d > maxKm) return false;
+          return false;
         }
       }
       return true;
     });
 
-    merged = filterPremiumVisibilityPlans(merged, viewerTier);
+    merged = filterPremiumVisibilityPlans(
+      merged,
+      viewerTier,
+      user?.id ?? null,
+      effectiveLat,
+      effectiveLng
+    );
+    merged = filterRadiusVisibilityPlans(merged, user?.id ?? null, effectiveLat, effectiveLng);
 
     merged = rankDiscoveryPlans(merged, {
       effectiveLat,
       effectiveLng,
+      sortDistanceAscending: effectiveLat != null && effectiveLng != null,
     });
     setRows(merged);
   }, [
     user?.id,
-    browseRadiusKm,
+    radiusKm,
     effectiveLat,
     effectiveLng,
     feedFilter,
+    distanceFilterActive,
     hiddenPlanIds,
     blockedIds,
     viewerTier,
   ]);
 
+  const removePlanFromFeed = useCallback((planId: string) => {
+    accRef.current = accRef.current.filter((p) => p.id !== planId);
+    void rebuildRowsRef.current();
+  }, []);
+
+  const silentRefreshDiscoverHead = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    const { plans: headPlans, error: fetchErr } = await fetchDiscoverPageRef.current(0, PAGE_SIZE - 1);
+    if (fetchErr) return;
+    const headIds = new Set(headPlans.map((p) => p.id));
+    const rest = accRef.current.filter((p) => !headIds.has(p.id));
+    accRef.current = dedupePlans(headPlans, rest);
+    await rebuildRowsRef.current();
+  }, []);
+
   const rebuildRowsRef = useRef(rebuildRows);
   rebuildRowsRef.current = rebuildRows;
+
+  const silentRefreshDiscoverHeadRef = useRef(silentRefreshDiscoverHead);
+  silentRefreshDiscoverHeadRef.current = silentRefreshDiscoverHead;
+
+  const removePlanFromFeedRef = useRef(removePlanFromFeed);
+  removePlanFromFeedRef.current = removePlanFromFeed;
+
+  const refreshVisibleOffersRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     void rebuildRows();
   }, [rebuildRows]);
 
   const rowIdsKey = useMemo(() => rows.map((r) => r.id).join('|'), [rows]);
+
+  const refreshVisibleOffers = useCallback(() => {
+    if (!user?.id || rows.length === 0) return;
+    const ids = rows.map((r) => r.id);
+    void fetchLatestBidderOffersByPlanIds(user.id, ids)
+      .then(setBidderOffersByPlan)
+      .catch(() => {});
+  }, [user?.id, rows]);
+
+  refreshVisibleOffersRef.current = refreshVisibleOffers;
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) {
@@ -366,6 +530,12 @@ export default function PlansScreen() {
   }, [rows, user?.id]);
 
   useEffect(() => {
+    visibleCreatorIdsRef.current = new Set(
+      presenceCreatorKey ? presenceCreatorKey.split('|').filter(Boolean) : []
+    );
+  }, [presenceCreatorKey]);
+
+  useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) {
       setPresenceByUser({});
       return;
@@ -390,15 +560,43 @@ export default function PlansScreen() {
   );
 
   const filteredRows = useMemo(() => {
+    const maxKm = resolveDiscoverMaxDistanceKm(feedFilter, radiusKm, distanceFilterActive);
+    let distanceFiltered = filterDiscoverRowsByDistance(
+      rows,
+      distanceFilterActive,
+      maxKm,
+      user?.id ?? null,
+      effectiveLat,
+      effectiveLng
+    );
+    if (distanceFilterActive && effectiveLat != null && effectiveLng != null) {
+      distanceFiltered = sortDiscoverByDistanceAsc(distanceFiltered, effectiveLat, effectiveLng);
+    }
     const q = debouncedSearchQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => {
+    if (!q) return distanceFiltered;
+    return distanceFiltered.filter((r) => {
       const t = (r.title ?? '').toLowerCase();
       const d = (r.description ?? '').toLowerCase();
       const c = (r.category ?? '').toLowerCase();
       return t.includes(q) || d.includes(q) || c.includes(q);
     });
-  }, [rows, debouncedSearchQuery]);
+  }, [
+    rows,
+    debouncedSearchQuery,
+    feedFilter,
+    distanceFilterActive,
+    radiusKm,
+    user?.id,
+    effectiveLat,
+    effectiveLng,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const pending = consumePendingMeetTypeFilter();
+      if (pending) setMeetTypeFilter(pending);
+    }, [])
+  );
 
   const moodFilteredRows = useMemo(
     () => filterPlansByMood(filteredRows, discoveryMood),
@@ -406,60 +604,153 @@ export default function PlansScreen() {
   );
 
   const presenceFilteredRows = useMemo(() => {
-    if (feedFilter.hostPresence === 'all') return moodFilteredRows;
-    return moodFilteredRows.filter((row) => {
-      if (user?.id && row.creator_id === user.id) return true;
-      const kind = resolveHostPresenceKind(
-        profile ?? null,
-        row.creatorProfile?.preferences,
-        presenceByUser[row.creator_id] ?? null,
-        !!row.creatorProfile?.masked_activity_enabled
-      );
-      return hostPresenceMatchesFilter(kind, feedFilter.hostPresence);
-    });
-  }, [moodFilteredRows, feedFilter.hostPresence, presenceByUser, profile, user?.id]);
+    let next = moodFilteredRows;
+    if (feedFilter.hostPresence !== 'all') {
+      next = next.filter((row) => {
+        if (user?.id && row.creator_id === user.id) return true;
+        const kind = resolveHostPresenceKind(
+          profile ?? null,
+          row.creatorProfile?.preferences,
+          presenceByUser[row.creator_id] ?? null,
+          !!row.creatorProfile?.masked_activity_enabled
+        );
+        return hostPresenceMatchesFilter(kind, feedFilter.hostPresence);
+      });
+    }
+    if (meetTypeFilter?.id) {
+      next = next.filter((row) => row.meet_type_id === meetTypeFilter.id);
+    }
+    return next;
+  }, [
+    moodFilteredRows,
+    feedFilter.hostPresence,
+    presenceByUser,
+    profile,
+    user?.id,
+    meetTypeFilter?.id,
+  ]);
 
-  const moodTimelineRows = useMemo(
-    () => presenceFilteredRows.filter((r) => r.is_mood_plan && !isPlanMoodWindowClosed(r)),
-    [presenceFilteredRows]
-  );
+  const moodTimelineRows = useMemo(() => {
+    const live = presenceFilteredRows.filter((r) => r.is_mood_plan && !isPlanMoodWindowClosed(r));
+    return rankMoodTimelinePlans(live, { effectiveLat, effectiveLng });
+  }, [presenceFilteredRows, effectiveLat, effectiveLng]);
 
   const standardDiscoverRows = useMemo(
     () => presenceFilteredRows.filter((r) => !r.is_mood_plan),
     [presenceFilteredRows]
   );
 
-  const syncLocation = useCallback(async () => {
-    try {
-      const fg = await Location.getForegroundPermissionsAsync();
-      setPerm(fg.status);
-      if (fg.status !== 'granted') return;
+  const swipeDeckRows = useMemo(
+    () => standardDiscoverRows.filter((row) => !deckDismissedPlanIds.has(row.id)),
+    [standardDiscoverRows, deckDismissedPlanIds]
+  );
 
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-
-      try {
-        const [place] = await Location.reverseGeocodeAsync({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-        const city = place?.city || place?.subregion || place?.region;
-        setCityLabel(city && city.length > 0 ? city : 'Near you');
-      } catch {
-        setCityLabel('Near you');
-      }
-    } catch {
-      // Permission can be granted while GPS / device location is off — avoid crashing the tab.
-      setCoords(null);
-      setCityLabel('Near you');
-    }
+  const dismissFromSwipeDeck = useCallback((planId: string) => {
+    setDeckDismissedPlanIds((prev) => {
+      if (prev.has(planId)) return prev;
+      const next = new Set(prev);
+      next.add(planId);
+      return next;
+    });
   }, []);
 
+  const resetSwipeDeck = useCallback(() => {
+    setDeckDismissedPlanIds(new Set());
+  }, []);
+
+  const applyViewerLocation = useCallback((lat: number, lng: number, label: string) => {
+    if (__DEV__) {
+      console.info('[Discover] viewer location active', { lat, lng, label });
+    }
+    setCoords({ lat, lng });
+    setCityLabel(label);
+    void saveCachedViewerCoords(lat, lng);
+  }, []);
+
+  const persistViewerLocation = useCallback(
+    async (lat: number, lng: number, label: string): Promise<boolean> => {
+      if (!user?.id || !isSupabaseConfigured) return false;
+      const patch: { latitude: number; longitude: number; location_label?: string } = {
+        latitude: lat,
+        longitude: lng,
+      };
+      if (label !== 'Near you') patch.location_label = label;
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(patch)
+        .eq('user_id', user.id)
+        .select('latitude, longitude')
+        .maybeSingle();
+      if (error) {
+        if (__DEV__) {
+          console.warn('[Discover] failed to save profile location', error.message);
+        }
+        return false;
+      }
+      if (data?.latitude == null || data?.longitude == null) {
+        if (__DEV__) {
+          console.warn('[Discover] profile location update returned no coordinates');
+        }
+        return false;
+      }
+      await refreshProfile();
+      return true;
+    },
+    [user?.id, refreshProfile]
+  );
+
+  const autoLocateViewer = useCallback(
+    async (requestPermission: boolean) => {
+      if (viewerDiscoverOriginReady(effectiveLat, effectiveLng)) return;
+      if (autoLocateInFlightRef.current) return;
+
+      autoLocateInFlightRef.current = true;
+      try {
+        const result = await resolveDiscoverViewerLocation({
+          profileLat: profile?.latitude,
+          profileLng: profile?.longitude,
+          profileLabel: profile?.location_label,
+          requestPermission,
+        });
+
+        setPerm(result.permission);
+
+        if (!result.ok) {
+          return;
+        }
+
+        setLocPromptDismissed(false);
+        void AsyncStorage.removeItem(LOCATION_PROMPT_DISMISSED_KEY);
+        applyViewerLocation(result.location.lat, result.location.lng, result.location.label);
+
+        if (result.location.source !== 'profile') {
+          void persistViewerLocation(
+            result.location.lat,
+            result.location.lng,
+            result.location.label
+          );
+        }
+
+        void rebuildRowsRef.current();
+      } finally {
+        autoLocateInFlightRef.current = false;
+      }
+    },
+    [
+      applyViewerLocation,
+      effectiveLat,
+      effectiveLng,
+      persistViewerLocation,
+      profile?.latitude,
+      profile?.longitude,
+      profile?.location_label,
+    ]
+  );
+
   useEffect(() => {
-    void syncLocation();
-  }, [syncLocation]);
+    if (!user?.id) return;
+    void autoLocateViewer(true);
+  }, [user?.id, autoLocateViewer]);
 
   useEffect(() => {
     let cancelled = false;
@@ -471,11 +762,7 @@ export default function PlansScreen() {
         }
         return;
       }
-      const { plans: newPlans, error: fetchErr } = await fetchPlansPage(
-        0,
-        PAGE_SIZE - 1,
-        user?.id ?? null
-      );
+      const { plans: newPlans, error: fetchErr } = await fetchDiscoverPage(0, PAGE_SIZE - 1);
       if (cancelled) return;
       if (fetchErr) {
         setError(fetchErr);
@@ -492,17 +779,17 @@ export default function PlansScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, fetchDiscoverPage, isSupabaseConfigured]);
 
   const onRefresh = useCallback(async () => {
     if (!isSupabaseConfigured) return;
-    setSwipeIndex(0);
+    setDeckDismissedPlanIds(new Set());
     setRefreshing(true);
     setError(null);
     pageRef.current = 0;
     accRef.current = [];
     setHasMore(true);
-    const { plans: newPlans, error: fetchErr } = await fetchPlansPage(0, PAGE_SIZE - 1, user?.id ?? null);
+    const { plans: newPlans, error: fetchErr } = await fetchDiscoverPage(0, PAGE_SIZE - 1);
     if (fetchErr) {
       setError(fetchErr);
       setRefreshing(false);
@@ -526,62 +813,68 @@ export default function PlansScreen() {
       }
     }
     setRefreshing(false);
-  }, [user?.id]);
+  }, [user?.id, fetchDiscoverPage]);
 
   const firstDiscoverFocusRef = useRef(true);
   useFocusEffect(
     useCallback(() => {
+      void (async () => {
+        const fg = await Location.getForegroundPermissionsAsync();
+        setPerm(fg.status);
+        if (!viewerDiscoverOriginReady(effectiveLat, effectiveLng)) {
+          await autoLocateViewer(fg.status !== 'granted');
+        }
+      })();
+
       if (!isSupabaseConfigured) return;
       if (firstDiscoverFocusRef.current) {
         firstDiscoverFocusRef.current = false;
         return;
       }
       void onRefresh();
-    }, [isSupabaseConfigured, onRefresh])
+    }, [autoLocateViewer, effectiveLat, effectiveLng, isSupabaseConfigured, onRefresh])
   );
 
-  const feedReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Unique topic per effect run — avoids `.on()` after `subscribe()` on React reconnect. */
-  const discoverPlansRealtimeRunRef = useRef(0);
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
-    discoverPlansRealtimeRunRef.current += 1;
-    const channelName = `discover-plans-ttl-${user?.id ?? 'anon'}-${discoverPlansRealtimeRunRef.current}`;
-    const ch = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'plans' },
-        (payload) => {
-          const row = payload.new as {
-            id?: string;
-            status?: string;
-            is_suppressed?: boolean;
-            archived_at?: string | null;
-          };
-          if (row?.id) {
-            const hid =
-              row.is_suppressed === true ||
-              (row.archived_at != null && row.archived_at !== '') ||
-              (row.status != null &&
-                ['agreed', 'active', 'completed', 'cancelled'].includes(row.status));
-            if (hid) {
-              accRef.current = accRef.current.filter((p) => p.id !== row.id);
-            }
-          }
-          if (feedReloadTimerRef.current) clearTimeout(feedReloadTimerRef.current);
-          feedReloadTimerRef.current = setTimeout(() => {
-            feedReloadTimerRef.current = null;
-            void rebuildRowsRef.current();
-          }, 450);
-        }
-      )
-      .subscribe();
+    const unsubPlans = subscribeDiscoverPlansRealtime({
+      userId: user?.id,
+      onRemovePlan: (planId) => removePlanFromFeedRef.current(planId),
+      onRefreshPlans: () => {
+        void silentRefreshDiscoverHeadRef.current();
+      },
+    });
+
+    const unsubOffers = user?.id
+      ? subscribeDiscoverOffersRealtime({
+          userId: user.id,
+          onRefreshOffers: () => refreshVisibleOffersRef.current(),
+        })
+      : () => {};
+
+    const unsubHidden = user?.id
+      ? subscribeDiscoverHiddenPlansRealtime({
+          userId: user.id,
+          onHiddenPlan: (planId) => {
+            setHiddenPlanIds((prev) => (prev.includes(planId) ? prev : [...prev, planId]));
+            removePlanFromFeedRef.current(planId);
+          },
+        })
+      : () => {};
+
+    const unsubPresence = subscribeDiscoverPresenceRealtime({
+      isTrackedCreator: (creatorId) => visibleCreatorIdsRef.current.has(creatorId),
+      onPresenceChange: (row) => {
+        setPresenceByUser((prev) => ({ ...prev, [row.user_id]: row }));
+      },
+    });
 
     return () => {
-      if (feedReloadTimerRef.current) clearTimeout(feedReloadTimerRef.current);
-      void supabase.removeChannel(ch);
+      unsubPlans();
+      unsubOffers();
+      unsubHidden();
+      unsubPresence();
     };
   }, [user?.id]);
 
@@ -590,7 +883,7 @@ export default function PlansScreen() {
     setLoadingMore(true);
     const from = pageRef.current * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-    const { plans: newPlans, error: fetchErr } = await fetchPlansPage(from, to, user?.id ?? null);
+    const { plans: newPlans, error: fetchErr } = await fetchDiscoverPage(from, to);
     if (fetchErr) {
       setError(fetchErr);
       setLoadingMore(false);
@@ -606,11 +899,11 @@ export default function PlansScreen() {
     setHasMore(newPlans.length === PAGE_SIZE);
     await rebuildRowsRef.current();
     setLoadingMore(false);
-  }, [error, hasMore, initialLoading, loadingMore, user?.id]);
+  }, [error, fetchDiscoverPage, hasMore, initialLoading, loadingMore]);
 
   function openCreateGate() {
     setGateTitle('Quick verification');
-    setGateMessage('So people feel safe meeting in person — it only takes a minute.');
+    setGateMessage('So people feel safe meeting in person. It only takes a minute.');
     setGateOpen(true);
   }
 
@@ -639,20 +932,42 @@ export default function PlansScreen() {
         openOfferGate();
         return;
       }
-      openPlanFromFeed(row);
+      seedPlanDetailFromFeed(row);
+      router.push(`/plan/${row.id}/negotiate` as Href);
     },
-    [dbUser?.verification_status, openPlanFromFeed]
+    [dbUser?.verification_status, openOfferGate]
   );
 
-  const onAllowLocation = useCallback(async () => {
-    const r = await Location.requestForegroundPermissionsAsync();
-    setPerm(r.status);
-    if (r.status === 'granted') {
-      await AsyncStorage.removeItem(LOCATION_PROMPT_DISMISSED_KEY);
-      setLocPromptDismissed(false);
-      await syncLocation();
+  const dismissLocationPrompt = useCallback((persist = true) => {
+    setLocPromptDismissed(true);
+    if (persist) {
+      void AsyncStorage.setItem(LOCATION_PROMPT_DISMISSED_KEY, 'true');
     }
-  }, [syncLocation]);
+  }, []);
+
+  const onNotNowLocation = useCallback(() => {
+    dismissLocationPrompt(true);
+  }, [dismissLocationPrompt]);
+
+  const onAllowLocation = useCallback(async () => {
+    if (locPromptBusyRef.current) return;
+    locPromptBusyRef.current = true;
+    setLocPromptBusy(true);
+
+    const releaseBusy = () => {
+      locPromptBusyRef.current = false;
+      setLocPromptBusy(false);
+    };
+
+    const safetyTimer = setTimeout(releaseBusy, 20_000);
+
+    try {
+      await autoLocateViewer(true);
+    } finally {
+      clearTimeout(safetyTimer);
+      releaseBusy();
+    }
+  }, [autoLocateViewer]);
 
   const retryLoad = useCallback(async () => {
     if (!isSupabaseConfigured) return;
@@ -660,7 +975,7 @@ export default function PlansScreen() {
     setInitialLoading(true);
     pageRef.current = 0;
     accRef.current = [];
-    const { plans: newPlans, error: fetchErr } = await fetchPlansPage(0, PAGE_SIZE - 1, user?.id ?? null);
+    const { plans: newPlans, error: fetchErr } = await fetchDiscoverPage(0, PAGE_SIZE - 1);
     if (fetchErr) {
       setError(fetchErr);
       setInitialLoading(false);
@@ -671,9 +986,11 @@ export default function PlansScreen() {
     setHasMore(newPlans.length === PAGE_SIZE);
     await rebuildRowsRef.current();
     setInitialLoading(false);
-  }, [user?.id]);
+  }, [user?.id, fetchDiscoverPage]);
 
-  const showLocPrompt = perm != null && perm !== 'granted' && !locPromptDismissed;
+  const viewerLocated = viewerDiscoverOriginReady(effectiveLat, effectiveLng);
+  /** Only when the user denied OS permission — auto-locate runs silently otherwise. */
+  const showLocPrompt = !viewerLocated && perm === 'denied' && !locPromptDismissed;
 
   const dismissRow = useCallback(
     (id: string) => {
@@ -746,6 +1063,20 @@ export default function PlansScreen() {
   ]);
 
   useEffect(() => {
+    if (!dbUser?.id) return;
+    void (async () => {
+      const { data, error } = await supabase.rpc('user_needs_privacy_reconsent', {
+        p_user_id: dbUser.id,
+      });
+      if (error) {
+        if (__DEV__) console.warn('[privacy] reconsent check:', error.message);
+        return;
+      }
+      setNeedsPrivacyReconsent(!!data);
+    })();
+  }, [dbUser?.id]);
+
+  useEffect(() => {
     if (activeModal === 'softKyc') {
       void consumeSoftKycPromptPending();
     }
@@ -774,14 +1105,19 @@ export default function PlansScreen() {
           onDismiss={() => setTrialBannerDismissed(true)}
           onUpgrade={() => router.push('/subscription' as Href)}
         />
+        {needsPrivacyReconsent && !reconsentBannerDismissed ? (
+          <PrivacyReconsentBanner
+            onReview={() => router.push('/legal/privacy-reconsent' as Href)}
+            onDismiss={() => setReconsentBannerDismissed(true)}
+          />
+        ) : null}
         {unverified ? <PlansKycBanner visible /> : null}
         {showLocPrompt ? (
           <PlansLocationPrompt
-            onAllow={onAllowLocation}
-            onNotNow={() => {
-              setLocPromptDismissed(true);
-              void AsyncStorage.setItem(LOCATION_PROMPT_DISMISSED_KEY, 'true');
-            }}
+            onAllow={() => void onAllowLocation()}
+            onNotNow={onNotNowLocation}
+            allowBusy={locPromptBusy}
+            permissionGranted={false}
           />
         ) : null}
         {error ? (
@@ -792,6 +1128,18 @@ export default function PlansScreen() {
             </Text>
           </View>
         ) : null}
+        {meetTypeFilter ? (
+          <Pressable
+            style={styles.meetTypeFilterPill}
+            onPress={() => setMeetTypeFilter(null)}
+            accessibilityRole="button"
+            accessibilityLabel={`Clear ${meetTypeFilter.name} filter`}
+          >
+            <Ionicons name="compass" size={14} color={colors.primary} />
+            <Text style={styles.meetTypeFilterTxt}>{meetTypeFilter.name}</Text>
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
         <MoodTimelineCarousel
           rows={moodTimelineRows}
           onOpenPlan={openPlanFromFeed}
@@ -799,7 +1147,7 @@ export default function PlansScreen() {
         />
       </>
     ),
-    [unverified, showLocPrompt, error, onAllowLocation, retryLoad, moodTimelineRows, openPlanFromFeed, dbUser, trialBannerDismissed]
+    [unverified, showLocPrompt, error, onAllowLocation, onNotNowLocation, locPromptBusy, retryLoad, moodTimelineRows, openPlanFromFeed, dbUser, trialBannerDismissed, meetTypeFilter, needsPrivacyReconsent, reconsentBannerDismissed]
   );
 
   const searchActive = debouncedSearchQuery.trim().length > 0;
@@ -809,56 +1157,97 @@ export default function PlansScreen() {
   }, [feedMode]);
 
   useEffect(() => {
-    setSwipeIndex(0);
-  }, [debouncedSearchQuery, discoveryMood]);
+    resetSwipeDeck();
+  }, [debouncedSearchQuery, discoveryMood, meetTypeFilter?.id, resetSwipeDeck]);
 
-  const onSwipeInterested = useCallback((row: PlanFeedRow) => {
-    openPlanFromFeed(row);
-  }, [openPlanFromFeed]);
+  const onSwipeInterested = useCallback(
+    (row: PlanFeedRow) => {
+      dismissFromSwipeDeck(row.id);
+      if (requiresVerificationGate(dbUser?.verification_status)) {
+        openOfferGate();
+        return;
+      }
+      seedPlanDetailFromFeed(row);
+      router.push(`/plan/${row.id}/negotiate` as Href);
+    },
+    [dbUser?.verification_status, dismissFromSwipeDeck, openOfferGate]
+  );
 
   const onSwipePass = useCallback(
     (row: PlanFeedRow) => {
-      if (canDismissSwipe) {
-        setHiddenPlanIds((prev) => [...prev, row.id]);
-        setLastHiddenId(row.id);
-        if (user?.id) persistHiddenPlan(user.id, row.id);
+      dismissFromSwipeDeck(row.id);
+      setHiddenPlanIds((prev) => (prev.includes(row.id) ? prev : [...prev, row.id]));
+      setLastHiddenId(row.id);
+      if (canDismissSwipe && user?.id) {
+        persistHiddenPlan(user.id, row.id);
       }
     },
-    [canDismissSwipe, user?.id]
+    [canDismissSwipe, dismissFromSwipeDeck, user?.id]
   );
 
   const listEmpty =
     initialLoading ? (
       <PlansFeedSkeleton />
     ) : error ? null : filteredRows.length > 0 && moodFilteredRows.length === 0 ? (
-      <View style={styles.moodEmpty}>
-        <Text style={styles.moodEmptyTitle}>Nothing in this vibe yet</Text>
-        <Text style={styles.moodEmptySub}>Try another mood or switch back to All.</Text>
-      </View>
+      <DiscoverInlineEmpty
+        icon="color-palette-outline"
+        title="Nothing in this vibe"
+        titleAccent="yet"
+        subtitle="Try another mood or switch back to All to see more meetups."
+      />
     ) : searchActive && standardDiscoverRows.length === 0 ? (
-      <View style={styles.searchEmpty}>
-        <Text style={styles.searchEmptyTitle}>Nothing in that vibe yet</Text>
-        <Text style={styles.searchEmptySub}>
-          Try a looser keyword or clear search — the best plans are often one word away.
-        </Text>
-      </View>
+      <DiscoverInlineEmpty
+        icon="search-outline"
+        title="No matches for that search"
+        subtitle="Try a looser keyword or clear search. The best plans are often one word away."
+      />
     ) : standardDiscoverRows.length === 0 && moodTimelineRows.length > 0 ? (
-      <View style={styles.moodEmpty}>
-        <Text style={styles.moodEmptyTitle}>Mood moments in the timeline</Text>
-        <Text style={styles.moodEmptySub}>Swipe the timeline for sparks on a countdown — longer meetups land in the deck.</Text>
-      </View>
+      <DiscoverInlineEmpty
+        icon="flash-outline"
+        title="Mood moments in the timeline"
+        subtitle="Swipe the timeline for sparks on a countdown. Longer meetups land in the deck when they appear."
+      />
+    ) : (feedFilter.clientFiltersActive || distanceFilterActive) &&
+      !searchActive &&
+      standardDiscoverRows.length === 0 &&
+      moodTimelineRows.length === 0 ? (
+      <DiscoverInlineEmpty
+        icon="options-outline"
+        title="Nothing matches right now"
+        subtitle={
+          hasDiscoverPriceFilter(feedFilter)
+            ? 'No plans fall in this price range. Widen your min/max price or clear filters to see more meetups.'
+            : 'Widen your radius, clear filters, or switch mood to see more meetups.'
+        }
+        ctaLabel="Open filters"
+        onCtaPress={() => setFilterOpen(true)}
+      />
     ) : (
       <PlansEmptyState onCreatePress={goCreatePlan} />
     );
 
+  const discoverFeedEmpty =
+    !initialLoading && !error && standardDiscoverRows.length === 0;
+
   const distanceForRow = useCallback(
     (row: PlanFeedRow): number | null => {
-      if (row.latitude == null || row.longitude == null || effectiveLat == null || effectiveLng == null)
+      const planLat = normalizeViewerCoordinate(row.latitude);
+      const planLng = normalizeViewerCoordinate(row.longitude);
+      if (
+        planLat == null ||
+        planLng == null ||
+        effectiveLat == null ||
+        effectiveLng == null
+      ) {
         return null;
-      return distanceKm(effectiveLat, effectiveLng, row.latitude, row.longitude);
+      }
+      return distanceKm(effectiveLat, effectiveLng, planLat, planLng);
     },
     [effectiveLat, effectiveLng]
   );
+
+  const viewerHasLocation = viewerDiscoverOriginReady(effectiveLat, effectiveLng);
+  const viewerLocationKey = viewerHasLocation ? `${effectiveLat},${effectiveLng}` : 'none';
 
   const discoverListKeyExtractor = useCallback((item: PlanFeedRow) => item.id, []);
 
@@ -867,6 +1256,7 @@ export default function PlansScreen() {
       <DiscoverPlanListRow
         row={item}
         distanceKm={distanceForRow(item)}
+        viewerHasLocation={viewerHasLocation}
         currentUserId={user?.id}
         userOffer={bidderOffersByPlan[item.id]}
         viewerProfile={profile}
@@ -879,6 +1269,7 @@ export default function PlansScreen() {
     ),
     [
       distanceForRow,
+      viewerHasLocation,
       user?.id,
       bidderOffersByPlan,
       profile,
@@ -894,12 +1285,35 @@ export default function PlansScreen() {
 
   useEffect(() => {
     if (!showSwipe || !hasMore || loadingMore || initialLoading || error) return;
-    const remaining = standardDiscoverRows.length - swipeIndex;
+    const remaining = swipeDeckRows.length;
     if (remaining <= 3) void onEndReached();
   }, [
     showSwipe,
-    standardDiscoverRows.length,
-    swipeIndex,
+    swipeDeckRows.length,
+    hasMore,
+    loadingMore,
+    initialLoading,
+    error,
+    onEndReached,
+  ]);
+
+  /** When distance filter is on, prefetch more pages until the feed has enough nearby plans. */
+  useEffect(() => {
+    if (!distanceFilterActive) {
+      distancePrefetchPagesRef.current = 0;
+      return;
+    }
+    if (!hasMore || loadingMore || initialLoading || error) return;
+    if (presenceFilteredRows.length >= 10) {
+      distancePrefetchPagesRef.current = 0;
+      return;
+    }
+    if (distancePrefetchPagesRef.current >= 5) return;
+    distancePrefetchPagesRef.current += 1;
+    void onEndReached();
+  }, [
+    distanceFilterActive,
+    presenceFilteredRows.length,
     hasMore,
     loadingMore,
     initialLoading,
@@ -908,12 +1322,11 @@ export default function PlansScreen() {
   ]);
 
   useEffect(() => {
-    if (!showSwipe || standardDiscoverRows.length === 0) return;
-    for (let i = 0; i < 3; i += 1) {
-      const row = standardDiscoverRows[swipeIndex + i];
-      if (row) prefetchPlanDetail(row.id);
+    if (!showSwipe || swipeDeckRows.length === 0) return;
+    for (let i = 0; i < Math.min(3, swipeDeckRows.length); i += 1) {
+      prefetchPlanDetail(swipeDeckRows[i]!.id);
     }
-  }, [showSwipe, swipeIndex, standardDiscoverRows]);
+  }, [showSwipe, swipeDeckRows]);
 
   return (
     <Screen
@@ -925,7 +1338,8 @@ export default function PlansScreen() {
         colors={[colors.discoveryGradientTop, colors.discoveryGradientMid, colors.discoveryGradientBottom]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.gradientBg}
+        style={bleedBgStyle}
+        pointerEvents="none"
       />
       {filterOpen ? (
         <PlansFilterSheet
@@ -936,18 +1350,17 @@ export default function PlansScreen() {
           discoveryMood={discoveryMood}
           feedMode={feedMode}
           baseRadiusKm={radiusKm}
-          browseRadiusKm={browseRadiusKm}
-          hasWiderRadius={hasWiderRadius}
-          effectiveTier={discoverTier}
+          effectiveTier={viewerTier}
           onUpgrade={() => {
             setFilterOpen(false);
             router.push('/subscription' as Href);
           }}
           onApply={(next, nextMood, nextFeedMode) => {
+            distancePrefetchPagesRef.current = 0;
             setFeedFilter(next);
             setDiscoveryMood(nextMood);
             persistFeedMode(nextFeedMode);
-            setSwipeIndex(0);
+            resetSwipeDeck();
             if (user && isSupabaseConfigured) {
               void supabase
                 .from('profiles')
@@ -961,6 +1374,7 @@ export default function PlansScreen() {
                       verifiedHostsOnly: next.verifiedHostsOnly,
                       hostPresence: next.hostPresence,
                       clientFiltersActive: next.clientFiltersActive,
+                      distanceFilterActive: next.distanceFilterActive,
                     },
                   },
                 })
@@ -982,7 +1396,7 @@ export default function PlansScreen() {
         onGoPremium={onGoPremiumFromTravelPaywall}
         kicker="Travel mode"
         title="Explore anywhere"
-        message="Upgrade to Gold to browse meetups as if you were in another city. Your home base stays saved — turn travel mode off anytime."
+        message="Upgrade to Gold to browse meetups as if you were in another city. Your home base stays saved, and you can turn travel mode off anytime."
       />
       <NearbyPlansHeader
         locationLabel={headerLocationLabel}
@@ -1027,30 +1441,38 @@ export default function PlansScreen() {
         <View style={styles.swipeColumn}>
           <View style={styles.swipeFeedStrip}>{feedBanner}</View>
           {filteredRows.length === 0 ? (
-            listEmpty
+            <View style={styles.discoverEmptyStage}>{listEmpty}</View>
           ) : standardDiscoverRows.length === 0 ? (
             moodTimelineRows.length > 0 ? (
-              <View style={styles.moodEmpty}>
-                <Text style={styles.moodEmptyTitle}>Mood moments in the timeline</Text>
-                <Text style={styles.moodEmptySub}>Explore the timeline — swipe the deck refreshes when longer meetups appear.</Text>
+              <View style={styles.discoverEmptyStage}>
+                <DiscoverInlineEmpty
+                  icon="flash-outline"
+                  title="Mood moments in the timeline"
+                  subtitle="Explore the timeline. The swipe deck refreshes when longer meetups appear."
+                />
               </View>
             ) : moodFilteredRows.length === 0 ? (
-              <View style={styles.moodEmpty}>
-                <Text style={styles.moodEmptyTitle}>Nothing in this vibe yet</Text>
-                <Text style={styles.moodEmptySub}>Open Filters to try another vibe or choose All.</Text>
+              <View style={styles.discoverEmptyStage}>
+                <DiscoverInlineEmpty
+                  icon="color-palette-outline"
+                  title="Nothing in this vibe"
+                  titleAccent="yet"
+                  subtitle="Open Filters to try another vibe or choose All."
+                  ctaLabel="Open filters"
+                  onCtaPress={() => setFilterOpen(true)}
+                />
               </View>
             ) : (
-              listEmpty
+              <View style={styles.discoverEmptyStage}>{listEmpty}</View>
             )
           ) : (
             <View style={styles.swipeStage}>
               <View style={styles.swipeDeckZone}>
                 <PlansSwipeDeck
                   ref={swipeDeckRef}
-                  items={standardDiscoverRows}
-                  index={swipeIndex}
-                  onIndexChange={setSwipeIndex}
+                  items={swipeDeckRows}
                   distanceForRow={distanceForRow}
+                  viewerHasLocation={viewerHasLocation}
                   presenceForRow={presenceForRow}
                   onSwipeRight={onSwipeInterested}
                   onSwipeLeft={onSwipePass}
@@ -1060,10 +1482,11 @@ export default function PlansScreen() {
               </View>
               <View style={[styles.swipeActionsZone, { paddingBottom: tabBarInset + spacing.xs }]}>
                 <SwipeActionButtons
+                  disabled={swipeDeckRows.length === 0}
                   onPass={() => swipeDeckRef.current?.swipeLeft()}
                   onLike={() => swipeDeckRef.current?.swipeRight()}
                   onInfo={() => {
-                    const row = standardDiscoverRows[swipeIndex];
+                    const row = swipeDeckRows[0];
                     if (row) openPlanFromFeed(row);
                   }}
                 />
@@ -1079,8 +1502,12 @@ export default function PlansScreen() {
           style={styles.list}
           data={standardDiscoverRows}
           keyExtractor={discoverListKeyExtractor}
+          extraData={viewerLocationKey}
           ListHeaderComponent={feedBanner}
-          contentContainerStyle={styles.listContentPremium}
+          contentContainerStyle={[
+            styles.listContentPremium,
+            discoverFeedEmpty && styles.listContentEmpty,
+          ]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -1116,7 +1543,6 @@ export default function PlansScreen() {
 
 const styles = StyleSheet.create({
   screenBg: { backgroundColor: 'transparent' },
-  gradientBg: { ...StyleSheet.absoluteFillObject },
   swipeColumn: { flex: 1, minHeight: 0 },
   swipeFeedStrip: { flexShrink: 0, flexGrow: 0 },
   swipeStage: {
@@ -1136,44 +1562,39 @@ const styles = StyleSheet.create({
   },
   list: { flex: 1, backgroundColor: 'transparent' },
   listContentPremium: { paddingBottom: 120, flexGrow: 1, paddingTop: spacing.xs },
-  searchEmpty: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl * 1.25,
-    marginTop: spacing.md,
-  },
-  searchEmptyTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center' },
-  searchEmptySub: {
-    fontSize: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 22,
-  },
-  moodEmpty: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
-    marginTop: spacing.md,
-  },
-  moodEmptyTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center' },
-  moodEmptySub: {
-    fontSize: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 22,
+  listContentEmpty: { justifyContent: 'center' },
+  discoverEmptyStage: {
+    flex: 1,
+    minHeight: 280,
+    justifyContent: 'center',
   },
   errorBox: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 101, 132, 0.08)',
+    backgroundColor: 'rgba(255, 74, 114, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 101, 132, 0.25)',
+    borderColor: 'rgba(255, 74, 114, 0.25)',
   },
-  errorTxt: { fontSize: 14, color: colors.text, fontWeight: '600' },
+  errorTxt: { fontSize: 14, color: colors.text, fontWeight: '600',
+    fontFamily: fonts.medium,},
+  meetTypeFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.28)',
+  },
+  meetTypeFilterTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   retry: {
     marginTop: 8,
     fontSize: 15,

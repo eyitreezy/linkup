@@ -5,8 +5,18 @@ import { Screen } from '@/components/Screen';
 import { BillingCycleToggle } from '@/components/subscription/BillingCycleToggle';
 import { MembershipHero } from '@/components/subscription/MembershipHero';
 import { SubscriptionTierCard } from '@/components/subscription/SubscriptionTierCard';
-import { colors, radius, spacing } from '@/constants/theme';
+import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
+import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
+import { FlutterwaveCheckoutModal } from '@/components/checkout/FlutterwaveCheckoutModal';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFlutterwaveCheckout } from '@/hooks/useFlutterwaveCheckout';
+import { getSubscriptionCallbackUrl } from '@/lib/flutterwave/callbackUrl';
+import {
+  getInvokeErrorMessage,
+  parsePaymentLinkFromInvoke,
+  userFacingCheckoutError,
+} from '@/lib/flutterwave/parsePaymentLink';
 import {
   hasActiveGoldTrial,
   hasActiveSilverTrial,
@@ -20,15 +30,14 @@ import {
   type PaidTier,
   type SubscriptionTier,
 } from '@/lib/subscription/pricing';
+import { tierRank } from '@/lib/subscription/tierRank';
 import { invalidatePermissionCache } from '@/lib/subscription/checkPermission';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { Href, router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -37,11 +46,13 @@ import {
   View,
 } from 'react-native';
 
-const TIERS: SubscriptionTier[] = ['FREE', 'SILVER', 'GOLD', 'PLATINUM'];
+type FeedbackState = {
+  title: string;
+  message: string;
+  variant: 'success' | 'error' | 'warning';
+};
 
-function tierRank(t: SubscriptionTier): number {
-  return { FREE: 0, SILVER: 1, GOLD: 2, PLATINUM: 3 }[t];
-}
+const TIERS: SubscriptionTier[] = ['FREE', 'SILVER', 'GOLD', 'PLATINUM'];
 
 export default function SubscriptionScreen() {
   const { user, dbUser, refreshProfile } = useAuth();
@@ -50,6 +61,15 @@ export default function SubscriptionScreen() {
   const [goldTrialBusy, setGoldTrialBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [goldTrialSuccess, setGoldTrialSuccess] = useState(false);
+  const [checkoutConfirm, setCheckoutConfirm] = useState<{
+    tier: PaidTier;
+    switchingDown: boolean;
+    fromName: string;
+    toName: string;
+  } | null>(null);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const { session: checkoutSession, beginCheckout, dismissCheckout } = useFlutterwaveCheckout();
 
   const effective = resolveClientEffectiveTier(dbUser);
   const paidTier = dbUser?.subscription_tier ?? 'FREE';
@@ -69,32 +89,68 @@ export default function SubscriptionScreen() {
 
   const legacyPremiumActive = hasLegacyPremium(dbUser);
 
+  const showFeedback = useCallback((next: FeedbackState) => {
+    setFeedback(next);
+  }, []);
+
   const startCheckout = useCallback(
-    async (tier: PaidTier) => {
-      if (!user?.id || !isSupabaseConfigured) return;
+    async (tier: PaidTier): Promise<boolean> => {
+      if (!user?.id || !isSupabaseConfigured) return false;
       setBusyTier(tier);
       try {
         const { data, error } = await supabase.functions.invoke('create-subscription', {
-          body: { user_id: user.id, tier, billing_cycle: cycle },
+          body: {
+            user_id: user.id,
+            tier,
+            billing_cycle: cycle,
+            redirect_url: getSubscriptionCallbackUrl(),
+          },
         });
-        if (error) throw error;
-        const link = (data as { payment_link?: string })?.payment_link;
-        if (!link) throw new Error('No payment link returned');
-        await WebBrowser.openBrowserAsync(link);
+        if (error) {
+          throw new Error(await getInvokeErrorMessage(error, data));
+        }
+
+        const link = parsePaymentLinkFromInvoke(data);
+        if (!link) {
+          throw new Error((await getInvokeErrorMessage(null, data)) || 'No payment link returned');
+        }
+
+        const opened = await beginCheckout(link, getSubscriptionCallbackUrl());
+        if (!opened.ok) throw new Error(opened.error ?? 'Could not open checkout');
+        if (opened.mode === 'browser') {
+          setBusyTier(null);
+          invalidatePermissionCache();
+          await refreshProfile();
+        }
+        return true;
       } catch (e) {
-        Alert.alert('Checkout', e instanceof Error ? e.message : 'Could not start checkout');
-      } finally {
+        const raw = e instanceof Error ? e.message : 'Could not start checkout';
+        showFeedback({
+          variant: 'error',
+          title: 'Checkout unavailable',
+          message: userFacingCheckoutError(raw),
+        });
         setBusyTier(null);
+        return false;
       }
     },
-    [user?.id, cycle]
+    [user?.id, cycle, beginCheckout, showFeedback, refreshProfile]
   );
+
+  const handleDismissCheckout = useCallback(() => {
+    dismissCheckout();
+    setBusyTier(null);
+  }, [dismissCheckout]);
 
   const onSubscribe = useCallback(
     (tier: PaidTier) => {
       if (!user?.id || !isSupabaseConfigured) return;
       if (paidActive && paidTier === tier) {
-        Alert.alert('Current plan', 'You are already on this plan.');
+        showFeedback({
+          variant: 'warning',
+          title: 'Already on this plan',
+          message: `You're already subscribed to ${tierDisplayName(tier)}.`,
+        });
         return;
       }
 
@@ -106,22 +162,13 @@ export default function SubscriptionScreen() {
       if (switchingDown || switchingUp) {
         const fromName = tierDisplayName(paidTier as SubscriptionTier);
         const toName = tierDisplayName(tier);
-        Alert.alert(
-          switchingDown ? 'Switch to a lower plan' : 'Upgrade plan',
-          switchingDown
-            ? `Checkout will move you from ${fromName} to ${toName}. Your current plan stays active until the switch completes.`
-            : `Checkout will upgrade you from ${fromName} to ${toName}.`,
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Continue', onPress: () => void startCheckout(tier) },
-          ]
-        );
+        setCheckoutConfirm({ tier, switchingDown, fromName, toName });
         return;
       }
 
       void startCheckout(tier);
     },
-    [user?.id, paidActive, paidTier, startCheckout]
+    [user?.id, paidActive, paidTier, startCheckout, showFeedback]
   );
 
   const onCancelSubscription = useCallback(async () => {
@@ -135,18 +182,23 @@ export default function SubscriptionScreen() {
       invalidatePermissionCache();
       await refreshProfile();
       const until = (data as { access_until?: string })?.access_until;
-      Alert.alert(
-        'Subscription cancelled',
-        until
+      showFeedback({
+        variant: 'success',
+        title: 'Subscription cancelled',
+        message: until
           ? `You'll keep ${tierDisplayName(paidTier as SubscriptionTier)} until ${new Date(until).toLocaleDateString()}.`
-          : 'Auto-renew is off. Your current plan stays active until the billing period ends.'
-      );
+          : 'Auto-renew is off. Your current plan stays active until the period ends.',
+      });
     } catch (e) {
-      Alert.alert('Cancellation', e instanceof Error ? e.message : 'Could not cancel subscription');
+      showFeedback({
+        variant: 'error',
+        title: 'Cancellation failed',
+        message: e instanceof Error ? e.message : 'Could not cancel subscription',
+      });
     } finally {
       setCancelBusy(false);
     }
-  }, [user?.id, paidActive, paidTier, refreshProfile]);
+  }, [user?.id, paidActive, paidTier, refreshProfile, showFeedback]);
 
   const onActivateGoldTrial = useCallback(async () => {
     if (!goldTrialEligible) return;
@@ -158,11 +210,15 @@ export default function SubscriptionScreen() {
       await refreshProfile();
       setGoldTrialSuccess(true);
     } catch (e) {
-      Alert.alert('Trial', e instanceof Error ? e.message : 'Could not activate trial');
+      showFeedback({
+        variant: 'error',
+        title: 'Trial unavailable',
+        message: e instanceof Error ? e.message : 'Could not activate trial',
+      });
     } finally {
       setGoldTrialBusy(false);
     }
-  }, [goldTrialEligible, refreshProfile]);
+  }, [goldTrialEligible, refreshProfile, showFeedback]);
 
   function ctaForTier(tier: SubscriptionTier) {
     if (tier === 'FREE') {
@@ -170,16 +226,7 @@ export default function SubscriptionScreen() {
         return {
           label: 'Cancel at period end',
           disabled: cancelBusy,
-          action: () => {
-            Alert.alert(
-              'Cancel subscription?',
-              `You'll keep ${tierDisplayName(paidTier as SubscriptionTier)} until your billing period ends, then return to Free.`,
-              [
-                { text: 'Keep plan', style: 'cancel' },
-                { text: 'Cancel renewal', style: 'destructive', onPress: () => void onCancelSubscription() },
-              ]
-            );
-          },
+          action: () => setCancelConfirmOpen(true),
           variant: 'ghost' as const,
         };
       }
@@ -248,7 +295,6 @@ export default function SubscriptionScreen() {
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </Pressable>
         <View style={styles.navCenter}>
-          <Text style={styles.navKicker}>Plans & billing</Text>
           <Text style={styles.navTitle}>Membership</Text>
         </View>
         <View style={styles.navSpacer} />
@@ -310,7 +356,7 @@ export default function SubscriptionScreen() {
         })}
 
         <View style={styles.trustRow}>
-          <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={16} color="#D97706" />
           <Text style={styles.trustTxt}>Secure checkout powered by Flutterwave</Text>
         </View>
 
@@ -319,6 +365,69 @@ export default function SubscriptionScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </Pressable>
       </ScrollView>
+
+      <AppConfirmModal
+        visible={checkoutConfirm != null}
+        onClose={() => setCheckoutConfirm(null)}
+        kicker="Membership"
+        title={checkoutConfirm?.switchingDown ? 'Switch to a lower plan' : 'Upgrade plan'}
+        message={
+          checkoutConfirm?.switchingDown
+            ? `Checkout will move you from ${checkoutConfirm.fromName} to ${checkoutConfirm.toName}. Your current plan stays active until the switch completes.`
+            : `Checkout will upgrade you from ${checkoutConfirm?.fromName ?? ''} to ${checkoutConfirm?.toName ?? ''}.`
+        }
+        iconVariant={checkoutConfirm?.switchingDown ? 'warning' : 'boost'}
+        primaryLabel="Not now"
+        onPrimary={() => setCheckoutConfirm(null)}
+        secondaryLabel="Continue"
+        onSecondary={async () => {
+          const tier = checkoutConfirm?.tier;
+          if (!tier) return;
+          const ok = await startCheckout(tier);
+          if (ok) setCheckoutConfirm(null);
+        }}
+        busyOn="secondary"
+      />
+
+      <AppConfirmModal
+        visible={cancelConfirmOpen}
+        onClose={() => !cancelBusy && setCancelConfirmOpen(false)}
+        kicker="Membership"
+        title="Cancel subscription?"
+        message={`You'll keep ${tierDisplayName(paidTier as SubscriptionTier)} until your billing period ends, then return to Free.`}
+        iconVariant="warning"
+        primaryLabel="Keep plan"
+        onPrimary={() => setCancelConfirmOpen(false)}
+        secondaryLabel="Cancel renewal"
+        onSecondary={async () => {
+          await onCancelSubscription();
+          setCancelConfirmOpen(false);
+        }}
+        secondaryTone="danger"
+        busyOn="secondary"
+        dismissOnBackdrop={!cancelBusy}
+      />
+
+      <AppFeedbackModal
+        visible={feedback != null}
+        onClose={() => setFeedback(null)}
+        kicker="Membership"
+        variant={feedback?.variant ?? 'warning'}
+        title={feedback?.title ?? ''}
+        message={feedback?.message ?? ''}
+      />
+
+      <FlutterwaveCheckoutModal
+        visible={checkoutSession != null}
+        url={checkoutSession?.url ?? null}
+        returnUrl={checkoutSession?.returnUrl ?? null}
+        onDismiss={handleDismissCheckout}
+        onSuccess={() => {
+          handleDismissCheckout();
+          router.push('/subscription/callback' as Href);
+        }}
+        title="LinkUp membership"
+      />
     </Screen>
   );
 }
@@ -340,10 +449,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.12)',
+    borderColor: 'rgba(94, 82, 255,0.12)',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 6,
@@ -353,14 +462,8 @@ const styles = StyleSheet.create({
   },
   backPressed: { opacity: 0.88, transform: [{ scale: 0.96 }] },
   navCenter: { flex: 1, alignItems: 'center' },
-  navKicker: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: colors.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  navTitle: { fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
+  navTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   navSpacer: { width: 42 },
   scroll: {
     paddingHorizontal: spacing.md,
@@ -369,6 +472,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -382,7 +486,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingVertical: spacing.md,
   },
-  trustTxt: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  trustTxt: { fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: '#D97706' },
   legacyPremiumCard: {
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: radius.lg,
@@ -391,8 +496,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(15, 23, 42, 0.06)',
   },
-  legacyPremiumTitle: { fontSize: 15, fontWeight: '900', color: colors.text, marginBottom: 6 },
-  legacyPremiumDesc: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  legacyPremiumTitle: { fontSize: 15, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 6 },
+  legacyPremiumDesc: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19, fontFamily: fonts.medium, },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -404,7 +510,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  successBannerTxt: { flex: 1, fontSize: 14, fontWeight: '700', color: '#047857' },
+  successBannerTxt: { flex: 1, fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#047857' },
   historyLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -413,5 +520,6 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: spacing.sm,
   },
-  historyLinkText: { fontSize: 16, fontWeight: '800', color: colors.primary },
+  historyLinkText: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
 });

@@ -16,7 +16,7 @@ module.exports = {
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
-      backgroundColor: '#2D1B4E',
+      backgroundColor: '#FFFFFF',
     },
     ios: {
       supportsTablet: true,
@@ -29,7 +29,7 @@ module.exports = {
       softwareKeyboardLayoutMode: 'resize',
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
-        backgroundColor: '#6C63FF',
+        backgroundColor: '#5E52FF',
       },
       package: 'com.linkup.app',
       googleServicesFile: './google-services.json',
@@ -46,6 +46,7 @@ module.exports = {
     },
     plugins: [
       'expo-dev-client',
+      'expo-font',
       '@react-native-community/datetimepicker',
       'expo-router',
       [
@@ -69,7 +70,7 @@ module.exports = {
         'expo-notifications',
         {
           icon: './assets/icon.png',
-          color: '#6C63FF',
+          color: '#5E52FF',
           sounds: [],
           mode: 'production',
         },

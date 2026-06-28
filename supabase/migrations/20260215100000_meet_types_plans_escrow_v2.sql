@@ -56,6 +56,8 @@ ON CONFLICT (slug) DO UPDATE SET
 -- users: KYC tier (1 = standard, 2 = enhanced e.g. BVN — app enforces Pattern C)
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS kyc_tier SMALLINT NOT NULL DEFAULT 1;
+UPDATE public.users SET kyc_tier = 1 WHERE kyc_tier IS NULL OR kyc_tier NOT IN (1, 2);
+
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_kyc_tier_check;
 ALTER TABLE public.users ADD CONSTRAINT users_kyc_tier_check CHECK (kyc_tier IN (1, 2));
 

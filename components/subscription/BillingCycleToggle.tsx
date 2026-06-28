@@ -1,8 +1,8 @@
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { BillingCycle } from '@/lib/subscription/pricing';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   value: BillingCycle;
@@ -19,7 +19,6 @@ const SEGMENT_HEIGHT = 56;
 export function BillingCycleToggle({ value, onChange }: Props) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>Billing</Text>
       <View style={styles.track}>
         {OPTIONS.map((opt) => {
           const selected = value === opt.id;
@@ -28,7 +27,7 @@ export function BillingCycleToggle({ value, onChange }: Props) {
               key={opt.id}
               onPress={() => onChange(opt.id)}
               style={({ pressed }) => [styles.segment, pressed && styles.segmentPressed]}
-              accessibilityRole="button"
+              accessibilityRole="tab"
               accessibilityState={{ selected }}
             >
               {selected ? (
@@ -67,45 +66,27 @@ export function BillingCycleToggle({ value, onChange }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.lg },
-  label: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
   track: {
     flexDirection: 'row',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
+    borderRadius: radius.button,
     padding: 4,
     gap: 4,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
-    borderColor: colors.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#6C63FF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-      },
-      android: { elevation: 2 },
-    }),
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   segment: {
     flex: 1,
     height: SEGMENT_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.md + 2,
+    borderRadius: radius.button,
     overflow: 'hidden',
     position: 'relative',
   },
   segmentFill: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: radius.md + 2,
+    borderRadius: radius.button,
   },
   segmentPressed: { opacity: 0.92 },
   labelStack: {
@@ -117,6 +98,7 @@ const styles = StyleSheet.create({
   chipLabel: {
     fontSize: 15,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
@@ -124,11 +106,13 @@ const styles = StyleSheet.create({
   chipLabelOn: {
     color: '#fff',
     fontWeight: '900',
+    fontFamily: fonts.bold,
   },
   chipHint: {
     marginTop: 2,
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 12,
@@ -136,6 +120,7 @@ const styles = StyleSheet.create({
   chipHintOn: {
     color: 'rgba(255,255,255,0.92)',
     fontWeight: '800',
+    fontFamily: fonts.bold,
   },
   hintSpacer: {
     height: 14,

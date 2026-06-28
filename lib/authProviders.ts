@@ -31,7 +31,7 @@ function isLocalhostUrl(url: string): boolean {
 
 /**
  * OAuth redirect must match Supabase Auth → URL Configuration (redirect allow list).
- * On real devices, localhost / 127.0.0.1 never points at your dev machine — use app scheme (linkup://…).
+ * On native preview/production APKs, always use the app scheme (linkup://auth/callback).
  */
 export function getAuthRedirectUrl(): string {
   const fromEnv =
@@ -42,9 +42,14 @@ export function getAuthRedirectUrl(): string {
 
   const trimmed = fromEnv.replace(/\/$/, '');
 
-  if (Platform.OS !== 'web' && trimmed && isLocalhostUrl(trimmed)) {
-    return Linking.createURL('/auth/callback');
+  if (Platform.OS !== 'web') {
+    if (trimmed && !isLocalhostUrl(trimmed)) {
+      return trimmed;
+    }
+    const scheme = Constants.expoConfig?.scheme ?? 'linkup';
+    return `${scheme}://auth/callback`;
   }
+
   if (trimmed) return trimmed;
   return Linking.createURL('/auth/callback');
 }

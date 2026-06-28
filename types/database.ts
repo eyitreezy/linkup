@@ -74,6 +74,7 @@ export interface ProfilePreferences {
     hostPresence?: 'all' | 'online' | 'offline';
     maxDistanceKm?: number | null;
     clientFiltersActive?: boolean;
+    distanceFilterActive?: boolean;
   };
   /** Travel browse location override (Premium). */
   travel_mode?: {
@@ -195,9 +196,19 @@ export interface DbMeetType {
   sort_order: number;
   is_active: boolean;
   created_at: string;
+  /** Short picker subtitle; null for legacy catalog rows. */
+  description?: string | null;
+  /** Public Storage URL for catalog tile cover; legacy rows use slug → bundled assets. */
+  meet_type_images?: string | null;
+  /** Admin-created catalog row; not user-editable. */
+  is_admin_managed?: boolean;
   /** Set when the row is created by a user (custom type); catalog seeds use null. */
   created_by?: string | null;
+  /** User submissions: pending until admin approves; catalog defaults to approved. */
+  approval_status?: MeetTypeApprovalStatus;
 }
+
+export type MeetTypeApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export interface DbPlan {
   id: string;
@@ -213,6 +224,8 @@ export interface DbPlan {
   /** Hidden from discovery feeds when moderation escalates */
   is_suppressed?: boolean;
   boosted_until: string | null;
+  /** Gold premium-visibility boost expansion radius (km). */
+  boost_radius_km?: number | null;
   scheduled_at: string | null;
   location_label: string | null;
   latitude: number | null;
@@ -252,6 +265,8 @@ export interface DbPlan {
   max_free_guests?: number | null;
   max_premium_guests?: number | null;
   max_guests?: number | null;
+  /** Group plans — count of accepted slot offers (host + guests capacity). */
+  accepted_guest_count?: number;
   multi_city?: boolean;
   city_ids?: string[] | null;
   mood_reach?: 'city' | 'city_adjacent' | 'city_widest' | 'all_cities' | null;
@@ -532,6 +547,9 @@ export type NotificationEventType =
   | 'trial_started'
   | 'trial_expiring'
   | 'trial_expired'
+  | 'meet_type_submitted'
+  | 'meet_type_approved'
+  | 'meet_type_rejected'
   | string;
 
 /** JSON `data` for deep links — keep push payloads generic (no amounts). */
@@ -687,4 +705,24 @@ export interface DbProfileView {
   viewer_id: string;
   viewed_user_id: string;
   created_at: string;
+}
+
+export type PrivacyConsentMethod = 'signup' | 're_consent';
+
+export interface DbPrivacyPolicyVersion {
+  id: string;
+  version: string;
+  content: string;
+  summary_of_changes: string | null;
+  effective_date: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface DbPrivacyPolicyConsent {
+  id: string;
+  user_id: string;
+  policy_version_id: string;
+  consented_at: string;
+  consent_method: PrivacyConsentMethod;
 }

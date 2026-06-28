@@ -12,6 +12,7 @@
  */
 import { sendExpoPushIfAllowed } from '../_shared/expoPush.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
+import { parseNotificationWebhookPayload } from '../_shared/webhookRecord.ts';
 
 type WebhookPayload = {
   type?: string;
@@ -36,15 +37,21 @@ Deno.serve(async (req) => {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  let payload: WebhookPayload;
+  let body: unknown;
   try {
-    payload = (await req.json()) as WebhookPayload;
+    body = await req.json();
   } catch {
     return new Response('Bad JSON', { status: 400 });
   }
 
-  const rec = payload.record;
-  if (payload.table !== 'notifications' || payload.type !== 'INSERT' || !rec?.user_id || !rec.title || !rec.body) {
+  const { table, eventType, record: rec } = parseNotificationWebhookPayload(body);
+  if (
+    table !== 'notifications' ||
+    (eventType && eventType !== 'INSERT') ||
+    !rec?.user_id ||
+    !rec.title ||
+    !rec.body
+  ) {
     return new Response(JSON.stringify({ ok: true, ignored: true }), {
       headers: { 'Content-Type': 'application/json' },
     });

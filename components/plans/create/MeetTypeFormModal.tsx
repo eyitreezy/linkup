@@ -1,11 +1,12 @@
 /**
  * Create / edit custom meet type — inbox-grade centered modal (AppConfirmModal shell).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { MeetTypeIonIcon } from '@/lib/plans/inferMeetTypeIcon';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 const FIELD_BORDER = '#D8DCE6';
 
@@ -34,7 +35,7 @@ export function MeetTypeFormModal({
   const title = isCreate ? 'New meet type' : 'Edit meet type';
   const subtitle = isCreate
     ? "We'll pick an icon from your title."
-    : 'Update the title — the icon updates automatically.';
+    : 'Update the title and the icon updates automatically.';
 
   return (
     <Modal
@@ -50,9 +51,10 @@ export function MeetTypeFormModal({
         accessibilityRole="button"
         accessibilityLabel="Dismiss"
       >
+        <KeyboardAvoidingView behavior="padding" style={styles.keyboardAvoid}>
         <Pressable style={styles.sheetHit} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.45)', 'rgba(255,101,132,0.28)']}
+            colors={['rgba(94, 82, 255,0.45)', 'rgba(255, 74, 114,0.28)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ring}
@@ -77,7 +79,7 @@ export function MeetTypeFormModal({
 
               <View style={styles.previewRow}>
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+                  colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
                   style={styles.previewIconWrap}
                 >
                   <Ionicons name={previewIcon} size={26} color={colors.primary} />
@@ -141,6 +143,7 @@ export function MeetTypeFormModal({
             </View>
           </LinearGradient>
         </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );
@@ -153,6 +156,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
+  keyboardAvoid: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
   sheetHit: {
     width: '100%',
     maxWidth: 400,
@@ -163,7 +171,7 @@ const styles = StyleSheet.create({
     padding: 2,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.22,
         shadowRadius: 24,
@@ -189,6 +197,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -197,6 +206,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.35,
     textAlign: 'center',
@@ -205,6 +215,7 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 22,
     textAlign: 'center',
@@ -231,8 +242,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previewText: { flex: 1 },
-  previewLabel: { fontSize: 13, fontWeight: '800', color: colors.text },
-  previewHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
+  previewLabel: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  previewHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   fieldLabel: {
     alignSelf: 'stretch',
     fontSize: 12,
@@ -251,6 +263,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.authInputBg,
     marginBottom: spacing.lg,
@@ -266,7 +279,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     borderRadius: radius.button,
     borderWidth: 1.5,
-    borderColor: 'rgba(108,99,255,0.35)',
+    borderColor: 'rgba(94, 82, 255,0.35)',
     backgroundColor: 'rgba(255,255,255,0.95)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -276,6 +289,7 @@ const styles = StyleSheet.create({
   secondaryTxt: {
     fontSize: 15,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
   },
   ctaOuter: {
@@ -284,7 +298,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.24,
         shadowRadius: 14,
@@ -302,6 +316,7 @@ const styles = StyleSheet.create({
   ctaTxt: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
   },
   ctaPressed: {

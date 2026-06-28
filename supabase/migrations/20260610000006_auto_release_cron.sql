@@ -44,7 +44,9 @@ GRANT EXECUTE ON FUNCTION public.sweep_completed_plan_auto_release() TO service_
 DO $cron$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.unschedule('auto-release-sweep');
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto-release-sweep') THEN
+      PERFORM cron.unschedule('auto-release-sweep');
+    END IF;
     PERFORM cron.schedule(
       'auto-release-sweep',
       '0 * * * *',

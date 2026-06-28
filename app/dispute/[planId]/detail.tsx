@@ -3,7 +3,7 @@
  */
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbDispute, DbDisputeEvidence, DbPlan, PlanDisputeResolution } from '@/types/database';
@@ -39,9 +39,9 @@ function statusPill(status: string): { bg: string; fg: string; label: string } {
     case 'rejected':
       return { bg: 'rgba(239, 68, 68, 0.12)', fg: colors.danger, label: 'Rejected' };
     case 'reviewing':
-      return { bg: 'rgba(108, 99, 255, 0.14)', fg: colors.primary, label: 'Reviewing' };
+      return { bg: 'rgba(94, 82, 255, 0.14)', fg: colors.primary, label: 'Reviewing' };
     default:
-      return { bg: 'rgba(108, 99, 255, 0.14)', fg: colors.primary, label: 'Pending' };
+      return { bg: 'rgba(94, 82, 255, 0.14)', fg: colors.primary, label: 'Pending' };
   }
 }
 
@@ -209,11 +209,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  heading: { flex: 1, fontSize: 20, fontWeight: '900', color: colors.text },
+  heading: { flex: 1, fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.button },
-  pillTxt: { fontSize: 12, fontWeight: '800' },
-  planLink: { fontSize: 17, fontWeight: '800', color: colors.primary, marginBottom: 4 },
-  meta: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 4 },
+  pillTxt: { fontSize: 12, fontWeight: '800', fontFamily: fonts.bold, },
+  planLink: { fontSize: 17, fontWeight: '800', color: colors.primary, marginBottom: 4, fontFamily: fonts.bold, },
+  meta: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 4, fontFamily: fonts.medium, },
   sectionTitle: {
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
@@ -241,13 +242,14 @@ const styles = StyleSheet.create({
   note: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     lineHeight: 22,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   resolutionBox: {
     backgroundColor: 'rgba(16, 185, 129, 0.08)',
@@ -256,6 +258,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.2)',
   },
-  resolutionTxt: { fontSize: 15, fontWeight: '600', color: colors.text, lineHeight: 22 },
-  title: { fontSize: 18, fontWeight: '800', color: colors.text, margin: spacing.md },
+  resolutionTxt: { fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 22 },
+  title: { fontSize: 18, fontWeight: '800', color: colors.text, margin: spacing.md, fontFamily: fonts.bold, },
 });

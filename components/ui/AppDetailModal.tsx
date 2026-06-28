@@ -1,7 +1,7 @@
 /**
  * Inbox-grade detail sheet — scrollable body + gradient CTA (admin/support, etc.).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,7 +65,7 @@ export function AppDetailModal({
       >
         <Pressable style={styles.sheetHit} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.45)', 'rgba(255,101,132,0.28)']}
+            colors={['rgba(94, 82, 255,0.45)', 'rgba(255, 74, 114,0.28)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.ring}
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     padding: 2,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.22,
         shadowRadius: 24,
@@ -166,6 +166,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -174,6 +175,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.35,
     textAlign: 'center',
@@ -195,7 +197,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.24,
         shadowRadius: 14,
@@ -217,6 +219,7 @@ const styles = StyleSheet.create({
   ctaTxt: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     letterSpacing: -0.2,
   },

@@ -6,7 +6,7 @@ import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
 import { SlaDeadlineBadge } from '@/components/admin/SlaDeadlineBadge';
 import { TicketReplyBubble } from '@/components/support/TicketReplyBubble';
 import { TierBadge } from '@/components/TierBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import type { DbSupportTicket, DbTicketReply, TicketStatus } from '@/types/database';
@@ -35,7 +35,7 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
 function ticketStatusStyle(status: string): { bg: string; fg: string; border: string } {
   const s = status.toLowerCase();
   if (s === 'open') return { bg: 'rgba(245,158,11,0.16)', fg: '#B45309', border: 'rgba(245,158,11,0.35)' };
-  if (s === 'in_progress') return { bg: 'rgba(108,99,255,0.14)', fg: colors.primary, border: 'rgba(108,99,255,0.35)' };
+  if (s === 'in_progress') return { bg: 'rgba(94, 82, 255,0.14)', fg: colors.primary, border: 'rgba(94, 82, 255,0.35)' };
   if (s === 'resolved') return { bg: 'rgba(16,185,129,0.14)', fg: '#047857', border: 'rgba(16,185,129,0.3)' };
   return { bg: 'rgba(107,114,128,0.1)', fg: colors.textMuted, border: colors.border };
 }
@@ -48,7 +48,7 @@ function priorityStyle(priority: string): { bg: string; fg: string; border: stri
   if (p === 'low') {
     return { bg: 'rgba(107,114,128,0.1)', fg: colors.textMuted, border: colors.border };
   }
-  return { bg: 'rgba(108,99,255,0.1)', fg: colors.primary, border: 'rgba(108,99,255,0.25)' };
+  return { bg: 'rgba(94, 82, 255,0.1)', fg: colors.primary, border: 'rgba(94, 82, 255,0.25)' };
 }
 
 function shortUuid(id: string, len = 8): string {
@@ -189,7 +189,7 @@ export function AdminSupportTicketModal({ ticket, onClose, onUpdated }: Props) {
             </View>
 
             <LinearGradient
-              colors={['rgba(108,99,255,0.16)', 'rgba(255,101,132,0.1)']}
+              colors={['rgba(94, 82, 255,0.16)', 'rgba(255, 74, 114,0.1)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.subjectOuter}
@@ -336,6 +336,7 @@ const styles = StyleSheet.create({
   pillTxt: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     textTransform: 'capitalize',
     letterSpacing: 0.2,
   },
@@ -353,6 +354,7 @@ const styles = StyleSheet.create({
   conciergeChipTxt: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#6D28D9',
   },
   subjectOuter: { borderRadius: radius.lg, padding: 2, alignSelf: 'stretch' },
@@ -366,6 +368,7 @@ const styles = StyleSheet.create({
   subjectLabel: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -374,6 +377,7 @@ const styles = StyleSheet.create({
   subjectText: {
     fontSize: 17,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     lineHeight: 24,
     letterSpacing: -0.25,
@@ -384,6 +388,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -394,24 +399,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.button,
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
     backgroundColor: 'rgba(255,255,255,0.95)',
   },
   statusChipOn: {
-    backgroundColor: 'rgba(108, 99, 255, 0.14)',
-    borderColor: 'rgba(108, 99, 255, 0.35)',
+    backgroundColor: 'rgba(94, 82, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.35)',
   },
-  statusChipTxt: { fontSize: 13, fontWeight: '700', color: colors.text },
-  statusChipTxtOn: { fontWeight: '900', color: colors.primary },
+  statusChipTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  statusChipTxtOn: { fontWeight: '900', color: colors.primary, fontFamily: fonts.bold, },
   messageBox: {
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     minHeight: 72,
   },
-  messageText: { fontSize: 15, fontWeight: '600', color: colors.text, lineHeight: 23 },
+  messageText: { fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 23 },
   messageEmpty: {
     fontSize: 15,
     fontWeight: '600',
@@ -422,6 +429,7 @@ const styles = StyleSheet.create({
   noReplies: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     fontStyle: 'italic',
   },
@@ -433,11 +441,12 @@ const styles = StyleSheet.create({
   replyInput: {
     minHeight: 88,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.surface,
   },
@@ -447,7 +456,8 @@ const styles = StyleSheet.create({
     gap: 6,
     alignSelf: 'flex-start',
   },
-  internalToggleTxt: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  internalToggleTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary },
   internalToggleTxtOn: { color: '#B45309' },
   sendBtn: {
     alignSelf: 'flex-end',
@@ -463,11 +473,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   memberShort: {
     flex: 1,
@@ -484,11 +494,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.28)',
+    borderColor: 'rgba(94, 82, 255, 0.28)',
     backgroundColor: 'rgba(255,255,255,0.9)',
   },
   copyPressed: { opacity: 0.9 },
-  copyBtnTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  copyBtnTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   metaCell: {
     alignSelf: 'stretch',
     flexDirection: 'row',
@@ -498,16 +509,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.85)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
   metaTextCol: { flex: 1, minWidth: 0 },
   metaLbl: {
     fontSize: 10,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 2,
   },
-  metaVal: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 18 },
+  metaVal: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 18 },
 });

@@ -2,7 +2,7 @@
  * Pill / chip with app-standard gradient when selected.
  */
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import {
@@ -84,6 +84,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.md,
   },
-  txt: { fontSize: 13, fontWeight: '800', color: colors.text },
-  txtOn: { fontSize: 13, fontWeight: '900', color: '#fff', textAlign: 'center' },
+  txt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  txtOn: { fontSize: 13, fontWeight: '900', color: '#fff', textAlign: 'center', fontFamily: fonts.bold, },
 });

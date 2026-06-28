@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -18,7 +18,7 @@ export function SilverTrialWelcomeModal({ visible, onContinue }: Props) {
           </LinearGradient>
           <Text style={styles.title}>Your 7-day Silver Explorer trial has started</Text>
           <Text style={styles.body}>
-            Explore advanced filters, bookmarks, read receipts, and more — no card required.
+            Explore advanced filters, bookmarks, read receipts, and more. No card required.
           </Text>
           <Pressable onPress={onContinue} style={styles.btn}>
             <LinearGradient colors={[colors.primary, colors.secondary]} style={styles.btnGrad}>
@@ -55,6 +55,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -62,6 +63,7 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -69,5 +71,6 @@ const styles = StyleSheet.create({
   },
   btn: { alignSelf: 'stretch', borderRadius: radius.button, overflow: 'hidden' },
   btnGrad: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  btnTxt: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  btnTxt: { color: '#fff', fontWeight: '800',
+    fontFamily: fonts.bold, fontSize: 16 },
 });

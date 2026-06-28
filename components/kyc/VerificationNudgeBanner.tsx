@@ -1,5 +1,5 @@
 import { kycColors } from '@/components/kyc/kycTheme';
-import { radius, spacing } from '@/constants/theme';
+import { radius, spacing, fonts } from '@/constants/theme';
 import { Href, router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -36,7 +36,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   inner: { flex: 1 },
-  txt: { fontSize: 13, color: kycColors.text, lineHeight: 19 },
-  bold: { fontWeight: '800', color: kycColors.primary },
-  dismiss: { fontSize: 22, color: kycColors.muted, paddingHorizontal: spacing.sm },
+  txt: { fontSize: 13, color: kycColors.text, lineHeight: 19, fontFamily: fonts.regular, },
+  bold: { fontWeight: '800',
+    fontFamily: fonts.bold, color: kycColors.primary },
+  dismiss: { fontSize: 22, color: kycColors.muted, paddingHorizontal: spacing.sm, fontFamily: fonts.regular, },
 });

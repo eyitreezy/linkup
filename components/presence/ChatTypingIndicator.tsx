@@ -1,7 +1,7 @@
 /**
  * iMessage-style typing dots.
  */
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -99,6 +99,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
 });

@@ -2,7 +2,7 @@
  * Single goodwill credit row — matches wallet activity row layout.
  */
 import { TierBadge } from '@/components/TierBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { DbGoodwillCredit, SubscriptionTier } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
@@ -97,10 +97,11 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flex: 1, paddingRight: 12 },
   rowTypeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  rowSource: { fontSize: 15, fontWeight: '900', color: colors.text },
-  rowDate: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
+  rowSource: { fontSize: 15, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  rowDate: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600', fontFamily: fonts.medium, },
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  tierMultiplierText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  tierMultiplierText: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontFamily: fonts.medium, },
   appliedPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,9 +116,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(16, 185, 129, 0.28)',
   },
   appliedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
-  appliedPillLabel: { fontSize: 11, fontWeight: '800', color: '#047857' },
+  appliedPillLabel: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#047857' },
   rowRight: { alignItems: 'flex-end' },
-  rowAmt: { fontSize: 16, fontWeight: '900', color: '#B45309' },
+  rowAmt: { fontSize: 16, fontWeight: '900', color: '#B45309', fontFamily: fonts.bold, },
   rowAmtMuted: { color: colors.textMuted },
-  rowExpired: { fontSize: 11, fontWeight: '800', color: colors.textMuted, marginTop: 4 },
+  rowExpired: { fontSize: 11, fontWeight: '800', color: colors.textMuted, marginTop: 4, fontFamily: fonts.bold, },
 });

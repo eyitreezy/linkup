@@ -5,7 +5,7 @@ import {
 } from '@/components/settings/TravelModeFeedbackModal';
 import { Screen } from '@/components/Screen';
 import type { LocationSuggestion } from '@/lib/location/locationGeocode';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -72,7 +72,7 @@ export default function TravelModeScreen() {
       <TravelModeFeedbackModal feedback={feedback} onClose={() => setFeedback(null)} />
       <View style={styles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -114,7 +114,7 @@ export default function TravelModeScreen() {
               </View>
 
               <LinearGradient
-                colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+                colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.cardOuter}
@@ -174,7 +174,7 @@ export default function TravelModeScreen() {
 
               {tm?.label ? (
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+                  colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={[styles.cardOuter, styles.activeCardOuter]}
@@ -197,7 +197,7 @@ export default function TravelModeScreen() {
                   <Text style={styles.sectionTitle}>Search location</Text>
                 </View>
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                  colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.sectionRule}
@@ -220,7 +220,7 @@ export default function TravelModeScreen() {
                   <Text style={styles.sectionTitle}>Quick presets</Text>
                 </View>
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                  colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.sectionRule}
@@ -228,7 +228,7 @@ export default function TravelModeScreen() {
               </View>
 
               <LinearGradient
-                colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+                colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.cardOuter}
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -330,6 +330,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -338,6 +339,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.45,
     marginBottom: 6,
@@ -347,6 +349,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   sectionHead: {
     marginBottom: spacing.sm,
@@ -370,6 +373,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -434,6 +438,7 @@ const styles = StyleSheet.create({
   paywallHeroTitle: {
     fontSize: 18,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.25,
     textAlign: 'center',
@@ -443,6 +448,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textMuted,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -466,6 +472,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   presetRow: {
     flexDirection: 'row',
@@ -479,7 +486,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(26, 29, 38, 0.08)',
   },
   presetRowPressed: {
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   presetRowLeft: {
     flexDirection: 'row',
@@ -489,6 +496,7 @@ const styles = StyleSheet.create({
   presetLabel: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
     letterSpacing: -0.2,
   },
@@ -515,6 +523,7 @@ const styles = StyleSheet.create({
   activeCardLabel: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -523,6 +532,7 @@ const styles = StyleSheet.create({
   activeCardPlace: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     lineHeight: 22,
   },
@@ -533,7 +543,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     ...(Platform.OS === 'ios'
       ? {
-          shadowColor: '#6C63FF',
+          shadowColor: '#5E52FF',
           shadowOffset: { width: 0, height: 10 },
           shadowOpacity: 0.28,
           shadowRadius: 18,
@@ -555,6 +565,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     letterSpacing: -0.2,
     color: '#FFFFFF',
   },
@@ -566,6 +577,7 @@ const styles = StyleSheet.create({
   clearBtnTxt: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.primary,
   },
 });

@@ -3,27 +3,68 @@
  */
 import { AuthDivider } from '@/components/auth/AuthDivider';
 import { AuthModeToggle, type AuthMode } from '@/components/auth/AuthModeToggle';
+import { useAuthSheetScroll } from '@/components/auth/AuthSheetScrollContext';
 import { DatingAuthShell } from '@/components/auth/DatingAuthShell';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { PasswordStrengthIndicator } from '@/components/auth/PasswordStrengthIndicator';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAuthRedirectUrl, signInWithGoogle, waitForSupabaseSession } from '@/lib/authProviders';
 import { formatAuthError } from '@/lib/auth/formatAuthError';
 import { useEmailSendCooldown } from '@/lib/auth/useEmailSendCooldown';
 import { resolvePostAuthHref } from '@/lib/auth/postAuthNavigation';
+import {
+  consumePendingSignupPrivacyConsent,
+  markPendingSignupPrivacyConsent,
+} from '@/lib/privacy/pendingSignupConsentStorage';
+import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { MotiView } from 'moti';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   initialMode?: AuthMode;
 };
+
+type SignupPasswordFieldProps = {
+  password: string;
+  onChangePassword: (value: string) => void;
+};
+
+/** Must render inside DatingAuthShell so keyboard scroll context is available. */
+function SignupPasswordField({ password, onChangePassword }: SignupPasswordFieldProps) {
+  const groupRef = useRef<View>(null);
+  const authSheetScroll = useAuthSheetScroll();
+
+  return (
+    <View
+      ref={groupRef}
+      collapsable={false}
+      onLayout={() => {
+        if (authSheetScroll?.keyboardOpen && groupRef.current) {
+          authSheetScroll.scrollFieldIntoView(groupRef);
+        }
+      }}
+    >
+      <Input
+        variant="auth"
+        passwordToggle
+        scrollAnchorRef={groupRef}
+        value={password}
+        onChangeText={onChangePassword}
+        placeholder="Password (min. 6 characters)"
+        autoComplete="new-password"
+        textContentType="newPassword"
+      />
+      <PasswordStrengthIndicator password={password} />
+    </View>
+  );
+}
 
 export function AuthScreen({ initialMode = 'login' }: Props) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -39,6 +80,8 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
   const [verificationSent, setVerificationSent] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const resendCooldown = useEmailSendCooldown(60);
+  const [privacyConsentChecked, setPrivacyConsentChecked] = useState(false);
+  const [showConsentError, setShowConsentError] = useState(false);
 
   const switchMode = useCallback(
     (next: AuthMode) => {
@@ -46,6 +89,8 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
       setMode(next);
       setErr('');
       setVerificationSent(false);
+      setPrivacyConsentChecked(false);
+      setShowConsentError(false);
     },
     [mode]
   );
@@ -128,12 +173,21 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
       );
       return;
     }
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setErr('Enter your name.');
+      return;
+    }
     if (!email.trim()) {
       setErr('Enter your email.');
       return;
     }
     if (password.length < 6) {
       setErr('Password must be at least 6 characters');
+      return;
+    }
+    if (!privacyConsentChecked) {
+      setShowConsentError(true);
       return;
     }
     setLoading(true);
@@ -144,7 +198,7 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
         password,
         options: {
           emailRedirectTo: redirectTo,
-          data: { display_name: displayName.trim() || undefined },
+          data: { display_name: trimmedName },
         },
       });
       if (error) {
@@ -154,10 +208,14 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
         return;
       }
       if (!data.session) {
+        await markPendingSignupPrivacyConsent();
         setVerificationSent(true);
         resendCooldown.startCooldown();
         setLoading(false);
         return;
+      }
+      if (data.user) {
+        await recordPrivacyConsent(data.user.id, 'signup');
       }
       await completeAuthAfterSignIn();
     } catch (e) {
@@ -199,22 +257,36 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
       );
       return;
     }
+    if (mode === 'signup' && !privacyConsentChecked) {
+      setShowConsentError(true);
+      return;
+    }
     setGoogleLoading(true);
     try {
+      if (mode === 'signup') {
+        await markPendingSignupPrivacyConsent();
+      }
       const { error } = await signInWithGoogle();
       if (error) {
+        if (mode === 'signup') await consumePendingSignupPrivacyConsent();
         setErr(error.message);
         setGoogleLoading(false);
         return;
       }
       const oauthSession = await waitForSupabaseSession(40, 200);
       if (!oauthSession?.user) {
+        if (mode === 'signup') await consumePendingSignupPrivacyConsent();
         setErr('Google sign-in did not complete. Please try again.');
         setGoogleLoading(false);
         return;
       }
+      if (mode === 'signup') {
+        await recordPrivacyConsent(oauthSession.user.id, 'signup');
+        await consumePendingSignupPrivacyConsent();
+      }
       await completeAuthAfterSignIn();
     } catch (e) {
+      if (mode === 'signup') await consumePendingSignupPrivacyConsent();
       setPendingNav(false);
       setErr(e instanceof Error ? e.message : 'Google sign-in failed. Please try again.');
       setGoogleLoading(false);
@@ -230,6 +302,10 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
       <AuthModeToggle mode={mode} onChange={switchMode} />
 
       <GoogleSignInButton onPress={() => void onGoogle()} loading={googleLoading} elevated fullWidth />
+
+      {showConsentError && showSignupForm ? (
+        <Text style={styles.consentErrorText}>Please accept the Privacy Policy to continue</Text>
+      ) : null}
 
       <AuthDivider
         tone="glass"
@@ -339,7 +415,8 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
               variant="auth"
               value={displayName}
               onChangeText={setDisplayName}
-              placeholder="Name"
+              placeholder="Your name"
+              autoCapitalize="words"
               autoComplete="name"
               textContentType="name"
             />
@@ -353,19 +430,38 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
               onChangeText={setEmail}
               placeholder="Email"
             />
-            <View>
-              <Input
-                variant="auth"
-                passwordToggle
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Password (min. 6 characters)"
-                autoComplete="new-password"
-                textContentType="newPassword"
-              />
-              <PasswordStrengthIndicator password={password} />
-            </View>
+            <SignupPasswordField password={password} onChangePassword={setPassword} />
             {err ? <Text style={styles.formErr}>{err}</Text> : null}
+            <View style={styles.consentRow}>
+              <Pressable
+                onPress={() => {
+                  setPrivacyConsentChecked((checked) => !checked);
+                  setShowConsentError(false);
+                }}
+                style={styles.checkboxTouchable}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: privacyConsentChecked }}
+                accessibilityLabel="Agree to Privacy Policy"
+              >
+                <View style={[styles.checkbox, privacyConsentChecked && styles.checkboxChecked]}>
+                  {privacyConsentChecked ? (
+                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  ) : null}
+                </View>
+              </Pressable>
+              <Text style={styles.consentText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => router.push('/legal/privacy-policy' as Href)}
+                >
+                  Privacy Policy
+                </Text>
+              </Text>
+            </View>
+            {showConsentError ? (
+              <Text style={styles.consentErrorText}>Please accept the Privacy Policy to continue</Text>
+            ) : null}
             <Button
               title="Create account"
               onPress={() => void onSignup()}
@@ -391,6 +487,7 @@ const styles = StyleSheet.create({
   forgotTxt: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: 'rgba(255,255,255,0.72)',
     letterSpacing: -0.1,
   },
@@ -401,6 +498,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: spacing.md,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     textAlign: 'center',
   },
   verifyCard: {
@@ -415,18 +513,21 @@ const styles = StyleSheet.create({
   verifyTitle: {
     fontSize: 19,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     marginBottom: spacing.sm,
     textAlign: 'center',
   },
   verifyBody: {
     fontSize: 15,
+    fontFamily: fonts.regular,
     color: 'rgba(255,255,255,0.85)',
     lineHeight: 23,
     marginBottom: spacing.md,
     textAlign: 'center',
   },
-  emailEm: { fontWeight: '800', color: '#FFFFFF' },
+  emailEm: { fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF' },
   ghostBtn: { marginTop: spacing.sm, borderColor: 'rgba(255,255,255,0.35)' },
   ghostTxt: { color: 'rgba(255,255,255,0.9)' },
   trustLine: {
@@ -436,5 +537,50 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.45)',
     textAlign: 'center',
     fontWeight: '500',
+  },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  checkboxTouchable: { paddingTop: 2 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  consentText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: 'rgba(255,255,255,0.88)',
+  },
+  consentLink: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    textDecorationLine: 'underline',
+  },
+  consentErrorText: {
+    color: '#FCA5A5',
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: spacing.sm,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    textAlign: 'center',
   },
 });

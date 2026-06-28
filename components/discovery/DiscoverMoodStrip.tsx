@@ -1,7 +1,7 @@
 /**
  * Hinge/Bumble-style horizontal mood categories for Discover.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -74,6 +74,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -115,6 +116,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.button,
   },
-  chipTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
-  chipTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  chipTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  chipTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
 });

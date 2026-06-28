@@ -2,7 +2,7 @@
  * Admin — grant, extend, revoke trials and view subscription events.
  */
 import { TierBadge } from '@/components/TierBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
   HIDDEN_SUBSCRIPTION_EVENT_TYPES,
   formatSubscriptionEventDate,
@@ -216,7 +216,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
-  panelTitle: { fontSize: 16, fontWeight: '900', color: colors.text },
+  panelTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -226,8 +227,9 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     gap: spacing.sm,
   },
-  statusLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  statusValue: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'right' },
+  statusLabel: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  statusValue: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'right', fontFamily: fonts.medium, },
   trialActionGroup: { marginTop: spacing.md },
   trialActionLabel: {
     fontSize: 12,
@@ -243,13 +245,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     backgroundColor: colors.surface,
   },
-  trialActionButtonText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  trialActionButtonText: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary },
   trialActionRevoke: { color: colors.danger },
   viewEventsLink: { marginTop: spacing.md, paddingVertical: spacing.sm },
-  viewEventsLinkText: { fontSize: 14, fontWeight: '800', color: colors.primary },
+  viewEventsLinkText: { fontSize: 14, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(26,29,38,0.45)',
@@ -262,20 +265,23 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     padding: spacing.lg,
   },
-  modalTitle: { fontSize: 18, fontWeight: '900', color: colors.text, marginBottom: spacing.md },
+  modalTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.md },
   eventsScroll: { maxHeight: 320 },
   eventRow: {
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  eventLabel: { fontSize: 14, fontWeight: '800', color: colors.text },
-  eventDate: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
-  empty: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  eventLabel: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  eventDate: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, fontFamily: fonts.medium, },
+  empty: { fontSize: 13, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
   modalClose: {
     marginTop: spacing.md,
     alignItems: 'center',
     paddingVertical: spacing.sm,
   },
-  modalCloseTxt: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  modalCloseTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
 });

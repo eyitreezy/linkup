@@ -30,7 +30,7 @@ export function KycShell({
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={kycInboxStyles.screenRoot}>
       <View style={kycInboxStyles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}

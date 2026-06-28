@@ -1,12 +1,12 @@
 /**
- * Swipe deck for discovery feed — pan gestures + spring animations (Reanimated).
+ * Swipe deck for discovery feed — pan gestures + fast exit animations (Reanimated).
  */
 import { DiscoverySwipeCard } from '@/components/discovery/DiscoverySwipeCard';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { memo, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { memo, useCallback, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -15,10 +15,12 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 const W = Dimensions.get('window').width;
-const SWIPE_THRESHOLD = 110;
+const SWIPE_THRESHOLD = 96;
+const EXIT_MS = 160;
 const TILT_DEG = 12;
 const MIN_DECK_HEIGHT = 420;
 
@@ -29,9 +31,8 @@ export type PlansSwipeDeckRef = {
 
 type Props = {
   items: PlanFeedRow[];
-  index: number;
-  onIndexChange: (next: number) => void;
   distanceForRow: (row: PlanFeedRow) => number | null;
+  viewerHasLocation?: boolean;
   onSwipeRight: (row: PlanFeedRow) => void;
   onSwipeLeft: (row: PlanFeedRow) => void;
   onPressCard: (row: PlanFeedRow) => void;
@@ -45,9 +46,8 @@ type Props = {
 const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansSwipeDeckInner(
   {
     items,
-    index,
-    onIndexChange,
     distanceForRow,
+    viewerHasLocation = true,
     onSwipeRight,
     onSwipeLeft,
     onPressCard,
@@ -64,40 +64,40 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const locked = useSharedValue(false);
+  const committedPlanIdRef = useRef<string | null>(null);
 
-  const top = items[index] ?? null;
-  const next = items[index + 1] ?? null;
+  const top = items[0] ?? null;
+  const next = items[1] ?? null;
 
   useEffect(() => {
+    locked.value = false;
+    committedPlanIdRef.current = null;
     translateX.value = 0;
     translateY.value = 0;
-  }, [index, top?.id, translateX, translateY]);
+  }, [top?.id, locked, translateX, translateY]);
 
-  const advance = useCallback(() => {
-    onIndexChange(index + 1);
-  }, [index, onIndexChange]);
+  const commitSwipe = useCallback(
+    (dir: 'left' | 'right') => {
+      if (!top || committedPlanIdRef.current === top.id) return;
+      committedPlanIdRef.current = top.id;
+      locked.value = true;
 
-  const completeRight = useCallback(() => {
-    if (top) onSwipeRight(top);
-    advance();
-  }, [top, onSwipeRight, advance]);
+      if (dir === 'right') onSwipeRight(top);
+      else onSwipeLeft(top);
 
-  const completeLeft = useCallback(() => {
-    if (top) onSwipeLeft(top);
-    advance();
-  }, [top, onSwipeLeft, advance]);
+      const target = dir === 'right' ? W * 1.25 : -W * 1.25;
+      translateX.value = withTiming(target, { duration: EXIT_MS });
+      translateY.value = withTiming(0, { duration: EXIT_MS });
+    },
+    [top, onSwipeLeft, onSwipeRight, locked, translateX, translateY]
+  );
 
   const triggerSwipe = useCallback(
     (dir: 'left' | 'right') => {
-      const target = dir === 'right' ? W * 1.4 : -W * 1.4;
-      translateX.value = withSpring(target, { damping: 18, stiffness: 180 }, (finished) => {
-        if (finished) {
-          if (dir === 'right') runOnJS(completeRight)();
-          else runOnJS(completeLeft)();
-        }
-      });
+      commitSwipe(dir);
     },
-    [translateX, completeRight, completeLeft]
+    [commitSwipe]
   );
 
   useImperativeHandle(
@@ -111,22 +111,22 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
+      if (locked.value) return;
       translateX.value = e.translationX;
       translateY.value = e.translationY * 0.35;
     })
     .onEnd((e) => {
+      if (locked.value) return;
       if (e.translationX > SWIPE_THRESHOLD) {
-        translateX.value = withSpring(W * 1.4, { damping: 18, stiffness: 180 }, (finished) => {
-          if (finished) runOnJS(completeRight)();
-        });
-      } else if (e.translationX < -SWIPE_THRESHOLD) {
-        translateX.value = withSpring(-W * 1.4, { damping: 18, stiffness: 180 }, (finished) => {
-          if (finished) runOnJS(completeLeft)();
-        });
-      } else {
-        translateX.value = withSpring(0, { damping: 20, stiffness: 220 });
-        translateY.value = withSpring(0, { damping: 20, stiffness: 220 });
+        runOnJS(commitSwipe)('right');
+        return;
       }
+      if (e.translationX < -SWIPE_THRESHOLD) {
+        runOnJS(commitSwipe)('left');
+        return;
+      }
+      translateX.value = withSpring(0, { damping: 20, stiffness: 280 });
+      translateY.value = withSpring(0, { damping: 20, stiffness: 280 });
     });
 
   const topStyle = useAnimatedStyle(() => ({
@@ -169,6 +169,7 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
             <DiscoverySwipeCard
               row={next}
               distanceKm={distanceForRow(next)}
+              viewerHasLocation={viewerHasLocation}
               presence={presenceForRow(next)}
               onPress={() => {}}
             />
@@ -179,6 +180,7 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
             <DiscoverySwipeCard
               row={top}
               distanceKm={distanceForRow(top)}
+              viewerHasLocation={viewerHasLocation}
               presence={presenceForRow(top)}
               onPress={() => onPressCard(top)}
             />
@@ -266,14 +268,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: 'rgba(255,255,255,0.95)',
   },
-  stampTxt: { marginTop: 4, fontSize: 13, fontWeight: '900', color: colors.secondary },
+  stampTxt: { marginTop: 4, fontSize: 13, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.secondary },
   done: {
     alignItems: 'center',
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.lg,
   },
-  doneEmoji: { fontSize: 40, marginBottom: spacing.sm },
-  doneTitle: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  doneEmoji: { fontSize: 40, marginBottom: spacing.sm, fontFamily: fonts.regular, },
+  doneTitle: { fontSize: 20, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, textAlign: 'center' },
   doneSub: {
     fontSize: 15,
     color: colors.textMuted,

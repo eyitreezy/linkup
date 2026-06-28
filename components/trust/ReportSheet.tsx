@@ -2,7 +2,7 @@
  * Trust report flow — bottom sheet styled like Notification Inbox (gradient shell, inbox rows, dual CTAs).
  */
 import { Input } from '@/components/Input';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { ReportReasonCode } from '@/lib/trust/submitReport';
 import { submitUserReport } from '@/lib/trust/submitReport';
 import { Ionicons } from '@expo/vector-icons';
@@ -108,7 +108,7 @@ export function ReportSheet({
         <Pressable style={styles.backdrop} onPress={handleClose} accessibilityLabel="Close" />
         <View style={[styles.sheetOuter, { height: sheetHeight, maxHeight: sheetHeight, borderTopLeftRadius: sheetTopRadius, borderTopRightRadius: sheetTopRadius }]}>
           <LinearGradient
-            colors={['#EDE8FF', '#FFFFFF', '#FFF5F8', colors.surface]}
+            colors={['#D2C9FF', '#FFFFFF', '#FFD1E3', colors.surface]}
             locations={[0, 0.25, 0.55, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -160,7 +160,7 @@ export function ReportSheet({
                 accessibilityLabel="Open plan dispute and meeting safety"
               >
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+                  colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.disputeEntryBorder}
@@ -187,7 +187,7 @@ export function ReportSheet({
                 <Text style={styles.sectionTitle}>What’s going on?</Text>
               </View>
               <LinearGradient
-                colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.sectionRule}
@@ -279,7 +279,7 @@ export function ReportSheet({
                 <Text style={styles.sectionTitle}>Optional details</Text>
               </View>
               <LinearGradient
-                colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.sectionRule}
@@ -350,7 +350,7 @@ export function ReportSheet({
           <View style={styles.doneScroll}>
           <View style={styles.doneWrap}>
             <LinearGradient
-              colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+              colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.doneIconRing}
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     backgroundColor: colors.surface,
     ...Platform.select({
       ios: {
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.97)',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.14)',
+    borderTopColor: 'rgba(94, 82, 255, 0.14)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(108, 99, 255, 0.28)',
+    backgroundColor: 'rgba(94, 82, 255, 0.28)',
     marginBottom: spacing.md,
   },
   headerBlock: {
@@ -488,12 +488,14 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
-  sheetTitle: { fontSize: 22, fontWeight: '900', color: colors.text, letterSpacing: -0.5 },
+  sheetTitle: { fontSize: 22, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.5 },
   closePill: {
     width: 44,
     height: 44,
@@ -502,12 +504,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   pressed: { opacity: 0.92 },
   trustCopy: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 21,
     marginBottom: spacing.md,
@@ -523,6 +526,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -546,8 +550,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   disputeEntryText: { flex: 1, minWidth: 0 },
-  disputeEntryTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  disputeEntrySub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 19 },
+  disputeEntryTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  disputeEntrySub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 19, fontFamily: fonts.medium, },
   reasonRowOuter: {
     marginBottom: spacing.sm,
     borderRadius: radius.lg,
@@ -582,14 +587,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 2,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   reasonIconWrap: {
     width: 48,
     height: 48,
     borderRadius: radius.button,
     borderWidth: 2,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
@@ -605,21 +610,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   reasonTextCol: { flex: 1, minWidth: 0 },
-  reasonTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  reasonSub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 19 },
+  reasonTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  reasonSub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 19, fontFamily: fonts.medium, },
   noteHint: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.textMuted,
     marginBottom: spacing.sm,
   },
-  err: { color: colors.danger, marginTop: spacing.sm, fontWeight: '600' },
+  err: { color: colors.danger, marginTop: spacing.sm, fontWeight: '600',
+    fontFamily: fonts.medium,},
   ctaFullOuter: {
     borderRadius: radius.button,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.22,
         shadowRadius: 14,
@@ -637,7 +644,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     minHeight: 54,
   },
-  ctaFullTxt: { fontSize: 17, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
+  ctaFullTxt: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF', letterSpacing: -0.2 },
   ctaFullTxtDim: { color: 'rgba(255,255,255,0.75)' },
   dualCtaRow: {
     flexDirection: 'row',
@@ -665,7 +673,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: spacing.sm,
   },
-  outlineTxt: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  outlineTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   submitGrad: {
     flex: 1,
     width: '100%',
@@ -678,7 +687,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: spacing.md,
   },
-  submitTxt: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  submitTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF' },
   doneWrap: { paddingVertical: spacing.md, alignItems: 'center' },
   doneIconRing: {
     borderRadius: 40,
@@ -695,6 +705,7 @@ const styles = StyleSheet.create({
   doneTitle: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.sm,
     letterSpacing: -0.3,
@@ -702,6 +713,7 @@ const styles = StyleSheet.create({
   doneBody: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,

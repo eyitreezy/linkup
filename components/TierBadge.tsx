@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
@@ -44,9 +44,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  labelCompact: { fontSize: 9 },
+  labelCompact: { fontSize: 9, fontFamily: fonts.regular },
 });

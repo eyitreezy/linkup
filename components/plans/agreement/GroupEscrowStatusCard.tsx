@@ -3,7 +3,7 @@
  */
 import { EscrowStatusBadge } from '@/components/escrow/EscrowStatusBadge';
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import type { DbEscrowTransaction, DbPlan } from '@/types/database';
 import { Href, router } from 'expo-router';
@@ -97,7 +97,7 @@ export function GroupEscrowStatusCard({ plan }: Props) {
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.08)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.08)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.topGlow}
@@ -105,7 +105,7 @@ export function GroupEscrowStatusCard({ plan }: Props) {
 
       <View style={styles.headerRow}>
         <LinearGradient
-          colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+          colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
           style={styles.iconWrap}
         >
           <Ionicons name="people-outline" size={22} color={colors.primary} />
@@ -177,7 +177,7 @@ export function GroupEscrowStatusCard({ plan }: Props) {
       {allFunded ? (
         <View style={styles.successBanner}>
           <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <Text style={styles.successTxt}>All guests funded — plan can go active.</Text>
+          <Text style={styles.successTxt}>All guests funded. Plan can go active.</Text>
         </View>
       ) : pending?.escrowId ? (
         <Pressable
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     overflow: 'hidden',
     ...cardShadow,
   },
@@ -235,12 +235,14 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
-  title: { fontSize: 17, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
+  title: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
   progressBlock: { marginBottom: spacing.md },
   progressMeta: {
     flexDirection: 'row',
@@ -248,8 +250,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  progressLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  progressPct: { fontSize: 13, fontWeight: '900', color: colors.primary },
+  progressLabel: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  progressPct: { fontSize: 13, fontWeight: '900', color: colors.primary, fontFamily: fonts.bold, },
   progressPctDone: { color: colors.success },
   track: {
     height: 8,
@@ -270,7 +273,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.1)',
+    borderTopColor: 'rgba(94, 82, 255, 0.1)',
   },
   guestRowFirst: { borderTopWidth: 0 },
   guestRowDone: { backgroundColor: 'rgba(16, 185, 129, 0.06)' },
@@ -279,20 +282,21 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   avatarDone: {
     backgroundColor: colors.success,
     borderColor: colors.success,
   },
-  avatarInitial: { fontSize: 14, fontWeight: '900', color: colors.primary },
+  avatarInitial: { fontSize: 14, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary },
   guestRowText: { flex: 1, gap: 6 },
-  guestName: { fontSize: 15, fontWeight: '800', color: colors.text },
-  pendingTxt: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  guestName: { fontSize: 15, fontWeight: '800', color: colors.text, fontFamily: fonts.bold, },
+  pendingTxt: { fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -304,7 +308,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.25)',
   },
-  successTxt: { flex: 1, fontSize: 13, fontWeight: '700', color: '#047857', lineHeight: 18 },
+  successTxt: { flex: 1, fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#047857', lineHeight: 18 },
   ctaRow: { marginTop: spacing.sm, borderRadius: radius.button, overflow: 'hidden' },
   ctaGrad: {
     flexDirection: 'row',
@@ -314,5 +319,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
   },
-  ctaTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  ctaTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
 });

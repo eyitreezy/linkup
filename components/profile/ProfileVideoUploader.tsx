@@ -1,11 +1,11 @@
 import { authSoftLabelStyle } from '@/components/Input';
 import { KycLivenessVideoPreview } from '@/components/kyc/KycLivenessVideoPreview';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Alert, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   localUri: string | null;
@@ -20,7 +20,10 @@ export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemov
 
   async function pickVideo() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') {
+      Alert.alert('Photos access needed', 'Allow photo library access to upload your intro video.');
+      return;
+    }
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       allowsMultipleSelection: false,
@@ -52,7 +55,7 @@ export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemov
       ) : (
         <Pressable onPress={pickVideo} style={({ pressed }) => [styles.addOuter, pressed && styles.addPressed]}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.08)']}
+            colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.08)']}
             style={styles.addInner}
           >
             <Ionicons name="videocam-outline" size={32} color={colors.primary} />
@@ -68,12 +71,13 @@ export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemov
 const styles = StyleSheet.create({
   wrap: { marginTop: onboarding.spacing.lg },
   labelSpacing: { marginBottom: 4 },
-  hint: { fontSize: 12, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18 },
+  hint: { fontSize: 12,
+    fontFamily: fonts.regular, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18 },
   previewCard: {
     borderRadius: onboarding.radius2xl,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.18)',
+    borderColor: 'rgba(94, 82, 255,0.18)',
     backgroundColor: '#fff',
   },
   video: { width: '100%', height: 220, backgroundColor: '#0F172A' },
@@ -86,9 +90,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
   },
-  actionTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  actionTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   actionDanger: { backgroundColor: 'rgba(239,68,68,0.08)' },
   actionDangerTxt: { color: colors.danger },
   addOuter: { borderRadius: onboarding.radius2xl, overflow: 'hidden' },
@@ -99,10 +104,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
     borderRadius: onboarding.radius2xl,
     borderStyle: 'dashed',
   },
-  addTitle: { marginTop: 8, fontSize: 15, fontWeight: '900', color: colors.text },
-  addSub: { marginTop: 4, fontSize: 12, fontWeight: '600', color: onboarding.muted },
+  addTitle: { marginTop: 8, fontSize: 15, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  addSub: { marginTop: 4, fontSize: 12, fontWeight: '600', color: onboarding.muted, fontFamily: fonts.medium, },
 });

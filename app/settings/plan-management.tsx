@@ -9,7 +9,7 @@ import { PlanShelfActionConfirmModal } from '@/components/plans/PlanShelfActionC
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { PlanCreatorEditSheet } from '@/components/plans/PlanCreatorEditSheet';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { distanceKm } from '@/lib/location';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
@@ -132,7 +132,7 @@ function SortChip({
     <Pressable onPress={onPress} style={styles.sortChipOuter}>
       {active ? (
         <LinearGradient
-          colors={['rgba(108,99,255,0.95)', '#9B8CFF']}
+          colors={['rgba(94, 82, 255,0.95)', '#9B8CFF']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.sortChipGrad}
@@ -316,7 +316,7 @@ export default function PlanManagementScreen() {
     plans.length === 0 ? 'No meetups yet' : query.trim() ? 'No matches' : 'Nothing in this filter';
   const emptySub =
     plans.length === 0
-      ? 'When you publish a plan, it shows up here — mood sparks and longer ideas together.'
+      ? 'When you publish a plan, it shows up here. Mood sparks and longer ideas together.'
       : query.trim()
         ? 'Try another keyword, clear search, or switch to All to browse everything you’ve created.'
         : 'Try the All tab to see every plan, or pick another shelf above.';
@@ -347,11 +347,11 @@ export default function PlanManagementScreen() {
           </View>
 
           <Text style={styles.sub}>
-            Color-coded shelves for every stage — same energy as your wallet: clear, confident, ready to scale.
+            Your plans organized by stage, from drafts to live meetups.
           </Text>
 
           <LinearGradient
-            colors={['#6C63FF', '#9B8CFF', '#FF6584']}
+            colors={['#5E52FF', '#9B8CFF', '#FF4A72']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
@@ -370,7 +370,7 @@ export default function PlanManagementScreen() {
                 <>
                   <Text style={styles.heroStat}>{plans.length}</Text>
                   <Text style={styles.heroHint}>
-                    {activeLivingCount} live in discovery flow · filters below slice this total without hiding the rest.
+                    {activeLivingCount} live in discovery. Filters below slice this total without hiding the rest.
                   </Text>
                 </>
               )}
@@ -428,7 +428,7 @@ export default function PlanManagementScreen() {
           ) : filtered.length === 0 ? (
             <View style={styles.emptyCard}>
               <LinearGradient
-                colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.08)']}
+                colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.08)']}
                 style={styles.emptyIconRing}
               >
                 <Ionicons name="folder-open-outline" size={36} color={colors.primary} />
@@ -579,7 +579,6 @@ export default function PlanManagementScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl * 2.5,
   },
 
@@ -587,7 +586,7 @@ const styles = StyleSheet.create({
   headerIconWrap: {
     borderRadius: radius.lg,
     overflow: 'hidden',
-    shadowColor: '#6C63FF',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -598,19 +597,21 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1.1,
     marginBottom: 2,
   },
-  title: { fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.6 },
-  sub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, marginBottom: spacing.md, fontWeight: '600' },
+  title: { fontSize: 28, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.6 },
+  sub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, marginBottom: spacing.md, fontWeight: '600', fontFamily: fonts.medium, },
 
   heroGradient: {
     borderRadius: radius.xl,
     padding: 2,
     marginBottom: spacing.lg,
-    shadowColor: '#6C63FF',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.22,
     shadowRadius: 18,
@@ -622,7 +623,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  heroLabel: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase' },
+  heroLabel: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase' },
   heroLivePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -633,9 +635,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   heroLiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#4ADE80' },
-  heroLiveTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
-  heroStat: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -0.5, marginTop: 4 },
-  heroHint: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 10, lineHeight: 20, fontWeight: '600' },
+  heroLiveTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
+  heroStat: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -0.5, marginTop: 4, fontFamily: fonts.bold, },
+  heroHint: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 10, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
 
   searchShell: {
     flexDirection: 'row',
@@ -643,7 +646,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
     minHeight: 52,
@@ -654,12 +657,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   searchIcon: { marginRight: spacing.sm },
-  searchInput: { flex: 1, fontSize: 16, color: colors.text, paddingVertical: Platform.OS === 'android' ? 10 : 12 },
+  searchInput: { flex: 1, fontSize: 16, color: colors.text, paddingVertical: Platform.OS === 'android' ? 10 : 12, fontFamily: fonts.regular, },
 
   filterSectionLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
   filterSectionLabel: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -680,7 +684,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.button,
   },
-  chipLabelOn: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  chipLabelOn: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   chipBadgeOn: {
     minWidth: 22,
     paddingHorizontal: 6,
@@ -689,7 +694,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.28)',
     alignItems: 'center',
   },
-  chipBadgeTxtOn: { fontSize: 12, fontWeight: '900', color: '#fff' },
+  chipBadgeTxtOn: { fontSize: 12, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff' },
   chipIdle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -699,32 +705,35 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
-  chipLabel: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  chipLabel: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   chipBadge: {
     minWidth: 22,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     alignItems: 'center',
   },
-  chipBadgeTxt: { fontSize: 12, fontWeight: '900', color: colors.primary },
+  chipBadgeTxt: { fontSize: 12, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary },
 
   sortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.lg },
   sortChipOuter: { borderRadius: radius.button, overflow: 'hidden' },
   sortChipGrad: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.button },
-  sortChipOnTxt: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  sortChipOnTxt: { fontSize: 13, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
   sortChipIdle: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
-  sortChipTxt: { fontSize: 13, fontWeight: '800', color: colors.textMuted },
+  sortChipTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted },
 
   emptyCard: {
     alignItems: 'center',
@@ -732,7 +741,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   emptyIconRing: {
     width: 72,
@@ -741,7 +750,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { fontSize: 18, fontWeight: '900', color: colors.text, marginTop: spacing.md },
+  emptyTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.md },
   emptySub: {
     fontSize: 14,
     color: colors.textMuted,
@@ -775,33 +785,37 @@ const styles = StyleSheet.create({
   planBody: { flex: 1, padding: spacing.md },
 
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  cardMeta: { marginTop: 4, fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+  cardTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  cardMeta: { marginTop: 4, fontSize: 13, color: colors.textMuted, fontWeight: '600', fontFamily: fonts.medium, },
   livePill: {
-    backgroundColor: 'rgba(255,101,132,0.18)',
+    backgroundColor: 'rgba(255, 74, 114,0.18)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  livePillTxt: { fontSize: 11, fontWeight: '900', color: colors.secondary },
+  livePillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.secondary },
   endedPill: {
     backgroundColor: 'rgba(100,116,139,0.16)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  endedPillTxt: { fontSize: 11, fontWeight: '900', color: '#64748B' },
+  endedPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#64748B' },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   statPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.md,
   },
-  statItem: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  statItem: { fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   actionsScroll: { marginTop: spacing.md, marginHorizontal: -2 },
   actionsScrollInner: {
     flexDirection: 'row',
@@ -814,12 +828,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.12)',
+    backgroundColor: 'rgba(94, 82, 255,0.12)',
     minHeight: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionBtnTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  actionBtnTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   actionBtnDanger: {
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -831,5 +846,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionBtnDangerTxt: { fontSize: 13, fontWeight: '800', color: colors.danger },
+  actionBtnDangerTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.danger },
 });

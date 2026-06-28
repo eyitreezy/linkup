@@ -19,9 +19,8 @@ import { ProfileCardPreview } from '@/components/onboarding/ProfileCardPreview';
 import { PromptSelector } from '@/components/onboarding/PromptSelector';
 import { TagSelector } from '@/components/onboarding/TagSelector';
 import { ProfileLocationSection } from '@/components/profile/ProfileLocationSection';
-import { KeyboardAwareContainer } from '@/components/KeyboardAwareContainer';
-import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
-import { colors, radius, spacing } from '@/constants/theme';
+import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +35,7 @@ import {
   SAFETY_TIPS,
 } from '@/lib/onboarding/constants';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
+import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import {
   draftFromProfile,
   ageFromBirthDate,
@@ -48,6 +48,7 @@ import {
   persistOnboardingResumeStep,
   saveOnboardingStep,
 } from '@/lib/onboarding/persist';
+import { userFacingOnboardingSaveError } from '@/lib/onboarding/userFacingError';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -63,7 +64,7 @@ import { MotiView } from 'moti';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -82,9 +83,16 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
+  const [showSaveDraftModal, setShowSaveDraftModal] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    title: string;
+    message: string;
+    variant: AppFeedbackVariant;
+  } | null>(null);
   const [contactsImportStatus, setContactsImportStatus] = useState<'idle' | 'imported' | 'denied'>('idle');
   const hydratedUserRef = useRef<string | null>(null);
   const skipDraftHydrateRef = useRef(false);
+  const stepRestoredRef = useRef(false);
 
   /** Prefill draft once per signed-in user — not on every profile refresh (avoids wiping fields after Continue). */
   useLayoutEffect(() => {
@@ -114,10 +122,12 @@ export default function OnboardingScreen() {
           : 0;
       setStep(idx);
     }
+    stepRestoredRef.current = true;
   }, [profile?.user_id, profile?.onboarding_status]);
 
   /** Persist resume index when the user moves between steps — not on every profile/preferences refresh (would race with `refreshProfile` after Continue). */
   useEffect(() => {
+    if (!stepRestoredRef.current) return;
     if (!user?.id || !isSupabaseConfigured || !profile) return;
     if (profile.onboarding_status !== 'pending') return;
 
@@ -170,10 +180,15 @@ export default function OnboardingScreen() {
 
   const persistAndNext = useCallback(async () => {
     if (!user?.id || !isSupabaseConfigured) {
-      Alert.alert('Setup', 'Configure Supabase in .env');
+      setFeedback({
+        variant: 'warning',
+        title: 'Setup required',
+        message: 'Configure Supabase in .env before continuing.',
+      });
       return;
     }
     setSaving(true);
+    Keyboard.dismiss();
     const { error, uploadedPhotoUrls } = await saveOnboardingStep({
       userId: user.id,
       draft,
@@ -182,7 +197,11 @@ export default function OnboardingScreen() {
     });
     if (error) {
       setSaving(false);
-      Alert.alert('Could not save', error.message);
+      setFeedback({
+        variant: 'error',
+        title: 'Could not save',
+        message: userFacingOnboardingSaveError(error.message),
+      });
       return;
     }
     const merged = mergeDraftAfterSave(draft, uploadedPhotoUrls);
@@ -216,7 +235,11 @@ export default function OnboardingScreen() {
     });
     if (error) {
       setSaving(false);
-      Alert.alert('Could not save', error.message);
+      setFeedback({
+        variant: 'error',
+        title: 'Could not save',
+        message: userFacingOnboardingSaveError(error.message),
+      });
       return;
     }
     setDraft((d) => mergeDraftAfterSave(d, uploadedPhotoUrls));
@@ -241,7 +264,12 @@ export default function OnboardingScreen() {
       });
       if (error) {
         setSaving(false);
-        Alert.alert('Error', error.message);
+        setShowSaveDraftModal(false);
+        setFeedback({
+          variant: 'error',
+          title: mode === 'draft' ? 'Could not save draft' : 'Could not publish',
+          message: userFacingOnboardingSaveError(error.message),
+        });
         return;
       }
       setDraft((d) => mergeDraftAfterSave(d, uploadedPhotoUrls));
@@ -250,21 +278,15 @@ export default function OnboardingScreen() {
       await refreshProfile();
       skipDraftHydrateRef.current = false;
       setSaving(false);
+      setShowSaveDraftModal(false);
       router.replace('/(tabs)');
     },
     [user?.id, draft, prefs, refreshProfile]
   );
 
   const confirmSaveDraft = useCallback(() => {
-    Alert.alert(
-      'Save as draft?',
-      "Your profile will be saved, but you'll need to publish or skip before you can browse Discover. You can come back to finish anytime.",
-      [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Save draft', onPress: () => void finish('draft') },
-      ]
-    );
-  }, [finish]);
+    setShowSaveDraftModal(true);
+  }, []);
 
   const handleContactsImport = useCallback(async () => {
     if (!user?.id) return;
@@ -311,7 +333,7 @@ export default function OnboardingScreen() {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           style={[StyleSheet.absoluteFillObject, styles.center]}
         >
@@ -340,7 +362,7 @@ export default function OnboardingScreen() {
             ? true
             : true;
 
-  const kbOffset = insets.top + 120;
+
   const stepLabel = ONBOARDING_STEP_LABELS[step] ?? 'Profile';
   const stepSubtitle = ONBOARDING_STEP_SUBTITLES[step] ?? '';
 
@@ -375,7 +397,7 @@ export default function OnboardingScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.32, 0.62, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -410,13 +432,65 @@ export default function OnboardingScreen() {
           </View>
         </View>
 
-        <KeyboardAwareContainer keyboardVerticalOffset={kbOffset} style={styles.keyboardFill}>
-          <KeyboardAwareScrollView
-            style={styles.scroll}
-            contentContainerStyle={[styles.scrollContent, step === 4 && styles.scrollContentPreview]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardSafeScrollView
+          style={styles.keyboardFill}
+          contentContainerStyle={[styles.scrollContent, step === 4 && styles.scrollContentPreview]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          footer={
+            step < 4 ? (
+              <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
+                <View style={styles.footerRow}>
+                  {step > 0 ? (
+                    <Pressable
+                      onPress={() => setShowSkipModal(true)}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.footerSkip, pressed && styles.pressed]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Skip onboarding"
+                    >
+                      <Text style={styles.skipTxt}>Skip</Text>
+                    </Pressable>
+                  ) : null}
+                  <Button
+                    title="Continue"
+                    onPress={onContinue}
+                    loading={saving}
+                    disabled={!stepValid || saving}
+                    gradient
+                    pill
+                    style={styles.footerContinue}
+                  />
+                </View>
+              </View>
+            ) : step === 4 ? (
+              <View style={[styles.previewFooter, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
+                <Button
+                  title="Edit from step 1"
+                  variant="ghost"
+                  onPress={() => setStep(0)}
+                  disabled={saving}
+                />
+                <Button
+                  title="Save as draft"
+                  variant="secondary"
+                  onPress={confirmSaveDraft}
+                  loading={saving}
+                  style={styles.previewFooterMid}
+                />
+                <Button
+                  title="Publish and go to Home"
+                  onPress={() => finish('publish')}
+                  loading={saving}
+                  gradient
+                  fullWidth
+                  pill
+                  style={styles.previewFooterPrimary}
+                />
+              </View>
+            ) : null
+          }
+        >
             <MotiView
               key={step}
               from={{ opacity: 0, translateX: 14 }}
@@ -503,6 +577,7 @@ export default function OnboardingScreen() {
                     ...d,
                     localVideoUri: null,
                     remoteVideoUrl: null,
+                    remoteVideoMediaId: null,
                   }))
                 }
               />
@@ -610,7 +685,7 @@ export default function OnboardingScreen() {
                 step={1}
                 value={draft.ageMin}
                 minimumTrackTintColor={colors.primary}
-                maximumTrackTintColor="rgba(108,99,255,0.15)"
+                maximumTrackTintColor="rgba(94, 82, 255,0.15)"
                 thumbTintColor={colors.primary}
                 onValueChange={(v) =>
                   setDraft((d) => ({
@@ -626,7 +701,7 @@ export default function OnboardingScreen() {
                 step={1}
                 value={draft.ageMax}
                 minimumTrackTintColor={colors.primary}
-                maximumTrackTintColor="rgba(108,99,255,0.15)"
+                maximumTrackTintColor="rgba(94, 82, 255,0.15)"
                 thumbTintColor={colors.primary}
                 onValueChange={(v) =>
                   setDraft((d) => ({
@@ -643,7 +718,7 @@ export default function OnboardingScreen() {
                 step={1}
                 value={draft.radiusKm}
                 minimumTrackTintColor={colors.primary}
-                maximumTrackTintColor="rgba(108,99,255,0.15)"
+                maximumTrackTintColor="rgba(94, 82, 255,0.15)"
                 thumbTintColor={colors.primary}
                 onValueChange={(v) => setDraft((d) => ({ ...d, radiusKm: v }))}
               />
@@ -663,7 +738,7 @@ export default function OnboardingScreen() {
               {SAFETY_TIPS.map((t) => (
                 <LinearGradient
                   key={t.title}
-                  colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+                  colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.tipCardBorder}
@@ -721,62 +796,7 @@ export default function OnboardingScreen() {
           )}
               </View>
             </MotiView>
-          </KeyboardAwareScrollView>
-        </KeyboardAwareContainer>
-
-      {step < 4 ? (
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
-          <View style={styles.footerRow}>
-            {step > 0 ? (
-              <Pressable
-                onPress={() => setShowSkipModal(true)}
-                hitSlop={8}
-                style={({ pressed }) => [styles.footerSkip, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Skip onboarding"
-              >
-                <Text style={styles.skipTxt}>Skip</Text>
-              </Pressable>
-            ) : (
-              <View style={styles.footerSkip} />
-            )}
-            <Button
-              title="Continue"
-              onPress={onContinue}
-              loading={saving}
-              disabled={!stepValid || saving}
-              gradient
-              pill
-              style={styles.footerContinue}
-            />
-          </View>
-        </View>
-      ) : step === 4 ? (
-        <View style={[styles.previewFooter, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
-          <Button
-            title="Edit from step 1"
-            variant="ghost"
-            onPress={() => setStep(0)}
-            disabled={saving}
-          />
-          <Button
-            title="Save as draft"
-            variant="secondary"
-            onPress={confirmSaveDraft}
-            loading={saving}
-            style={styles.previewFooterMid}
-          />
-          <Button
-            title="Publish and go to Home"
-            onPress={() => finish('publish')}
-            loading={saving}
-            gradient
-            fullWidth
-            pill
-            style={styles.previewFooterPrimary}
-          />
-        </View>
-      ) : null}
+          </KeyboardSafeScrollView>
 
         <AppConfirmModal
           visible={showSkipModal}
@@ -793,6 +813,31 @@ export default function OnboardingScreen() {
           busyOn="secondary"
           dismissOnBackdrop={!saving}
         />
+
+        <AppConfirmModal
+          visible={showSaveDraftModal}
+          onClose={() => !saving && setShowSaveDraftModal(false)}
+          kicker="Profile setup"
+          title="Save as draft?"
+          message="Your profile will be saved, but you'll need to publish or skip before you can browse Discover. You can come back to finish anytime."
+          iconVariant="warning"
+          primaryLabel="Keep editing"
+          onPrimary={() => setShowSaveDraftModal(false)}
+          secondaryLabel="Save draft"
+          onSecondary={() => void finish('draft')}
+          busyOn="secondary"
+          dismissOnBackdrop={!saving}
+        />
+
+        <AppFeedbackModal
+          visible={feedback != null}
+          onClose={() => setFeedback(null)}
+          variant={feedback?.variant ?? 'error'}
+          kicker="Profile setup"
+          title={feedback?.title ?? ''}
+          message={feedback?.message ?? ''}
+          primaryLabel="Got it"
+        />
       </View>
     </Screen>
   );
@@ -803,7 +848,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   keyboardFill: { flex: 1 },
-  skipTxt: { fontSize: 14, fontWeight: '800', color: colors.primary },
+  skipTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   pressed: { opacity: 0.92 },
   backBtn: {
     width: 44,
@@ -837,6 +883,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -845,6 +892,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 28,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -854,6 +902,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   scroll: { flex: 1 },
   scrollContent: {
@@ -876,17 +925,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     lineHeight: 21,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   fieldLabelSpacing: { marginBottom: 8 },
   dateBtn: { marginBottom: spacing.md },
-  dateTxt: { fontSize: 16, fontWeight: '600', color: colors.text },
+  dateTxt: { fontSize: 16, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
   },
-  switchLabel: { fontSize: 15, fontWeight: '700', color: colors.text, flex: 1 },
+  switchLabel: { fontSize: 15, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, flex: 1 },
   intentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.lg },
   chipOuter: { borderRadius: radius.button, overflow: 'hidden' },
   chipGrad: {
@@ -900,11 +952,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  chipTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
-  chipTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff' },
-  sliderLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  chipTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  chipTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
+  sliderLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4, fontFamily: fonts.medium, },
   slider: { width: '100%', height: 44, marginBottom: spacing.md },
   tipCardBorder: {
     borderRadius: radius.xl,
@@ -919,9 +972,10 @@ const styles = StyleSheet.create({
     backgroundColor: onboarding.cardBg,
   },
   tipTextCol: { flex: 1, minWidth: 0 },
-  tipIcon: { fontSize: 28 },
-  tipTitle: { fontSize: 16, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
-  tipBody: { fontSize: 14, color: colors.textMuted, marginTop: 4, lineHeight: 20, fontWeight: '600' },
+  tipIcon: { fontSize: 28, fontFamily: fonts.regular, },
+  tipTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
+  tipBody: { fontSize: 14, color: colors.textMuted, marginTop: 4, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   secondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -930,18 +984,20 @@ const styles = StyleSheet.create({
     marginVertical: spacing.md,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   contactsImportContent: { flex: 1 },
   contactsImportDesc: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     marginTop: 4,
     lineHeight: 17,
   },
-  contactsImportDenied: { fontSize: 12, fontWeight: '700', color: colors.danger },
+  contactsImportDenied: { fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.danger },
   trialEducationCallout: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -957,16 +1013,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     lineHeight: 19,
   },
-  secondaryBtnTxt: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  secondaryBtnTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.12)',
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
     backgroundColor: 'rgba(255,255,255,0.96)',
     ...Platform.select({
       ios: {
@@ -991,7 +1049,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
   footerContinue: {
     flex: 1,
@@ -1002,7 +1060,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xl,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.12)',
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
     backgroundColor: 'rgba(255,255,255,0.96)',
     gap: spacing.sm,
     ...Platform.select({

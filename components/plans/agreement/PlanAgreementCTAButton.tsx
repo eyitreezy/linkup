@@ -1,7 +1,7 @@
 /**
  * PL6a — primary / secondary actions (gradient + outline ring, inbox-aligned).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.26,
         shadowRadius: 18,
@@ -114,7 +114,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryText: { color: '#fff', fontSize: 17, fontWeight: '800', textAlign: 'center' },
+  primaryText: { color: '#fff', fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, textAlign: 'center' },
   primaryTextMuted: { color: 'rgba(255,255,255,0.7)' },
   secondaryOuter: {
     borderRadius: radius.button,
@@ -133,5 +134,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryText: { color: colors.secondary, fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  secondaryText: { color: colors.secondary, fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, textAlign: 'center' },
 });

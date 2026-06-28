@@ -2,7 +2,7 @@
  * Trust-focused cancellation summary (Hinge-style clarity).
  */
 import { CancellationPolicyRows } from '@/components/plans/CancellationPolicyRows';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { CANCELLATION_POLICY_TABLE_ROWS } from '@/lib/plans/cancellationPolicy';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     marginBottom: spacing.md,
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 6 },
@@ -76,24 +76,27 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 3,
   },
-  title: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 8, letterSpacing: -0.3 },
-  lead: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginBottom: spacing.md },
+  title: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 8, letterSpacing: -0.3 },
+  lead: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginBottom: spacing.md, fontFamily: fonts.regular, },
   outcome: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  outcomeTitle: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  outcomeTitle: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 8 },
   outcomeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  outcomeLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  outcomeAmount: { fontSize: 15, fontWeight: '900', color: colors.text },
-  outcomeLabelGoodwill: { fontSize: 13, fontWeight: '700', color: colors.primary },
-  outcomeAmountGoodwill: { fontSize: 15, fontWeight: '900', color: colors.primary },
-  outcomeLine: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 4 },
+  outcomeLabel: { fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  outcomeAmount: { fontSize: 15, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
+  outcomeLabelGoodwill: { fontSize: 13, fontWeight: '700', color: colors.primary, fontFamily: fonts.medium, },
+  outcomeAmountGoodwill: { fontSize: 15, fontWeight: '900', color: colors.primary, fontFamily: fonts.bold, },
+  outcomeLine: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 4, fontFamily: fonts.regular, },
 });

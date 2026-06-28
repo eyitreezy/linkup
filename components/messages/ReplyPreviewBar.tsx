@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -43,9 +43,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.16)',
+    borderColor: 'rgba(94, 82, 255, 0.16)',
   },
   accent: {
     width: 3,
@@ -54,7 +54,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   textCol: { flex: 1, minWidth: 0 },
-  label: { fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 2 },
-  preview: { fontSize: 14, fontWeight: '600', color: colors.textMuted, lineHeight: 18 },
+  label: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, marginBottom: 2 },
+  preview: { fontSize: 14, fontWeight: '600', color: colors.textMuted, lineHeight: 18, fontFamily: fonts.medium, },
   closeBtn: { padding: 4 },
 });

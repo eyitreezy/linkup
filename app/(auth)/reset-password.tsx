@@ -5,7 +5,7 @@ import { DatingAuthShell } from '@/components/auth/DatingAuthShell';
 import { PasswordStrengthIndicator } from '@/components/auth/PasswordStrengthIndicator';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { updatePassword } from '@/lib/auth/passwordReset';
 import { supabase } from '@/lib/supabase';
@@ -111,9 +111,10 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0D18' },
   head: { marginBottom: spacing.lg, gap: spacing.sm },
-  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  sub: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.72)', fontWeight: '500' },
-  formErr: { color: '#FCA5A5', fontSize: 13, textAlign: 'center', marginVertical: spacing.sm },
+  title: { fontSize: 24, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#FFFFFF', letterSpacing: -0.5 },
+  sub: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.72)', fontWeight: '500', fontFamily: fonts.regular, },
+  formErr: { color: '#FCA5A5', fontSize: 13, textAlign: 'center', marginVertical: spacing.sm, fontFamily: fonts.regular, },
   cta: { marginTop: spacing.md },
   warnIcon: { alignSelf: 'center', marginBottom: spacing.md },
   body: {

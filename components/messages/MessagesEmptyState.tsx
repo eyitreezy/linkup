@@ -2,7 +2,7 @@
  * Inbox empty — warm dating-app tone (connection-first, not marketplace).
  */
 import { Button } from '@/components/Button';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
@@ -21,7 +21,7 @@ export function MessagesEmptyState({ onBrowsePlansPress }: Props) {
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108, 99, 255, 0.35)', 'rgba(255, 101, 132, 0.3)', 'rgba(16, 185, 129, 0.2)']}
+        colors={['rgba(94, 82, 255, 0.35)', 'rgba(255, 74, 114, 0.3)', 'rgba(16, 185, 129, 0.2)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.artRingOuter}
@@ -104,10 +104,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.9)',
   },
-  emoji: { fontSize: 52 },
+  emoji: { fontSize: 52, fontFamily: fonts.regular, },
   title: {
     fontSize: 24,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     letterSpacing: -0.5,
@@ -120,6 +121,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 24,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   tips: {
     alignSelf: 'stretch',
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     gap: spacing.sm,
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 4 },
@@ -140,6 +142,7 @@ const styles = StyleSheet.create({
   tipsLabel: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: 0.7,
     textTransform: 'uppercase',
@@ -152,7 +155,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tip: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 22, fontWeight: '600', paddingTop: 6 },
+  tip: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 22, fontWeight: '600',
+    fontFamily: fonts.medium, paddingTop: 6 },
   ctaShell: {
     alignSelf: 'stretch',
     marginTop: spacing.xl,
@@ -165,5 +169,6 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: 0,
   },
-  ctaInnerTxt: { color: colors.primary, fontWeight: '900' },
+  ctaInnerTxt: { color: colors.primary, fontWeight: '900',
+    fontFamily: fonts.bold,},
 });

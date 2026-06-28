@@ -2,10 +2,12 @@
  * S1 — Support & help: quick topics, tickets (open / resolved), contact flow.
  * Visual shell aligned with Notification Inbox (gradient, glass nav, list rows). No settings icon in header.
  */
-import { Button } from '@/components/Button';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
+import { SupportContactModal } from '@/components/support/SupportContactModal';
+import { SupportPaymentDisambigModal } from '@/components/support/SupportPaymentDisambigModal';
+import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { TierBadge } from '@/components/TierBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -18,13 +20,10 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -97,6 +96,7 @@ export default function SupportHomeScreen() {
   const [subject, setSubject] = useState<string>(SUBJECT_OPTIONS[0]);
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [helpInfo, setHelpInfo] = useState<{ title: string; body: string; icon: IonName } | null>(null);
 
   const load = useCallback(async () => {
     if (!user || !isSupabaseConfigured) {
@@ -189,17 +189,23 @@ export default function SupportHomeScreen() {
         safeAreaEdges={['top', 'left', 'right', 'bottom']}
         contentContainerStyle={styles.scroll}
       >
-          <View style={styles.leadBlock}>
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.leadAccent}
-            />
-            <View style={styles.leadTextCol}>
-              <Text style={styles.leadKicker}>Support</Text>
-              <Text style={styles.leadTitle}>Support & help</Text>
-              <Text style={styles.leadSub}>We’re here to help you — quick answers below or open a ticket anytime.</Text>
+          <View style={styles.heroHeader}>
+            <View style={styles.heroLeft}>
+              <LinearGradient
+                colors={[colors.primary, '#8B7CFF', colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroBadge}
+              >
+                <Ionicons name="help-circle" size={22} color="#fff" />
+              </LinearGradient>
+              <View style={styles.heroText}>
+                <Text style={styles.heroKicker}>Support</Text>
+                <Text style={styles.heroTitle}>Support & help</Text>
+                <Text style={styles.heroSub}>
+                  Quick answers below or open a ticket anytime.
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -242,7 +248,7 @@ export default function SupportHomeScreen() {
               <Text style={styles.sectionTitle}>Quick help</Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -250,7 +256,7 @@ export default function SupportHomeScreen() {
           </View>
 
           <LinearGradient
-            colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+            colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardOuter}
@@ -265,9 +271,19 @@ export default function SupportHomeScreen() {
                     pressed && styles.helpRowPressed,
                   ]}
                   onPress={() => {
-                    if (c.onPress) c.onPress();
-                    else if (c.title === 'Payment issues') Alert.alert(c.title, PAYMENT_HELP_COPY);
-                    else Alert.alert(c.title, c.body);
+                    if (c.onPress) {
+                      c.onPress();
+                      return;
+                    }
+                    if (c.title === 'Payment issues') {
+                      setHelpInfo({ title: c.title, body: PAYMENT_HELP_COPY, icon: 'card-outline' });
+                      return;
+                    }
+                    if (c.title === 'Safety & reports') {
+                      setHelpInfo({ title: c.title, body: c.body, icon: 'heart-outline' });
+                      return;
+                    }
+                    setHelpInfo({ title: c.title, body: c.body, icon: c.icon });
                   }}
                 >
                   <View style={styles.helpIconWrap}>
@@ -310,7 +326,7 @@ export default function SupportHomeScreen() {
               <Text style={styles.sectionTitle}>Your tickets</Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -353,7 +369,7 @@ export default function SupportHomeScreen() {
           ) : filtered.length === 0 ? (
             <View style={styles.emptyCardOuter}>
               <LinearGradient
-                colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+                colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.emptyCardBorder}
@@ -375,7 +391,7 @@ export default function SupportHomeScreen() {
             </View>
           ) : (
             <LinearGradient
-              colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+              colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardOuter}
@@ -416,204 +432,152 @@ export default function SupportHomeScreen() {
           </Pressable>
       </SettingsStickyShell>
 
-        <Modal visible={modalOpen} animationType="slide" transparent statusBarTranslucent>
-          <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
-            <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-              <LinearGradient
-                colors={['#FBFAFF', '#F5F3FF']}
-                style={StyleSheet.absoluteFillObject}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-              />
-              <Text style={styles.modalTitle}>Contact support</Text>
-              <Text style={styles.modalSub}>We’ll email you from the address on your account.</Text>
-              <Text style={styles.inputLabel}>Topic</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-                <View style={styles.chipsRow}>
-                  {SUBJECT_OPTIONS.map((s) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => {
-                        if (s === 'Payment & escrow') void handlePaymentTopicSelect();
-                        else setSubject(s);
-                      }}
-                      style={styles.chipHit}
-                    >
-                      {subject === s ? (
-                        <LinearGradient
-                          colors={[colors.primary, '#8B7CE8']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 1 }}
-                          style={styles.chipGrad}
-                        >
-                          <Text style={styles.chipTxtOnWhite}>{s}</Text>
-                        </LinearGradient>
-                      ) : (
-                        <View style={styles.chipIdle}>
-                          <Text style={styles.chipTxt}>{s}</Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              </ScrollView>
-              <Text style={styles.inputLabel}>What’s going on?</Text>
-              <TextInput
-                style={styles.textarea}
-                placeholder="The more detail you share, the faster we can help."
-                placeholderTextColor={colors.textMuted}
-                multiline
-                value={body}
-                onChangeText={setBody}
-                textAlignVertical="top"
-              />
-              <Button title="Submit" onPress={() => void submitTicket()} loading={submitting} />
-              <Button title="Cancel" variant="ghost" onPress={() => setModalOpen(false)} style={{ marginTop: spacing.sm }} />
-            </Pressable>
-          </Pressable>
-        </Modal>
+      <AppConfirmModal
+        visible={helpInfo !== null}
+        onClose={() => setHelpInfo(null)}
+        kicker="Support"
+        title={helpInfo?.title ?? ''}
+        message={helpInfo?.body ?? ''}
+        iconVariant={helpInfo?.title === 'Payment issues' ? 'warning' : 'default'}
+        primaryLabel={
+          helpInfo?.title === 'Payment issues'
+            ? 'Choose next step'
+            : helpInfo?.title === 'Safety & reports'
+              ? 'Contact support'
+              : 'Got it'
+        }
+        onPrimary={() => {
+          if (helpInfo?.title === 'Payment issues') {
+            setHelpInfo(null);
+            void handlePaymentTopicSelect();
+            return;
+          }
+          if (helpInfo?.title === 'Safety & reports') {
+            setHelpInfo(null);
+            setSubject('Safety & reports');
+            setModalOpen(true);
+            return;
+          }
+          setHelpInfo(null);
+        }}
+        secondaryLabel="Got it"
+        onSecondary={() => setHelpInfo(null)}
+        actionsLayout={helpInfo?.title === 'Payment issues' || helpInfo?.title === 'Safety & reports' ? 'row' : 'stack'}
+      />
 
-        <Modal visible={conciergeModalOpen} animationType="slide" transparent statusBarTranslucent>
-          <Pressable style={styles.modalBackdrop} onPress={() => setConciergeModalOpen(false)}>
-            <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-              <LinearGradient
-                colors={['#F3EFFF', '#EDE8FF']}
-                style={StyleSheet.absoluteFillObject}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-              />
-              <View style={styles.conciergeModalHead}>
-                <TierBadge tier="PLATINUM" compact />
-                <Text style={styles.modalTitle}>Concierge Support</Text>
-              </View>
-              <Text style={styles.modalSub}>Describe anything — a concierge agent will take it from here.</Text>
-              <Text style={styles.conciergeSlaReminder}>We&apos;ll respond within 2 hours.</Text>
-              <Text style={styles.inputLabel}>What do you need?</Text>
-              <TextInput
-                style={styles.textarea}
-                placeholder="Tell us what you need — no topic required."
-                placeholderTextColor={colors.textMuted}
-                multiline
-                value={body}
-                onChangeText={setBody}
-                textAlignVertical="top"
-              />
-              <Button title="Send to concierge" onPress={() => void submitTicket({ concierge: true })} loading={submitting} />
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => setConciergeModalOpen(false)}
-                style={{ marginTop: spacing.sm }}
-              />
-            </Pressable>
-          </Pressable>
-        </Modal>
+      <SupportContactModal
+        visible={modalOpen}
+        onClose={() => setModalOpen(false)}
+        mode="standard"
+        subjectOptions={SUBJECT_OPTIONS}
+        subject={subject}
+        onSelectSubject={(s) => {
+          if (s === 'Payment & escrow') void handlePaymentTopicSelect();
+          else setSubject(s);
+        }}
+        body={body}
+        onChangeBody={setBody}
+        submitting={submitting}
+        onSubmit={() => void submitTicket()}
+      />
 
-        <Modal visible={disambigOpen} animationType="slide" transparent statusBarTranslucent>
-          <Pressable style={styles.disambigBackdrop} onPress={() => setDisambigOpen(false)}>
-            <Pressable style={styles.disambigSheet} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.disambigHandle} />
-              <Text style={styles.disambigTitle}>What&apos;s the issue?</Text>
-              <Text style={styles.disambigSub}>
-                You have active escrow — pick the path that matches your situation.
-              </Text>
+      <SupportContactModal
+        visible={conciergeModalOpen}
+        onClose={() => setConciergeModalOpen(false)}
+        mode="concierge"
+        subjectOptions={SUBJECT_OPTIONS}
+        subject={subject}
+        onSelectSubject={setSubject}
+        body={body}
+        onChangeBody={setBody}
+        submitting={submitting}
+        onSubmit={() => void submitTicket({ concierge: true })}
+      />
 
-              <Pressable
-                style={styles.disambigOption}
-                onPress={() => {
-                  setDisambigOpen(false);
-                  const esc = activeEscrows[0];
-                  if (esc) router.push(`/escrow/${esc.id}` as Href);
-                }}
-              >
-                <View style={styles.disambigOptionText}>
-                  <Text style={styles.disambigOptionTitle}>Money stuck / wrong amount in escrow</Text>
-                  <Text style={styles.disambigOptionDesc}>
-                    Go to your escrow screen to dispute and hold the funds.
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </Pressable>
-
-              <Pressable
-                style={styles.disambigOption}
-                onPress={() => {
-                  setDisambigOpen(false);
-                  const esc = activeEscrows[0];
-                  if (esc?.plan_id) router.push(`/dispute/${esc.plan_id}` as Href);
-                }}
-              >
-                <View style={styles.disambigOptionText}>
-                  <Text style={styles.disambigOptionTitle}>Misconduct, scam, or safety concern</Text>
-                  <Text style={styles.disambigOptionDesc}>
-                    File a plan dispute with evidence (video required).
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </Pressable>
-
-              <Pressable
-                style={styles.disambigOption}
-                onPress={() => {
-                  setDisambigOpen(false);
-                  proceedToTicketForm('Payment & escrow');
-                }}
-              >
-                <View style={styles.disambigOptionText}>
-                  <Text style={styles.disambigOptionTitle}>Something else — contact support</Text>
-                  <Text style={styles.disambigOptionDesc}>A support agent will help you.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </Pressable>
-            </Pressable>
-          </Pressable>
-        </Modal>
+      <SupportPaymentDisambigModal
+        visible={disambigOpen}
+        onClose={() => setDisambigOpen(false)}
+        options={[
+          {
+            title: 'Money stuck / wrong amount in escrow',
+            description: 'Go to your escrow screen to dispute and hold the funds.',
+            onPress: () => {
+              setDisambigOpen(false);
+              const esc = activeEscrows[0];
+              if (esc) router.push(`/escrow/${esc.id}` as Href);
+            },
+          },
+          {
+            title: 'Misconduct, scam, or safety concern',
+            description: 'File a plan dispute with evidence (video required).',
+            onPress: () => {
+              setDisambigOpen(false);
+              const esc = activeEscrows[0];
+              if (esc?.plan_id) router.push(`/dispute/${esc.plan_id}` as Href);
+            },
+          },
+          {
+            title: 'Something else — contact support',
+            description: 'A support agent will help you.',
+            onPress: () => {
+              setDisambigOpen(false);
+              proceedToTicketForm('Payment & escrow');
+            },
+          },
+        ]}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: spacing.xl,
+    paddingBottom: 120,
   },
-  leadBlock: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
+  heroHeader: {
     marginBottom: spacing.lg,
   },
-  leadAccent: {
-    width: 5,
-    marginTop: 8,
-    borderRadius: 3,
-    height: 52,
+  heroLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  heroBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  leadTextCol: { flex: 1, minWidth: 0 },
-  leadKicker: {
+  heroText: { flex: 1, minWidth: 0 },
+  heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
-  leadTitle: {
-    fontSize: 26,
+  heroTitle: {
+    fontSize: 30,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
-    letterSpacing: -0.45,
-    marginBottom: 6,
+    letterSpacing: -0.7,
   },
-  leadSub: {
+  heroSub: {
     fontSize: 15,
-    color: colors.textMuted,
-    lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 6,
+    lineHeight: 21,
   },
   sectionHead: {
     marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
   },
   sectionHeadSpaced: {
     marginTop: spacing.md,
@@ -633,6 +597,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -646,7 +611,6 @@ const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: radius.xl,
     padding: 2,
-    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
   cardInner: {
@@ -677,21 +641,22 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(26, 29, 38, 0.08)',
   },
   helpRowPressed: {
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   helpIconWrap: {
     width: 44,
     height: 44,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   helpTextCol: { flex: 1, minWidth: 0 },
-  helpRowTitle: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
-  helpRowBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, fontWeight: '600' },
+  helpRowTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
+  helpRowBody: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, fontWeight: '600', fontFamily: fonts.medium, },
   ctaWrap: {
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
@@ -703,7 +668,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     ...(Platform.OS === 'ios'
       ? {
-          shadowColor: '#6C63FF',
+          shadowColor: '#5E52FF',
           shadowOffset: { width: 0, height: 10 },
           shadowOpacity: 0.28,
           shadowRadius: 18,
@@ -727,6 +692,7 @@ const styles = StyleSheet.create({
   ctaLabel: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     letterSpacing: -0.2,
     color: '#FFFFFF',
   },
@@ -755,14 +721,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
     alignItems: 'center',
   },
-  tabTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
-  tabTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  tabTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  tabTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
   loader: { marginVertical: spacing.lg },
   emptyCardOuter: {
-    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
   emptyCardBorder: {
@@ -787,6 +753,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.25,
     textAlign: 'center',
@@ -798,6 +765,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   ticketRow: {
     paddingVertical: spacing.md,
@@ -807,7 +775,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(26, 29, 38, 0.08)',
   },
-  ticketTitle: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
+  ticketTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   ticketMeta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -816,12 +785,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.button },
-  pillOpen: { backgroundColor: 'rgba(108, 99, 255, 0.12)', borderWidth: 1, borderColor: 'rgba(108, 99, 255, 0.22)' },
+  pillOpen: { backgroundColor: 'rgba(94, 82, 255, 0.12)', borderWidth: 1, borderColor: 'rgba(94, 82, 255, 0.22)' },
   pillDone: { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.22)' },
-  pillTxt: { fontSize: 12, fontWeight: '800' },
+  pillTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold,},
   pillTxtOpen: { color: colors.primary },
   pillTxtDone: { color: '#059669' },
-  ticketDate: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
+  ticketDate: { fontSize: 12, color: colors.textMuted, fontWeight: '600', fontFamily: fonts.medium, },
   disputesLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -830,55 +800,9 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingBottom: spacing.md,
   },
-  disputesLinkTxt: { fontSize: 16, fontWeight: '800', color: colors.primary },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    maxHeight: '90%',
-    overflow: 'hidden',
-  },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text, marginBottom: spacing.xs, letterSpacing: -0.3 },
-  modalSub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.lg, lineHeight: 20, fontWeight: '600' },
-  inputLabel: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  chipsScroll: { marginBottom: spacing.md },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chipHit: { borderRadius: radius.button, overflow: 'hidden' },
-  chipGrad: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.button,
-  },
-  chipIdle: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-  },
-  chipTxt: { fontSize: 13, fontWeight: '700', color: colors.text },
-  chipTxtOnWhite: { fontSize: 13, fontWeight: '900', color: '#fff' },
-  textarea: {
-    minHeight: 120,
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    fontSize: 15,
-    color: colors.text,
-    marginBottom: spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-  },
+  disputesLinkTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   conciergeOuter: {
-    marginHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
   conciergeBorder: {
@@ -901,12 +825,14 @@ const styles = StyleSheet.create({
   conciergeTitle: {
     fontSize: 18,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#5E35B1',
     letterSpacing: -0.2,
   },
   conciergeDesc: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 20,
     marginBottom: spacing.sm,
@@ -920,6 +846,7 @@ const styles = StyleSheet.create({
   conciergeSlaText: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: '#5E35B1',
   },
   conciergeBtn: {
@@ -932,78 +859,8 @@ const styles = StyleSheet.create({
   conciergeBtnLabel: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     letterSpacing: -0.2,
-  },
-  conciergeModalHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  conciergeSlaReminder: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#5E35B1',
-    marginBottom: spacing.md,
-  },
-  disambigBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-    justifyContent: 'flex-end',
-  },
-  disambigSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
-    maxHeight: '88%',
-  },
-  disambigHandle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  disambigTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.text,
-    letterSpacing: -0.3,
-    marginBottom: spacing.xs,
-  },
-  disambigSub: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
-    lineHeight: 20,
-    marginBottom: spacing.lg,
-  },
-  disambigOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    marginBottom: spacing.sm,
-  },
-  disambigOptionText: { flex: 1, minWidth: 0 },
-  disambigOptionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  disambigOptionDesc: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-    lineHeight: 19,
   },
 });

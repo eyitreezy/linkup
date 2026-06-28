@@ -6,11 +6,12 @@ import { ConversationCard } from '@/components/messages/ConversationCard';
 import { MessagesEmptyState } from '@/components/messages/MessagesEmptyState';
 import { MessagesInboxSkeleton } from '@/components/messages/MessagesInboxSkeleton';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { getLastReadMap } from '@/lib/messaging/inboxCache';
 import { messageDisplayText, parseLegacyImageBody } from '@/lib/messaging/chatQueries';
+import { subscribeInboxRealtime } from '@/lib/messaging/subscribeInboxRealtime';
 import { fetchFeedEngagementCarousel, type EngagementCarouselItem } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { fetchPresenceMap } from '@/lib/presence/presenceHeartbeat';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -19,6 +20,7 @@ import { Href, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
+import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -54,13 +56,13 @@ function previewForLast(
 
 export default function MessagesInboxScreen() {
   const tabBarScroll = useTabBarScrollProps();
+  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user } = useAuth();
   const [rows, setRows] = useState<InboxRow[]>([]);
   const [convIds, setConvIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [inboxReady, setInboxReady] = useState(false);
   const loadInboxRef = useRef<() => Promise<void>>(async () => {});
-  const inboxChannelRunRef = useRef(0);
 
   const [engagementItems, setEngagementItems] = useState<EngagementCarouselItem[]>([]);
   const [engagementLoading, setEngagementLoading] = useState(false);
@@ -95,6 +97,7 @@ export default function MessagesInboxScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadEngagementCarousel();
+      void loadInboxRef.current();
     }, [loadEngagementCarousel])
   );
 
@@ -288,36 +291,12 @@ export default function MessagesInboxScreen() {
 
   useEffect(() => {
     if (!user?.id || !isSupabaseConfigured) return;
-    inboxChannelRunRef.current += 1;
-    const topic = `inbox-user:${user.id}:${inboxChannelRunRef.current}`;
-    const ch = supabase
-      .channel(topic)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        () => {
-          void loadInboxRef.current();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-        },
-        () => {
-          void loadInboxRef.current();
-        }
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(ch);
-    };
+    return subscribeInboxRealtime({
+      userId: user.id,
+      onChange: () => {
+        void loadInboxRef.current();
+      },
+    });
   }, [user?.id]);
 
   const unreadTotal = useMemo(() => rows.filter((r) => r.unread).length, [rows]);
@@ -337,7 +316,7 @@ export default function MessagesInboxScreen() {
           <View style={styles.recentWrap}>
             <View style={styles.recentPill}>
               <LinearGradient
-                colors={['rgba(108,99,255,0.15)', 'rgba(255,101,132,0.12)']}
+                colors={['rgba(94, 82, 255,0.15)', 'rgba(255, 74, 114,0.12)']}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={StyleSheet.absoluteFill}
@@ -358,11 +337,12 @@ export default function MessagesInboxScreen() {
       style={styles.screenBg}
     >
       <LinearGradient
-        colors={['#EDE8FF', '#FFF5F8', '#E8FAF4', colors.discoveryGradientBottom]}
+        colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
         locations={[0, 0.28, 0.55, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.gradientBg}
+        style={bleedBgStyle}
+        pointerEvents="none"
       />
       <View style={styles.heroHeader}>
         <View style={styles.heroLeft}>
@@ -472,6 +452,7 @@ const styles = StyleSheet.create({
   heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -480,12 +461,14 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 32,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.8,
   },
   heroSub: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     marginTop: 6,
     lineHeight: 21,
@@ -504,7 +487,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
-  unreadBadgeTxt: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  unreadBadgeTxt: { color: '#fff', fontSize: 14, fontWeight: '900',
+    fontFamily: fonts.bold,},
   listFlex: { flex: 1 },
   listContent: { paddingBottom: spacing.xl * 2, flexGrow: 1 },
   listHeader: { paddingBottom: spacing.xs },
@@ -524,11 +508,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
   recentLabel: {
     fontSize: 13,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: 0.3,
     textTransform: 'uppercase',

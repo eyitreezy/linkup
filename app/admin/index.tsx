@@ -9,29 +9,45 @@ import {
 } from '@/components/admin/EscrowDisputeResolveModal';
 import { SlaDeadlineBadge } from '@/components/admin/SlaDeadlineBadge';
 import { AdminUsersPanel } from '@/components/admin/AdminUsersPanel';
+import { AdminMeetTypesPanel } from '@/components/admin/AdminMeetTypesPanel';
+import { AdminListSkeleton } from '@/components/admin/AdminListSkeleton';
+import { AdminPrivacyPolicyPanel } from '@/components/admin/AdminPrivacyPolicyPanel';
+import {
+  emptyAdminDashboardCounts,
+  fetchAdminDashboardCounts,
+  type AdminDashboardCounts,
+} from '@/lib/admin/adminDashboardCounts';
+import {
+  loadModerationTabData,
+  loadPlanDisputesTabData,
+  loadReportsTabData,
+  loadSupportTabData,
+  loadVerifyTabData,
+  type EscrowDisputeAdminRow,
+  type KycProfileSnippet,
+  type VerRow,
+} from '@/lib/admin/adminTabLoaders';
 import { TierBadge } from '@/components/TierBadge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type {
   DbDispute,
   DbDisputeEvidence,
-  DbEscrowTransaction,
   DbModerationLog,
   DbReport,
   DbSupportTicket,
   DbVerificationEvent,
-  DbVerificationRequest,
 } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Redirect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Redirect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -40,6 +56,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -50,28 +67,34 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-type AdminTab = 'verify' | 'reports' | 'moderation' | 'plan_disputes' | 'support' | 'plans' | 'users';
+type AdminTab =
+  | 'verify'
+  | 'reports'
+  | 'moderation'
+  | 'plan_disputes'
+  | 'support'
+  | 'plans'
+  | 'users'
+  | 'privacy_policy'
+  | 'meet_types';
 
-type EscrowDisputeAdminRow = {
-  id: string;
-  reason: string;
-  status: string;
-  created_at: string;
-  resolved_at: string | null;
-  escrow_id: string | null;
-  opened_by: string | null;
-  admin_resolution: string | null;
-  support_ticket_id: string | null;
-  detail: string | null;
-  queue_priority?: number | null;
-  sla_deadline?: string | null;
-  escrow_row?: Pick<
-    DbEscrowTransaction,
-    'id' | 'amount_cents' | 'currency' | 'plan_id' | 'payer_id' | 'payee_id' | 'status'
-  > | null;
-};
+const PANEL_TABS = new Set<AdminTab>(['users', 'privacy_policy', 'meet_types', 'plans']);
 
-type KycProfileSnippet = { display_name: string | null; avatar_url: string | null };
+const ADMIN_TAB_IDS: AdminTab[] = [
+  'verify',
+  'reports',
+  'moderation',
+  'plan_disputes',
+  'support',
+  'plans',
+  'users',
+  'privacy_policy',
+  'meet_types',
+];
+
+function isAdminTabId(value: string): value is AdminTab {
+  return ADMIN_TAB_IDS.includes(value as AdminTab);
+}
 
 function shortUuid(id: string, len = 8): string {
   return id.length <= len ? id : `${id.slice(0, len)}…`;
@@ -96,9 +119,9 @@ function escrowDisputeStatusStyle(status: string): { bg: string; fg: string; bor
   }
   if (s === 'under_review') {
     return {
-      bg: 'rgba(108,99,255,0.14)',
+      bg: 'rgba(94, 82, 255,0.14)',
       fg: colors.primary,
-      border: 'rgba(108,99,255,0.35)',
+      border: 'rgba(94, 82, 255,0.35)',
       label: 'Under review',
     };
   }
@@ -129,22 +152,10 @@ function escrowDisputeStatusStyle(status: string): { bg: string; fg: string; bor
 function ticketStatusStyle(status: string): { bg: string; fg: string; border: string } {
   const s = status.toLowerCase();
   if (s === 'open') return { bg: 'rgba(245,158,11,0.16)', fg: '#B45309', border: 'rgba(245,158,11,0.35)' };
-  if (s === 'in_progress') return { bg: 'rgba(108,99,255,0.14)', fg: colors.primary, border: 'rgba(108,99,255,0.35)' };
+  if (s === 'in_progress') return { bg: 'rgba(94, 82, 255,0.14)', fg: colors.primary, border: 'rgba(94, 82, 255,0.35)' };
   if (s === 'resolved') return { bg: 'rgba(16,185,129,0.14)', fg: '#047857', border: 'rgba(16,185,129,0.3)' };
   return { bg: 'rgba(107,114,128,0.1)', fg: colors.textMuted, border: colors.border };
 }
-
-type VerRow = Pick<
-  DbVerificationRequest,
-  | 'id'
-  | 'user_id'
-  | 'status'
-  | 'created_at'
-  | 'rejection_reason'
-  | 'id_document_path'
-  | 'selfie_video_path'
-  | 'reviewed_by'
->;
 
 const SEV_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
@@ -152,11 +163,11 @@ function kycStatusStyle(status: string): { bg: string; fg: string; border: strin
   if (status === 'pending') return { bg: 'rgba(245,158,11,0.18)', fg: '#B45309', border: 'rgba(245,158,11,0.35)' };
   if (status === 'admin_approved') return { bg: 'rgba(16,185,129,0.14)', fg: '#047857', border: 'rgba(16,185,129,0.35)' };
   if (status === 'admin_rejected') return { bg: 'rgba(239,68,68,0.12)', fg: colors.danger, border: 'rgba(239,68,68,0.35)' };
-  return { bg: 'rgba(108,99,255,0.1)', fg: colors.primary, border: 'rgba(108,99,255,0.25)' };
+  return { bg: 'rgba(94, 82, 255,0.1)', fg: colors.primary, border: 'rgba(94, 82, 255,0.25)' };
 }
 
 function reportStatusStyle(status: string): { bg: string; fg: string; border: string } {
-  if (status === 'pending') return { bg: 'rgba(255,101,132,0.14)', fg: '#BE185D', border: 'rgba(255,101,132,0.35)' };
+  if (status === 'pending') return { bg: 'rgba(255, 74, 114,0.14)', fg: '#BE185D', border: 'rgba(255, 74, 114,0.35)' };
   if (status === 'reviewed') return { bg: 'rgba(59,130,246,0.12)', fg: '#1D4ED8', border: 'rgba(59,130,246,0.3)' };
   return { bg: 'rgba(16,185,129,0.12)', fg: '#047857', border: 'rgba(16,185,129,0.3)' };
 }
@@ -304,14 +315,12 @@ function SectionHeader({
   return (
     <View style={[styles.sectionHeaderBlock, style]}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']}
+        colors={[colors.primary, '#8B7CFF', colors.secondary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.sectionIconRing}
+        style={styles.sectionIconBadge}
       >
-        <View style={styles.sectionIconInner}>
-          <Ionicons name={icon} size={20} color={colors.primary} />
-        </View>
+        <Ionicons name={icon} size={20} color="#fff" />
       </LinearGradient>
       <View style={styles.sectionHeaderText}>
         <Text style={styles.sectionTitle}>{title}</Text>
@@ -337,6 +346,7 @@ function AdminListCard({ children, style }: { children: ReactNode; style?: Style
 
 export default function AdminScreen() {
   const { isAdmin, adminRecordId } = useAuth();
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<AdminTab>('verify');
 
   const [ver, setVer] = useState<VerRow[]>([]);
@@ -347,7 +357,10 @@ export default function AdminScreen() {
   const [modProfiles, setModProfiles] = useState<Record<string, KycProfileSnippet>>({});
   const [modMessagePreview, setModMessagePreview] = useState<Record<string, string>>({});
   const [modPlanTitle, setModPlanTitle] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [dashboardCounts, setDashboardCounts] = useState<AdminDashboardCounts>(emptyAdminDashboardCounts);
+  const [refreshing, setRefreshing] = useState(false);
+  const panelReloadRef = useRef<(() => Promise<void>) | null>(null);
   const [kycProfiles, setKycProfiles] = useState<Record<string, KycProfileSnippet>>({});
 
   const [expandedKyc, setExpandedKyc] = useState<string | null>(null);
@@ -379,170 +392,90 @@ export default function AdminScreen() {
   const [ticketDetail, setTicketDetail] = useState<DbSupportTicket | null>(null);
   const [escrowResolveCtx, setEscrowResolveCtx] = useState<EscrowResolveContext | null>(null);
 
-  const load = useCallback(async () => {
-    if (!isSupabaseConfigured) return;
-    setLoading(true);
-    const { data: v } = await supabase
-      .from('verification_requests')
-      .select(
-        'id, user_id, status, created_at, rejection_reason, id_document_path, selfie_video_path, reviewed_by'
-      )
-      .order('created_at', { ascending: false })
-      .limit(40);
-    if (v) {
-      const rows = v as VerRow[];
-      setVer(rows);
-      const uidSet = [...new Set(rows.map((r) => r.user_id))];
-      if (uidSet.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('user_id, display_name, avatar_url')
-          .in('user_id', uidSet);
-        const map: Record<string, KycProfileSnippet> = {};
-        for (const p of profs ?? []) {
-          map[p.user_id] = { display_name: p.display_name, avatar_url: p.avatar_url };
+  const refreshDashboardCounts = useCallback(async () => {
+    const counts = await fetchAdminDashboardCounts();
+    setDashboardCounts(counts);
+  }, []);
+
+  const loadActiveTab = useCallback(async (t: AdminTab, opts?: { background?: boolean }) => {
+    if (!isSupabaseConfigured || PANEL_TABS.has(t)) return;
+    if (!opts?.background) setLoading(true);
+    try {
+      switch (t) {
+        case 'verify': {
+          const data = await loadVerifyTabData();
+          setVer(data.ver);
+          setKycProfiles(data.kycProfiles);
+          break;
         }
-        setKycProfiles(map);
-      } else setKycProfiles({});
-    } else {
-      setVer([]);
-      setKycProfiles({});
+        case 'reports': {
+          const data = await loadReportsTabData();
+          setReports(data.reports);
+          break;
+        }
+        case 'plan_disputes': {
+          const data = await loadPlanDisputesTabData();
+          setPlanDisputes(data.planDisputes);
+          setDisp(data.disp);
+          break;
+        }
+        case 'support': {
+          const data = await loadSupportTabData();
+          setTickets(data.tickets);
+          break;
+        }
+        case 'moderation': {
+          const data = await loadModerationTabData();
+          setMods(data.mods);
+          setModProfiles(data.modProfiles);
+          setModMessagePreview(data.modMessagePreview);
+          setModPlanTitle(data.modPlanTitle);
+          break;
+        }
+        default:
+          break;
+      }
+    } finally {
+      if (!opts?.background) setLoading(false);
     }
+  }, []);
 
-    const { data: pdi } = await supabase
-      .from('disputes')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(80);
-    if (pdi) setPlanDisputes(pdi as DbDispute[]);
+  const reloadAdminData = useCallback(async () => {
+    await Promise.all([loadActiveTab(tab, { background: true }), refreshDashboardCounts()]);
+  }, [tab, loadActiveTab, refreshDashboardCounts]);
 
-    const { data: d } = await supabase
-      .from('escrow_disputes')
-      .select(
-        'id, reason, status, created_at, resolved_at, escrow_id, opened_by, admin_resolution, support_ticket_id, detail, queue_priority'
-      )
-      .order('queue_priority', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(40);
-    if (d && d.length) {
-      const escrowIds = [
-        ...new Set(
-          d
-            .map((x: { escrow_id: string | null }) => x.escrow_id)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0)
-        ),
-      ];
-      const ticketIds = [
-        ...new Set(
-          d
-            .map((x: { support_ticket_id: string | null }) => x.support_ticket_id)
-            .filter((id): id is string => typeof id === 'string' && id.length > 0)
-        ),
-      ];
-      let byEscrow: Record<
-        string,
-        Pick<
-          DbEscrowTransaction,
-          'id' | 'amount_cents' | 'currency' | 'plan_id' | 'payer_id' | 'payee_id' | 'status'
-        >
-      > = {};
-      if (escrowIds.length) {
-        const { data: escrows } = await supabase
-          .from('escrow_transactions')
-          .select('id, amount_cents, currency, plan_id, payer_id, payee_id, status')
-          .in('id', escrowIds);
-        for (const e of escrows ?? []) byEscrow[e.id] = e as (typeof byEscrow)[string];
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const panelReload = panelReloadRef.current;
+      if (PANEL_TABS.has(tab) && panelReload) {
+        await Promise.all([panelReload(), refreshDashboardCounts()]);
+      } else {
+        await Promise.all([loadActiveTab(tab, { background: true }), refreshDashboardCounts()]);
       }
-      let slaByTicket: Record<string, string> = {};
-      if (ticketIds.length) {
-        const { data: linkedTickets } = await supabase
-          .from('support_tickets')
-          .select('id, sla_deadline')
-          .in('id', ticketIds);
-        for (const tk of linkedTickets ?? []) {
-          if (tk.sla_deadline) slaByTicket[tk.id] = tk.sla_deadline as string;
-        }
-      }
-      setDisp(
-        d.map((row) => ({
-          ...(row as EscrowDisputeAdminRow),
-          escrow_row: row.escrow_id ? byEscrow[row.escrow_id] ?? null : null,
-          sla_deadline: row.support_ticket_id ? slaByTicket[row.support_ticket_id] ?? null : null,
-        }))
-      );
-    } else setDisp([]);
-
-    const { data: t } = await supabase
-      .from('support_tickets')
-      .select(
-        'id, user_id, subject, body, status, priority, queue_priority, sla_deadline, is_concierge, created_at, updated_at'
-      )
-      .order('queue_priority', { ascending: true })
-      .order('created_at', { ascending: true })
-      .limit(120);
-    if (t) setTickets(t as DbSupportTicket[]);
-
-    const { data: r } = await supabase
-      .from('reports')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(80);
-    if (r) setReports(r as DbReport[]);
-
-    const { data: m } = await supabase.from('moderation_logs').select('*').order('created_at', { ascending: false }).limit(120);
-    if (m?.length) {
-      const rows = m as DbModerationLog[];
-      rows.sort((a, b) => (SEV_ORDER[a.severity] ?? 9) - (SEV_ORDER[b.severity] ?? 9));
-      setMods(rows);
-
-      const modUserIds = [...new Set(rows.map((r) => r.user_id))];
-      if (modUserIds.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('user_id, display_name, avatar_url')
-          .in('user_id', modUserIds);
-        const pmap: Record<string, KycProfileSnippet> = {};
-        for (const p of profs ?? []) {
-          pmap[p.user_id] = { display_name: p.display_name, avatar_url: p.avatar_url };
-        }
-        setModProfiles(pmap);
-      } else setModProfiles({});
-
-      const messageIds = [...new Set(rows.filter((r) => r.content_type === 'message').map((r) => r.content_id))];
-      const msgMap: Record<string, string> = {};
-      if (messageIds.length) {
-        const { data: msgs } = await supabase.from('messages').select('id, text, body').in('id', messageIds);
-        for (const row of msgs ?? []) {
-          const r = row as { id: string; text: string | null; body: string | null };
-          const blob = r.text ?? r.body;
-          if (typeof blob === 'string' && blob.trim()) msgMap[r.id] = blob.trim().slice(0, 320);
-        }
-      }
-      setModMessagePreview(msgMap);
-
-      const planIds = [...new Set(rows.filter((r) => r.content_type === 'plan').map((r) => r.content_id))];
-      const planMap: Record<string, string> = {};
-      if (planIds.length) {
-        const { data: plans } = await supabase.from('plans').select('id, title').in('id', planIds);
-        for (const row of plans ?? []) {
-          const r = row as { id: string; title: string | null };
-          const t = r.title?.trim();
-          if (t) planMap[r.id] = t.slice(0, 160);
-        }
-      }
-      setModPlanTitle(planMap);
-    } else {
-      setMods([]);
-      setModProfiles({});
-      setModMessagePreview({});
-      setModPlanTitle({});
+    } finally {
+      setRefreshing(false);
     }
-    setLoading(false);
+  }, [tab, loadActiveTab, refreshDashboardCounts]);
+
+  const registerPanelReload = useCallback((reload: (() => Promise<void>) | null) => {
+    panelReloadRef.current = reload;
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    panelReloadRef.current = null;
+  }, [tab]);
+
+  useEffect(() => {
+    if (typeof tabParam === 'string' && isAdminTabId(tabParam)) {
+      setTab(tabParam);
+    }
+  }, [tabParam]);
+
+  useEffect(() => {
+    void refreshDashboardCounts();
+    void loadActiveTab(tab);
+  }, [tab, loadActiveTab, refreshDashboardCounts]);
 
   const loadKycExtras = useCallback(async (row: VerRow) => {
     setEventsBusy(true);
@@ -592,7 +525,7 @@ export default function AdminScreen() {
     if (error) Alert.alert('Approve failed', error.message);
     else Alert.alert('Approved', 'User will receive an in-app update.');
     setExpandedKyc(null);
-    void load();
+    void reloadAdminData();
   }
 
   function openReject(id: string) {
@@ -620,7 +553,7 @@ export default function AdminScreen() {
     setRejectFor(null);
     setRejectReason('');
     setExpandedKyc(null);
-    void load();
+    void reloadAdminData();
   }
 
   async function resolveReport(id: string) {
@@ -628,7 +561,7 @@ export default function AdminScreen() {
     if (error) Alert.alert('Update failed', error.message);
     else {
       setReportDetail(null);
-      void load();
+      void reloadAdminData();
     }
   }
 
@@ -696,21 +629,7 @@ export default function AdminScreen() {
     return planDisputes.filter((x) => x.status === 'pending' || x.status === 'reviewing');
   }, [planDisputes, planDispFilter]);
 
-  const dashboardStats = useMemo(() => {
-    const kycPending = ver.filter((x) => x.status === 'pending').length;
-    const reportsPending = reports.filter((x) => x.status === 'pending').length;
-    const disputesOpen = planDisputes.filter((x) => x.status === 'pending' || x.status === 'reviewing').length;
-    const modHigh = mods.filter((x) => x.severity === 'high').length;
-    const escrowOpen = disp.filter((x) => {
-      const s = x.status.toLowerCase();
-      return s === 'open' || s === 'under_review';
-    }).length;
-    const ticketsOpen = tickets.filter((x) => {
-      const s = x.status.toLowerCase();
-      return s === 'open' || s === 'in_progress';
-    }).length;
-    return { kycPending, reportsPending, disputesOpen, modHigh, escrowOpen, ticketsOpen };
-  }, [ver, reports, planDisputes, mods, disp, tickets]);
+  const dashboardStats = dashboardCounts;
 
   const sortedDisp = useMemo(() => {
     return [...disp].sort((a, b) => {
@@ -771,7 +690,7 @@ export default function AdminScreen() {
     if (error) Alert.alert('Save failed', error.message);
     else {
       Alert.alert('Saved', 'Notes and status updated.');
-      void load();
+      void reloadAdminData();
       setPlanDispDetail(null);
     }
   }
@@ -820,7 +739,7 @@ export default function AdminScreen() {
     setPlanDispPartialOpen(false);
     setPlanDispIssueGoodwill(false);
     setPlanDispGoodwillAmount('');
-    void load();
+    void reloadAdminData();
   }
 
   if (!isAdmin) return <Redirect href="/(tabs)/profile" />;
@@ -829,18 +748,13 @@ export default function AdminScreen() {
     <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <View style={styles.root}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF5F8', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           locations={[0, 0.28, 0.55, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.headerSticky}>
           <View style={styles.heroRow}>
             <LinearGradient
               colors={[colors.primary, '#8B7CFF', colors.secondary]}
@@ -854,7 +768,7 @@ export default function AdminScreen() {
               <Text style={styles.heroKicker}>Trust & safety</Text>
               <Text style={styles.heroTitle}>Admin</Text>
               <Text style={styles.heroSub}>
-                Priority queues, audit trails, and resolution tools — keep the community confident.
+                Priority queues, audit trails, and resolution tools in one place.
               </Text>
             </View>
           </View>
@@ -918,18 +832,39 @@ export default function AdminScreen() {
               onPress={() => setTab('users')}
             />
             <TabButton
+              label="Privacy"
+              icon="document-text-outline"
+              active={tab === 'privacy_policy'}
+              onPress={() => setTab('privacy_policy')}
+            />
+            <TabButton
+              label="Meet types"
+              icon="grid-outline"
+              active={tab === 'meet_types'}
+              onPress={() => setTab('meet_types')}
+            />
+            <TabButton
               label="Plans"
               icon="albums-outline"
               active={tab === 'plans'}
               onPress={() => setTab('plans')}
             />
           </ScrollView>
+        </View>
 
-          {loading ? (
-            <ActivityIndicator style={styles.loader} color={colors.primary} size="large" />
-          ) : null}
-
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+        >
           {tab === 'verify' ? (
+            loading || refreshing ? (
+              <AdminListSkeleton count={5} />
+            ) : (
             <>
               <SectionHeader
                 title="Verification queue"
@@ -997,7 +932,7 @@ export default function AdminScreen() {
                               style={({ pressed }) => [styles.kycMediaCard, pressed && styles.kycMediaCardPressed]}
                             >
                               <LinearGradient
-                                colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+                                colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
                                 style={StyleSheet.absoluteFill}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
@@ -1025,7 +960,7 @@ export default function AdminScreen() {
                               style={({ pressed }) => [styles.kycMediaCard, pressed && styles.kycMediaCardPressed]}
                             >
                               <LinearGradient
-                                colors={['rgba(255,101,132,0.12)', 'rgba(108,99,255,0.1)']}
+                                colors={['rgba(255, 74, 114,0.12)', 'rgba(94, 82, 255,0.1)']}
                                 style={StyleSheet.absoluteFill}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
@@ -1099,9 +1034,13 @@ export default function AdminScreen() {
                 }}
               />
             </>
+            )
           ) : null}
 
           {tab === 'reports' ? (
+            loading || refreshing ? (
+              <AdminListSkeleton count={5} />
+            ) : (
             <>
               <SectionHeader
                 title="Safety reports"
@@ -1141,9 +1080,13 @@ export default function AdminScreen() {
                 }}
               />
             </>
+            )
           ) : null}
 
           {tab === 'plan_disputes' ? (
+            loading || refreshing ? (
+              <AdminListSkeleton count={5} />
+            ) : (
             <>
               <SectionHeader
                 title="Member plan disputes"
@@ -1188,7 +1131,7 @@ export default function AdminScreen() {
               />
 
               <LinearGradient
-                colors={['rgba(108,99,255,0.12)', 'transparent']}
+                colors={['rgba(94, 82, 255,0.12)', 'transparent']}
                 style={styles.sectionDivider}
               />
               <SectionHeader
@@ -1217,7 +1160,7 @@ export default function AdminScreen() {
                   return (
                     <View style={styles.escrowCardWrap}>
                       <LinearGradient
-                        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.28)', 'rgba(52,211,153,0.25)']}
+                        colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.28)', 'rgba(52,211,153,0.25)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.escrowCardGradientPad}
@@ -1385,9 +1328,13 @@ export default function AdminScreen() {
                 }}
               />
             </>
+            )
           ) : null}
 
           {tab === 'support' ? (
+            loading || refreshing ? (
+              <AdminListSkeleton count={5} />
+            ) : (
             <>
               <SectionHeader
                 title="Support inbox"
@@ -1480,6 +1427,7 @@ export default function AdminScreen() {
                 }}
               />
             </>
+            )
           ) : null}
 
           {tab === 'users' ? (
@@ -1489,7 +1437,29 @@ export default function AdminScreen() {
                 subtitle="Account health, verification, and profile cards — pair with KYC for identity."
                 icon="people-outline"
               />
-              <AdminUsersPanel />
+              <AdminUsersPanel refreshing={refreshing} registerReload={registerPanelReload} />
+            </>
+          ) : null}
+
+          {tab === 'privacy_policy' ? (
+            <>
+              <SectionHeader
+                title="Privacy policy"
+                subtitle="Publish new versions and track what users must re-consent to."
+                icon="document-text-outline"
+              />
+              <AdminPrivacyPolicyPanel refreshing={refreshing} registerReload={registerPanelReload} />
+            </>
+          ) : null}
+
+          {tab === 'meet_types' ? (
+            <>
+              <SectionHeader
+                title="Meet types"
+                subtitle="Catalog, admin, and user owned types. Archive instead of delete when plans exist."
+                icon="grid-outline"
+              />
+              <AdminMeetTypesPanel refreshing={refreshing} registerReload={registerPanelReload} />
             </>
           ) : null}
 
@@ -1500,11 +1470,14 @@ export default function AdminScreen() {
                 subtitle="Mood TTL, suppression, and deep links — pair with Reports for context."
                 icon="albums-outline"
               />
-              <AdminPlansPanel />
+              <AdminPlansPanel refreshing={refreshing} registerReload={registerPanelReload} />
             </>
           ) : null}
 
           {tab === 'moderation' ? (
+            loading || refreshing ? (
+              <AdminListSkeleton count={5} />
+            ) : (
             <>
               <SectionHeader
                 title="Moderation log"
@@ -1626,24 +1599,8 @@ export default function AdminScreen() {
                 }}
               />
             </>
+            )
           ) : null}
-
-          <Pressable
-            onPress={load}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh all admin data"
-            style={({ pressed }) => [styles.refreshOuter, pressed && styles.refreshPressed]}
-          >
-            <LinearGradient
-              colors={[colors.primary, '#8B7CE8', colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.refreshGrad}
-            >
-              <Ionicons name="refresh-outline" size={22} color="#FFFFFF" />
-              <Text style={styles.refreshLabel}>Refresh all data</Text>
-            </LinearGradient>
-          </Pressable>
         </ScrollView>
       </View>
 
@@ -1838,13 +1795,13 @@ export default function AdminScreen() {
       <AdminSupportTicketModal
         ticket={ticketDetail}
         onClose={() => setTicketDetail(null)}
-        onUpdated={() => void load()}
+        onUpdated={() => void reloadAdminData()}
       />
 
       <EscrowDisputeResolveModal
         context={escrowResolveCtx}
         onClose={() => setEscrowResolveCtx(null)}
-        onResolved={() => void load()}
+        onResolved={() => void reloadAdminData()}
       />
 
       <Modal visible={rejectFor !== null} animationType="slide" transparent>
@@ -1940,8 +1897,14 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   screenTransparent: { backgroundColor: 'transparent', flex: 1 },
   root: { flex: 1 },
+  headerSticky: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    flexShrink: 0,
+  },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl * 2 },
+  scrollContent: { paddingHorizontal: spacing.md, paddingBottom: 120 },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1966,12 +1929,14 @@ const styles = StyleSheet.create({
   heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
-  heroTitle: { fontSize: 30, fontWeight: '900', color: colors.text, letterSpacing: -0.6 },
+  heroTitle: { fontSize: 30, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.6 },
   heroSub: {
     fontSize: 14,
     fontWeight: '600',
@@ -1993,13 +1958,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     alignItems: 'center',
   },
-  statVal: { fontSize: 20, fontWeight: '900', color: colors.primary },
+  statVal: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary },
   statValAlert: { color: colors.danger },
   statValWarn: { color: colors.warning },
-  statLbl: { fontSize: 10, fontWeight: '800', color: colors.textMuted, marginTop: 2, textAlign: 'center' },
+  statLbl: { fontSize: 10, fontWeight: '800', color: colors.textMuted, marginTop: 2, textAlign: 'center', fontFamily: fonts.bold, },
   tabBar: { marginBottom: spacing.md },
   tabBarScroll: {
     flexDirection: 'row',
@@ -2044,7 +2010,7 @@ const styles = StyleSheet.create({
   tabBtnIdle: {
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.28)',
+    borderColor: 'rgba(94, 82, 255, 0.28)',
   },
   tabBtnPressed: { opacity: 0.94 },
   tabBtnInner: {
@@ -2059,6 +2025,7 @@ const styles = StyleSheet.create({
   },
   tabBtnTxt: {
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     fontSize: 13,
     textAlign: 'center',
@@ -2074,7 +2041,7 @@ const styles = StyleSheet.create({
         }
       : {}),
   },
-  tabBtnTxtCompact: { fontSize: 13 },
+  tabBtnTxtCompact: { fontSize: 13, fontFamily: fonts.regular },
   loader: { marginVertical: spacing.lg },
   sectionHeaderBlock: {
     flexDirection: 'row',
@@ -2083,27 +2050,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  sectionIconRing: {
+  sectionIconBadge: {
     width: 44,
     height: 44,
     borderRadius: radius.button,
-    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sectionIconInner: {
-    flex: 1,
-    width: '100%',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
   },
   sectionHeaderText: { flex: 1 },
-  sectionTitle: { fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
-  sectionSubtitle: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 18 },
+  sectionTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
+  sectionSubtitle: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 18, fontFamily: fonts.medium, },
   sectionDivider: { height: 2, marginVertical: spacing.lg, borderRadius: 2, opacity: 0.9 },
   adminCard: {
     flexDirection: 'row',
@@ -2123,7 +2085,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     borderTopRightRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
   },
@@ -2134,24 +2096,27 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexWrap: 'wrap',
   },
-  cardLead: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.2, marginBottom: 6 },
-  cardUserHint: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  cardLead: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2, marginBottom: 6 },
+  cardUserHint: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontFamily: fonts.medium, },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  metaStrong: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  metaStrong: { color: colors.text, fontSize: 13, fontWeight: '700', fontFamily: fonts.medium, },
   statusChip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  statusChipTxt: { fontSize: 11, fontWeight: '900', letterSpacing: 0.2 },
+  statusChipTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, letterSpacing: 0.2 },
   statusChipNeutral: {
     backgroundColor: 'rgba(107,114,128,0.1)',
     borderColor: colors.border,
   },
-  statusChipTxtNeutral: { fontSize: 11, fontWeight: '900', color: colors.textMuted },
+  statusChipTxtNeutral: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.textMuted },
   sevTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.button },
-  sevTagTxt: { fontSize: 11, fontWeight: '900' },
+  sevTagTxt: { fontSize: 11, fontWeight: '900', fontFamily: fonts.bold, },
   nestedTabs: { flexDirection: 'row', gap: 8, marginBottom: spacing.sm, flexWrap: 'wrap' },
   emptyState: {
     alignItems: 'center',
@@ -2163,42 +2128,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(16,185,129,0.25)',
     marginBottom: spacing.sm,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '900', color: colors.text, marginTop: spacing.sm },
-  emptySub: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 4, textAlign: 'center' },
-  refreshOuter: {
-    alignSelf: 'stretch',
-    borderRadius: radius.button,
-    overflow: 'hidden',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-    ...(Platform.OS === 'ios'
-      ? {
-          shadowColor: '#6C63FF',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.22,
-          shadowRadius: 14,
-        }
-      : { elevation: 5 }),
-  },
-  refreshPressed: { opacity: 0.94, transform: [{ scale: 0.98 }] },
-  refreshGrad: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    paddingHorizontal: spacing.lg,
-    minHeight: 54,
-  },
-  refreshLabel: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
+  emptyTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm },
+  emptySub: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 4, textAlign: 'center', fontFamily: fonts.medium, },
   row: { flexDirection: 'row', gap: 8, marginTop: spacing.sm, flexWrap: 'wrap' },
-  meta: { color: colors.textMuted, marginTop: 4, fontSize: 13 },
-  t: { fontWeight: '600', color: colors.text },
+  meta: { color: colors.textMuted, marginTop: 4, fontSize: 13, fontFamily: fonts.regular, },
+  t: { fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text },
   kycExpand: { marginTop: spacing.md, gap: 0 },
   kycExpandAccent: {
     height: 3,
@@ -2209,6 +2145,7 @@ const styles = StyleSheet.create({
   kycFieldLabel: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -2218,6 +2155,7 @@ const styles = StyleSheet.create({
   kycIdMono: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
     fontVariant: ['tabular-nums'],
     lineHeight: 20,
@@ -2229,7 +2167,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     minHeight: 72,
     justifyContent: 'center',
   },
@@ -2249,11 +2187,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
   },
   kycMediaTextCol: { flex: 1, minWidth: 0 },
-  kycMediaTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  kycMediaCap: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
+  kycMediaTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  kycMediaCap: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   kycEmptyMedia: {
     padding: spacing.md,
     borderRadius: radius.md,
@@ -2266,12 +2205,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.12)',
+    borderColor: 'rgba(94, 82, 255,0.12)',
     marginBottom: spacing.sm,
   },
-  kycTimelineEmptyTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textMuted, lineHeight: 20 },
+  kycTimelineEmptyTxt: { flex: 1, fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted, lineHeight: 20 },
   kycActionRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -2289,6 +2229,7 @@ const styles = StyleSheet.create({
   kycActionDisabledTxt: {
     color: '#64748B',
     fontWeight: '700',
+    fontFamily: fonts.medium,
   },
   kycActionDisabledSecondary: {
     backgroundColor: '#E2E8F0',
@@ -2298,6 +2239,7 @@ const styles = StyleSheet.create({
   kycActionDisabledSecondaryTxt: {
     color: '#64748B',
     fontWeight: '700',
+    fontFamily: fonts.medium,
   },
   modalBtnCol: { gap: spacing.sm, marginTop: spacing.sm },
   goodwillOptionRow: {
@@ -2307,19 +2249,21 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
-  goodwillOptionLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
+  goodwillOptionLabel: { flex: 1, fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   planPartialBox: {
     marginTop: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
-    backgroundColor: 'rgba(108, 99, 255, 0.05)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
+    backgroundColor: 'rgba(94, 82, 255, 0.05)',
     gap: spacing.sm,
   },
   planPartialLbl: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
   },
   planPartialRow: {
@@ -2330,27 +2274,31 @@ const styles = StyleSheet.create({
   planPartialInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.surface,
   },
   planPartialPct: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
   },
   planPartialHint: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 19,
   },
-  link: { color: colors.primary, fontWeight: '700', marginTop: 0, flex: 1 },
-  subhead: { fontWeight: '800', marginTop: spacing.sm, color: colors.text, fontSize: 14 },
+  link: { color: colors.primary, fontWeight: '700',
+    fontFamily: fonts.medium, marginTop: 0, flex: 1 },
+  subhead: { fontWeight: '800', marginTop: spacing.sm, color: colors.text, fontSize: 14, fontFamily: fonts.bold, },
   timelineRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 4 },
   timelineDot: {
     width: 7,
@@ -2359,8 +2307,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     marginTop: 5,
   },
-  timelineLine: { fontSize: 13, color: colors.textMuted, flex: 1, lineHeight: 18 },
-  hint: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 18 },
+  timelineLine: { fontSize: 13,
+    fontFamily: fonts.regular, color: colors.textMuted, flex: 1, lineHeight: 18 },
+  hint: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 18, fontFamily: fonts.regular, },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(26,29,38,0.5)',
@@ -2374,7 +2323,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     maxHeight: '92%',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     overflow: 'hidden',
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 12 },
@@ -2389,10 +2338,11 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.lg,
     marginTop: -spacing.lg,
   },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: spacing.sm, letterSpacing: -0.3 },
+  modalTitle: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.sm, letterSpacing: -0.3 },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.md,
     minHeight: 88,
     padding: spacing.sm,
@@ -2401,7 +2351,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlignVertical: 'top',
   },
-  bodySnippet: { fontSize: 14, color: colors.text, marginTop: 4, lineHeight: 20 },
+  bodySnippet: { fontSize: 14,
+    fontFamily: fonts.regular, color: colors.text, marginTop: 4, lineHeight: 20 },
   kycIdentityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1, minWidth: 0 },
   kycAvatar: {
     width: 44,
@@ -2409,20 +2360,21 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
   },
   kycAvatarPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
   },
   kycIdentityText: { flex: 1, minWidth: 0 },
-  kycCardName: { fontSize: 17, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
+  kycCardName: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   kycCardUserId: {
     fontSize: 11,
     fontWeight: '600',
@@ -2461,12 +2413,14 @@ const styles = StyleSheet.create({
   escrowCardKicker: {
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.9,
     marginBottom: 4,
   },
-  escrowCardReason: { fontSize: 16, fontWeight: '800', color: colors.text, lineHeight: 22 },
+  escrowCardReason: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, lineHeight: 22 },
   escrowStatusPill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -2474,7 +2428,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexShrink: 0,
   },
-  escrowStatusPillTxt: { fontSize: 11, fontWeight: '900', letterSpacing: 0.2 },
+  escrowStatusPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, letterSpacing: 0.2 },
   escrowMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2485,17 +2440,18 @@ const styles = StyleSheet.create({
     width: '47%',
     minWidth: 140,
     flexGrow: 1,
-    backgroundColor: 'rgba(108,99,255,0.05)',
+    backgroundColor: 'rgba(94, 82, 255,0.05)',
     borderRadius: radius.md,
     padding: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.1)',
+    borderColor: 'rgba(94, 82, 255,0.1)',
   },
   escrowMetaBlockHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  escrowMetaLbl: { fontSize: 10, fontWeight: '800', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  escrowMetaVal: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 18 },
-  escrowMetaValMono: { fontSize: 12, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  escrowMetaValStrong: { fontSize: 16, fontWeight: '900', color: colors.primary },
+  escrowMetaLbl: { fontSize: 10, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  escrowMetaVal: { fontSize: 13, fontWeight: '700', color: colors.text, lineHeight: 18, fontFamily: fonts.medium, },
+  escrowMetaValMono: { fontSize: 12, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'], fontFamily: fonts.medium, },
+  escrowMetaValStrong: { fontSize: 16, fontWeight: '900', color: colors.primary, fontFamily: fonts.bold, },
   escrowDetailBox: {
     backgroundColor: colors.background,
     borderRadius: radius.md,
@@ -2504,8 +2460,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.sm,
   },
-  escrowDetailKicker: { fontSize: 11, fontWeight: '800', color: colors.textMuted, marginBottom: 4 },
-  escrowDetailTxt: { fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  escrowDetailKicker: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted, marginBottom: 4 },
+  escrowDetailTxt: { fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20, fontFamily: fonts.medium, },
   escrowResolutionNote: {
     backgroundColor: '#F0FDF4',
     borderRadius: radius.md,
@@ -2517,12 +2474,14 @@ const styles = StyleSheet.create({
   escrowResolutionKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#047857',
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  escrowResolutionBody: { fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  escrowResolutionBody: { fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 20 },
   escrowLinkedTicket: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2530,12 +2489,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingVertical: 6,
   },
-  escrowLinkedTicketTxt: { fontSize: 13, fontWeight: '700', color: colors.primary, flex: 1 },
+  escrowLinkedTicketTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary, flex: 1 },
   escrowResolveBtn: {
     marginTop: spacing.xs,
     borderWidth: 1.5,
-    borderColor: 'rgba(108,99,255,0.35)',
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    borderColor: 'rgba(94, 82, 255,0.35)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
   },
   escrowClosedFoot: {
     flexDirection: 'row',
@@ -2546,7 +2506,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'rgba(107,114,128,0.08)',
   },
-  escrowClosedFootTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 18 },
+  escrowClosedFootTxt: { flex: 1, fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted, lineHeight: 18 },
   supportCardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2572,10 +2533,12 @@ const styles = StyleSheet.create({
   conciergeChipTxt: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#5E35B1',
     letterSpacing: 0.3,
   },
-  supportCardSubject: { flex: 1, fontSize: 17, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
+  supportCardSubject: { flex: 1, fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   ticketStatusPill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -2583,7 +2546,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexShrink: 0,
   },
-  ticketStatusPillTxt: { fontSize: 11, fontWeight: '900', letterSpacing: 0.15 },
+  ticketStatusPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, letterSpacing: 0.15 },
   supportCardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2591,9 +2555,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: 6,
   },
-  supportMetaTxt: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  supportMetaDot: { fontSize: 12, fontWeight: '800', color: colors.textMuted },
-  supportMetaTxtMono: { fontSize: 11, fontWeight: '700', color: colors.text, flex: 1 },
+  supportMetaTxt: { fontSize: 12, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  supportMetaDot: { fontSize: 12, fontWeight: '800', color: colors.textMuted, fontFamily: fonts.bold, },
+  supportMetaTxtMono: { fontSize: 11, fontWeight: '700', color: colors.text, flex: 1, fontFamily: fonts.medium, },
   supportBodyPreview: {
     fontSize: 14,
     fontWeight: '600',
@@ -2610,7 +2575,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  supportTapHintTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  supportTapHintTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   modCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2622,11 +2588,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.1)',
+    backgroundColor: 'rgba(94, 82, 255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.22)',
+    borderColor: 'rgba(94, 82, 255,0.22)',
   },
-  modFlagChipTxt: { fontSize: 11, fontWeight: '800', color: colors.primary, letterSpacing: 0.2 },
+  modFlagChipTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, letterSpacing: 0.2 },
   modSummary: {
     fontSize: 14,
     fontWeight: '700',
@@ -2643,7 +2610,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   modContentHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
-  modContentHeadTxt: { fontSize: 15, fontWeight: '800', color: colors.text },
+  modContentHeadTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   modQuote: {
     fontSize: 14,
     fontWeight: '600',
@@ -2651,8 +2619,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontStyle: 'italic',
   },
-  modPlanTitlePreview: { fontSize: 15, fontWeight: '800', color: colors.text, lineHeight: 21 },
-  modPreviewMuted: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  modPlanTitlePreview: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, lineHeight: 21 },
+  modPreviewMuted: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19, fontFamily: fonts.medium, },
   modActorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2660,9 +2629,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(108,99,255,0.05)',
+    backgroundColor: 'rgba(94, 82, 255,0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.12)',
+    borderColor: 'rgba(94, 82, 255,0.12)',
   },
   modActorAvatar: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface },
   modActorAvatarPh: {
@@ -2676,7 +2645,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   modActorMeta: { flex: 1, minWidth: 0 },
-  modActorName: { fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 4 },
+  modActorName: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
   modDetailLbl: {
     fontSize: 10,
     fontWeight: '800',
@@ -2685,8 +2655,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.45,
     marginBottom: 2,
   },
-  modMonoSm: { fontSize: 11, fontWeight: '700', color: colors.text, lineHeight: 16 },
-  modMonoXs: { fontSize: 10, fontWeight: '600', color: colors.text, lineHeight: 15, fontVariant: ['tabular-nums'] },
+  modMonoSm: { fontSize: 11, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 16 },
+  modMonoXs: { fontSize: 10, fontWeight: '600', color: colors.text, lineHeight: 15, fontVariant: ['tabular-nums'], fontFamily: fonts.medium, },
   modStatRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   modStatCell: {
     flex: 1,
@@ -2697,7 +2668,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  modStatVal: { fontSize: 14, fontWeight: '800', color: colors.text, lineHeight: 19 },
+  modStatVal: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, lineHeight: 19 },
   modIdsBox: {
     marginBottom: spacing.sm,
     padding: spacing.sm,
@@ -2715,9 +2687,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.3)',
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    borderColor: 'rgba(94, 82, 255,0.3)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
     marginBottom: spacing.sm,
   },
-  modCopyBtnTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  modCopyBtnTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
 });

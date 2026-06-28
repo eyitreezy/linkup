@@ -4,7 +4,7 @@
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { submitPlanDisputeWithEvidence } from '@/lib/trust/submitPlanDispute';
@@ -392,10 +392,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   back: { padding: spacing.xs },
-  stepPill: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  stepPill: { flex: 1, fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   pad: { padding: spacing.md, paddingBottom: spacing.xl },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.4 },
-  lead: { marginTop: spacing.sm, fontSize: 15, color: colors.textMuted, lineHeight: 22 },
+  title: { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.4, fontFamily: fonts.bold, },
+  lead: { marginTop: spacing.sm, fontSize: 15, color: colors.textMuted, lineHeight: 22, fontFamily: fonts.regular, },
   trust: {
     marginTop: spacing.md,
     fontSize: 14,
@@ -403,7 +404,8 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontStyle: 'italic',
   },
-  sub: { marginTop: spacing.sm, fontSize: 14, color: colors.textMuted, lineHeight: 20 },
+  sub: { marginTop: spacing.sm, fontSize: 14,
+    fontFamily: fonts.regular, color: colors.textMuted, lineHeight: 20 },
   muted: { color: colors.textMuted, padding: spacing.md },
   cta: { marginTop: spacing.lg },
   catScroll: { maxHeight: 360, marginTop: spacing.md },
@@ -415,9 +417,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     backgroundColor: colors.surface,
   },
-  catCardOn: { borderColor: colors.primary, backgroundColor: 'rgba(108, 99, 255, 0.06)' },
-  catTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  catHint: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
+  catCardOn: { borderColor: colors.primary, backgroundColor: 'rgba(94, 82, 255, 0.06)' },
+  catTitle: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  catHint: { fontSize: 13, color: colors.textMuted, marginTop: 4, fontFamily: fonts.regular, },
   cameraShell: {
     flex: 1,
     minHeight: 420,
@@ -436,6 +439,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowRadius: 4,
@@ -457,16 +461,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  camCloseTxt: { color: '#fff', fontWeight: '600' },
+  camCloseTxt: { color: '#fff', fontWeight: '600',
+    fontFamily: fonts.medium,},
   previewWrap: { flex: 1, paddingTop: 48 },
   previewVideo: { flex: 1, backgroundColor: '#111' },
   rowBtns: { padding: spacing.md, gap: spacing.sm },
-  meta: { marginTop: spacing.sm, color: colors.textMuted, fontSize: 13 },
+  meta: { marginTop: spacing.sm, color: colors.textMuted, fontSize: 13, fontFamily: fonts.regular, },
   doneIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',

@@ -2,7 +2,7 @@
  * Premium plan interest row — inbox / notification card polish.
  */
 import { Avatar } from '@/components/Avatar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,8 +41,8 @@ export function PlanInterestEngagementCard({ name, avatarUrl, kind, createdAt, o
           <LinearGradient
             colors={
               isSave
-                ? ['rgba(255,101,132,0.35)', 'rgba(108,99,255,0.28)']
-                : ['rgba(108,99,255,0.22)', 'rgba(255,101,132,0.14)']
+                ? ['rgba(255, 74, 114,0.35)', 'rgba(94, 82, 255,0.28)']
+                : ['rgba(94, 82, 255,0.22)', 'rgba(255, 74, 114,0.14)']
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
     paddingRight: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
-    shadowColor: '#6C63FF',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 14,
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardSave: {
-    borderColor: 'rgba(255, 101, 132, 0.32)',
+    borderColor: 'rgba(255, 74, 114, 0.32)',
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     shadowColor: colors.secondary,
     shadowOpacity: 0.14,
@@ -144,12 +144,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 17,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.25,
   },
   time: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
   kindRow: { gap: 4 },
@@ -161,17 +163,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   kindPillSave: {
-    backgroundColor: 'rgba(255, 101, 132, 0.1)',
-    borderColor: 'rgba(255, 101, 132, 0.22)',
+    backgroundColor: 'rgba(255, 74, 114, 0.1)',
+    borderColor: 'rgba(255, 74, 114, 0.22)',
   },
   kindTxt: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -180,6 +183,7 @@ const styles = StyleSheet.create({
   sub: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 18,
   },

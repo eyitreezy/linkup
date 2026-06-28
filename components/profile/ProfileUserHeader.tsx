@@ -1,7 +1,7 @@
 import { TierBadge } from '@/components/TierBadge';
 import { PremiumBadge } from '@/components/profile/PremiumBadge';
 import type { SubscriptionTier } from '@/types/database';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.22,
         shadowRadius: 8,
@@ -147,7 +147,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   ph: { alignItems: 'center', justifyContent: 'center' },
-  phTxt: { fontSize: 30, fontWeight: '900', color: colors.textMuted },
+  phTxt: { fontSize: 30, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.textMuted },
   meta: { flex: 1, minWidth: 0, paddingTop: 2 },
   name: {
     fontSize: 24,
@@ -169,6 +170,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     minWidth: 0,
   },
@@ -198,7 +200,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(26, 29, 38, 0.1)',
   },
-  badgeTxt: { fontSize: 13, fontWeight: '800' },
+  badgeTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold,},
   badgeTxtOn: { color: colors.success },
   badgeTxtOff: { color: colors.textMuted },
   hintBox: {
@@ -209,9 +212,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   hintBoxStatic: {
     flexDirection: 'row',
@@ -221,9 +224,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
   hintPressed: { opacity: 0.92 },
   hintIconWrap: {
@@ -234,12 +237,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
   hintTxt: {
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 18,
   },

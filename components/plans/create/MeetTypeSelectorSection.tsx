@@ -4,33 +4,41 @@
 import { GroupPlanSettingsSection } from '@/components/plans/create/GroupPlanSettingsSection';
 import { MoodPlanFieldsSection } from '@/components/plans/create/MoodPlanFieldsSection';
 import { MeetTypeFormModal } from '@/components/plans/create/MeetTypeFormModal';
+import { MeetTypeReviewPendingModal } from '@/components/plans/create/MeetTypeReviewPendingModal';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { checkPermission } from '@/lib/subscription/checkPermission';
 import { inferMeetTypeIcon } from '@/lib/plans/inferMeetTypeIcon';
 import { insertUserMeetType } from '@/lib/plans/insertUserMeetType';
-import { fetchActiveMeetTypes } from '@/lib/plans/meetTypes';
+import {
+  fetchMeetTypesForUser,
+  filterMeetTypesVisibleToUser,
+  isMeetTypePendingForUser,
+  isMeetTypeSelectable,
+} from '@/lib/plans/meetTypes';
 import {
   deleteUserMeetType,
   isUserMeetType,
   updateUserMeetType,
 } from '@/lib/plans/userMeetTypeCrud';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbMeetType, EscrowPattern } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type FormMode = 'create' | 'edit';
+type PendingModalMode = 'submitted' | 'pending';
 
 export function MeetTypeSelectorSection() {
   const { draft, setDraft } = usePlanDraft();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [types, setTypes] = useState<DbMeetType[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -45,26 +53,44 @@ export function MeetTypeSelectorSection() {
     title: string;
     message: string;
   } | null>(null);
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [pendingModalType, setPendingModalType] = useState<DbMeetType | null>(null);
+  const [pendingModalMode, setPendingModalMode] = useState<PendingModalMode>('pending');
+  const [groupUpgradeOpen, setGroupUpgradeOpen] = useState(false);
 
   function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
     setFeedback({ variant, title, message });
   }
 
   const reloadTypes = async () => {
-    const { rows } = await fetchActiveMeetTypes();
-    setTypes(rows);
+    const { rows } = await fetchMeetTypesForUser(user?.id);
+    setTypes(filterMeetTypesVisibleToUser(rows, user?.id));
   };
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { rows } = await fetchActiveMeetTypes();
+      const { rows } = await fetchMeetTypesForUser(user?.id);
+      const visible = filterMeetTypesVisibleToUser(rows, user?.id);
       if (cancelled) return;
-      setTypes(rows);
+      setTypes(visible);
       setLoading(false);
       setDraft((d) => {
-        if (d.meetTypeId || rows.length === 0) return d;
-        const dinner = rows.find((t) => t.slug === 'dinner') ?? rows[0];
+        const current = visible.find((t) => t.id === d.meetTypeId);
+        if (current && isMeetTypeSelectable(current)) return d;
+        if (d.meetTypeId && current && !isMeetTypeSelectable(current)) {
+          const fallback = firstSelectableType(visible);
+          if (!fallback) return { ...d, meetTypeId: null };
+          return {
+            ...d,
+            meetTypeId: fallback.id,
+            durationMinutes: fallback.default_duration_minutes,
+            escrowPattern: (fallback.default_pattern as EscrowPattern) ?? 'A',
+          };
+        }
+        if (d.meetTypeId || visible.length === 0) return d;
+        const dinner = firstSelectableType(visible);
+        if (!dinner) return d;
         return {
           ...d,
           meetTypeId: dinner.id,
@@ -76,7 +102,7 @@ export function MeetTypeSelectorSection() {
     return () => {
       cancelled = true;
     };
-  }, [setDraft]);
+  }, [setDraft, user?.id]);
 
   const selectedType = useMemo(
     () => types.find((t) => t.id === draft.meetTypeId) ?? null,
@@ -92,6 +118,7 @@ export function MeetTypeSelectorSection() {
   const previewIcon = inferMeetTypeIcon(typeName);
 
   function applyMeetType(t: DbMeetType) {
+    if (!isMeetTypeSelectable(t)) return;
     const isGroup = t.slug === 'group';
     setDraft((d) => ({
       ...d,
@@ -106,24 +133,37 @@ export function MeetTypeSelectorSection() {
     }));
   }
 
+  function firstSelectableType(rows: DbMeetType[]): DbMeetType | null {
+    return (
+      rows.find((t) => t.slug === 'dinner' && isMeetTypeSelectable(t)) ??
+      rows.find((t) => isMeetTypeSelectable(t)) ??
+      null
+    );
+  }
+
   function fallbackMeetTypeId(rows: DbMeetType[], excludeId?: string): string | null {
-    const dinner = rows.find((t) => t.slug === 'dinner' && t.id !== excludeId);
-    const first = rows.find((t) => t.id !== excludeId);
+    const dinner = rows.find((t) => t.slug === 'dinner' && t.id !== excludeId && isMeetTypeSelectable(t));
+    const first = rows.find((t) => t.id !== excludeId && isMeetTypeSelectable(t));
     return (dinner ?? first)?.id ?? null;
   }
 
+  function openPendingModal(type: DbMeetType, mode: PendingModalMode) {
+    setPendingModalType(type);
+    setPendingModalMode(mode);
+    setPendingModalOpen(true);
+  }
+
   async function onSelectMeetType(t: DbMeetType) {
+    if (isMeetTypePendingForUser(t, user?.id)) {
+      openPendingModal(t, 'pending');
+      return;
+    }
+    if (!isMeetTypeSelectable(t)) return;
+
     if (t.slug === 'group' && user?.id) {
       const perm = await checkPermission(user.id, 'group_plan.host');
       if (!perm.allowed) {
-        Alert.alert(
-          'Unlock group plans',
-          'Hosting group meetups is available on Gold and above.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'View plans', onPress: () => router.push('/subscription' as Href) },
-          ]
-        );
+        setGroupUpgradeOpen(true);
         return;
       }
     }
@@ -172,14 +212,7 @@ export function MeetTypeSelectorSection() {
       }
       closeForm();
       await reloadTypes();
-      setDraft((d) => ({
-        ...d,
-        meetTypeId: row.id,
-        durationMinutes: row.default_duration_minutes,
-        escrowPattern: (row.default_pattern as EscrowPattern) ?? d.escrowPattern ?? 'A',
-        isMoodPlan: row.slug === 'mood' ? d.isMoodPlan : false,
-        moodExpiresAt: row.slug === 'mood' ? d.moodExpiresAt : null,
-      }));
+      openPendingModal(row, 'submitted');
       return;
     }
 
@@ -196,7 +229,7 @@ export function MeetTypeSelectorSection() {
     }
     closeForm();
     await reloadTypes();
-    if (draft.meetTypeId === row.id) {
+    if (draft.meetTypeId === row.id && isMeetTypeSelectable(row)) {
       setDraft((d) => ({
         ...d,
         durationMinutes: row.default_duration_minutes,
@@ -230,12 +263,13 @@ export function MeetTypeSelectorSection() {
     }
 
     const wasSelected = draft.meetTypeId === target.id;
-    const { rows } = await fetchActiveMeetTypes();
-    setTypes(rows);
+    const { rows } = await fetchMeetTypesForUser(user?.id);
+    const visible = filterMeetTypesVisibleToUser(rows, user?.id);
+    setTypes(visible);
     if (wasSelected) {
-      const nextId = fallbackMeetTypeId(rows, target.id);
+      const nextId = fallbackMeetTypeId(visible, target.id);
       if (nextId) {
-        const next = rows.find((t) => t.id === nextId);
+        const next = visible.find((t) => t.id === nextId);
         if (next) applyMeetType(next);
         else setDraft((d) => ({ ...d, meetTypeId: nextId }));
       } else {
@@ -254,11 +288,16 @@ export function MeetTypeSelectorSection() {
       <Text style={styles.hint}>Pick a vibe or add your own — edit or remove types you created.</Text>
       <View style={styles.chipRow}>
         {types.map((t) => {
-          const on = draft.meetTypeId === t.id;
+          const pending = isMeetTypePendingForUser(t, user?.id);
+          const on = draft.meetTypeId === t.id && !pending;
           const owned = !!user?.id && isUserMeetType(t, user.id);
           return (
-            <View key={t.id} style={styles.chipWrap}>
-              <GradientSelectionChip selected={on} onPress={() => void onSelectMeetType(t)}>
+            <View key={t.id} style={[styles.chipWrap, pending && styles.chipWrapPending]}>
+              <GradientSelectionChip
+                selected={on}
+                onPress={() => void onSelectMeetType(t)}
+                style={pending ? styles.chipPending : undefined}
+              >
                 <View style={styles.typeChipInner}>
                   <Ionicons
                     name={(t.icon as keyof typeof Ionicons.glyphMap) ?? 'ellipse-outline'}
@@ -266,9 +305,10 @@ export function MeetTypeSelectorSection() {
                     color={on ? '#fff' : colors.primary}
                   />
                   <Text style={[styles.typeChipTxt, on && styles.typeChipTxtOn]}>{t.name}</Text>
+                  {pending ? <Text style={styles.pendingChipLbl}>Pending</Text> : null}
                 </View>
               </GradientSelectionChip>
-              {owned ? (
+              {owned && !isAdmin ? (
                 <View style={styles.chipActions}>
                   <Pressable
                     onPress={() => openEditForm(t)}
@@ -293,15 +333,17 @@ export function MeetTypeSelectorSection() {
             </View>
           );
         })}
-        <Pressable
-          onPress={openCreateForm}
-          style={styles.addChip}
-          accessibilityRole="button"
-          accessibilityLabel="Add custom meet type"
-        >
-          <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-          <Text style={styles.addChipTxt}>New</Text>
-        </Pressable>
+        {!isAdmin ? (
+          <Pressable
+            onPress={openCreateForm}
+            style={styles.addChip}
+            accessibilityRole="button"
+            accessibilityLabel="Add custom meet type"
+          >
+            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+            <Text style={styles.addChipTxt}>New</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <MeetTypeFormModal
@@ -313,6 +355,16 @@ export function MeetTypeSelectorSection() {
         saving={savingType}
         onClose={closeForm}
         onSave={() => void onSaveMeetType()}
+      />
+
+      <MeetTypeReviewPendingModal
+        visible={pendingModalOpen}
+        onClose={() => {
+          setPendingModalOpen(false);
+          setPendingModalType(null);
+        }}
+        meetTypeName={pendingModalType?.name ?? ''}
+        mode={pendingModalMode}
       />
 
       <AppConfirmModal
@@ -327,7 +379,9 @@ export function MeetTypeSelectorSection() {
         }
         iconVariant="danger"
         primaryLabel="Keep"
-        onPrimary={() => !deleteBusy && setDeleteTarget(null)}
+        onPrimary={() => {
+          if (!deleteBusy) setDeleteTarget(null);
+        }}
         secondaryLabel="Delete"
         onSecondary={() => void onConfirmDelete()}
         secondaryTone="danger"
@@ -348,16 +402,32 @@ export function MeetTypeSelectorSection() {
 
       <MoodPlanFieldsSection visible={selectedType?.slug === 'mood'} />
       <GroupPlanSettingsSection visible={selectedType?.slug === 'group'} />
+      <UpgradePrompt
+        visible={groupUpgradeOpen}
+        feature="group_plan.host"
+        requiredTier="GOLD"
+        title="Unlock group plans"
+        message="Hosting group meetups is available on Gold and above."
+        icon="people-outline"
+        onUpgrade={() => {
+          setGroupUpgradeOpen(false);
+          router.push('/subscription' as Href);
+        }}
+        onDismiss={() => setGroupUpgradeOpen(false)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.lg },
-  sectionLabel: { fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: spacing.sm },
+  sectionLabel: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: spacing.sm, fontFamily: fonts.regular, },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   chipWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  chipWrapPending: { opacity: 0.45 },
+  chipPending: { opacity: 1 },
   chipActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   chipActionBtn: {
     width: 28,
@@ -371,8 +441,17 @@ const styles = StyleSheet.create({
   },
   chipActionPressed: { opacity: 0.85 },
   typeChipInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  typeChipTxt: { fontWeight: '700', color: colors.text },
+  typeChipTxt: { fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   typeChipTxtOn: { color: '#fff' },
+  pendingChipLbl: {
+    fontSize: 9,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   addChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,7 +462,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.primary,
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
   },
-  addChipTxt: { fontWeight: '800', color: colors.primary, fontSize: 14 },
+  addChipTxt: { fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, fontSize: 14 },
 });

@@ -4,16 +4,16 @@
 import { Screen } from '@/components/Screen';
 import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
 import { WalletSkeleton } from '@/components/wallet/WalletSkeleton';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbGoodwillCredit, DbWalletLedgerRow } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
-import { RefreshControl, StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function formatMoney(cents: number, currency = 'NGN'): string {
@@ -25,7 +25,6 @@ function sourcePretty(source: string): string {
 }
 
 export default function WalletScreen() {
-  const tabBarScroll = useTabBarScrollProps();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [ledger, setLedger] = useState<DbWalletLedgerRow[]>([]);
@@ -126,12 +125,24 @@ export default function WalletScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <View style={styles.root}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', '#F5F6FA']}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', '#F5F6FA']}
           locations={[0, 0.35, 0.7, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0.9, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
+
+        <View style={styles.topNav}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.backPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+        </View>
 
         <View style={styles.heroHeader}>
           <View style={styles.heroLeft}>
@@ -147,20 +158,18 @@ export default function WalletScreen() {
               <Text style={styles.heroKicker}>Your money hub</Text>
               <Text style={styles.heroTitle}>Wallet</Text>
               <Text style={styles.heroSub}>
-                Cash from escrow releases and refunds. Goodwill credits can lower fees when things go fairly — plain
-                language, no fine print buried in the corner.
+                See escrow payouts, refunds, and goodwill credits in one place.
               </Text>
             </View>
           </View>
         </View>
 
-        <Animated.ScrollView
+        <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xl * 2 + 72 },
+            { paddingBottom: Math.max(insets.bottom, spacing.md) + spacing.xl },
           ]}
           showsVerticalScrollIndicator={false}
-          {...tabBarScroll}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
@@ -170,7 +179,7 @@ export default function WalletScreen() {
           ) : (
             <>
               <LinearGradient
-                colors={['#6C63FF', '#9B8CFF', '#FF6584']}
+                colors={['#5E52FF', '#9B8CFF', '#FF4A72']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.balanceShell}
@@ -318,7 +327,7 @@ export default function WalletScreen() {
               )}
             </>
           )}
-        </Animated.ScrollView>
+        </ScrollView>
       </View>
     </Screen>
   );
@@ -327,6 +336,21 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   screenTransparent: { backgroundColor: 'transparent', flex: 1 },
   root: { flex: 1 },
+  topNav: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255,0.12)',
+  },
+  backPressed: { opacity: 0.88, transform: [{ scale: 0.96 }] },
   heroHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -352,19 +376,21 @@ const styles = StyleSheet.create({
   heroKicker: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1.1,
     marginBottom: 2,
   },
-  heroTitle: { fontSize: 28, fontWeight: '900', color: colors.text, letterSpacing: -0.5, marginBottom: 4 },
-  heroSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600' },
+  heroTitle: { fontSize: 28, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.5, marginBottom: 4 },
+  heroSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   scroll: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },
   balanceShell: {
     borderRadius: radius.xl,
     padding: 2,
     marginBottom: spacing.md,
-    shadowColor: '#6C63FF',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
@@ -382,7 +408,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  balanceLabel: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.88)', textTransform: 'uppercase' },
+  balanceLabel: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: 'rgba(255,255,255,0.88)', textTransform: 'uppercase' },
   livePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,9 +425,10 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#4ADE80',
   },
-  liveTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
-  balanceAmt: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -0.5, marginTop: 4 },
-  balanceHint: { fontSize: 14, color: 'rgba(255,255,255,0.88)', marginTop: 10, lineHeight: 20, fontWeight: '600' },
+  liveTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
+  balanceAmt: { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: -0.5, marginTop: 4, fontFamily: fonts.bold, },
+  balanceHint: { fontSize: 14, color: 'rgba(255,255,255,0.88)', marginTop: 10, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   balanceFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -410,7 +438,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.25)',
   },
-  balanceFooterTxt: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.85)', flex: 1 },
+  balanceFooterTxt: { fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: 'rgba(255,255,255,0.85)', flex: 1 },
   goodwillCard: {
     borderRadius: radius.xl,
     padding: spacing.lg,
@@ -424,9 +453,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   goodwillHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  goodwillTitle: { fontSize: 17, fontWeight: '900', color: colors.text },
-  goodwillAmt: { fontSize: 26, fontWeight: '900', color: '#B45309', marginTop: 8 },
-  goodwillHint: { fontSize: 14, color: colors.textMuted, marginTop: 8, lineHeight: 20, fontWeight: '600' },
+  goodwillTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  goodwillAmt: { fontSize: 26, fontWeight: '900', color: '#B45309', marginTop: 8, fontFamily: fonts.bold, },
+  goodwillHint: { fontSize: 14, color: colors.textMuted, marginTop: 8, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   expiryBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -438,7 +468,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(245, 158, 11, 0.35)',
   },
-  expiryBannerText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#B45309', lineHeight: 20 },
+  expiryBannerText: { flex: 1, fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#B45309', lineHeight: 20 },
   withdrawCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -448,18 +479,19 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.15)',
+    borderColor: 'rgba(94, 82, 255, 0.15)',
   },
   withdrawIcon: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  withdrawTitle: { fontSize: 16, fontWeight: '900', color: colors.text },
-  withdrawHint: { fontSize: 13, color: colors.textMuted, marginTop: 6, lineHeight: 18, fontWeight: '600' },
+  withdrawTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  withdrawHint: { fontSize: 13, color: colors.textMuted, marginTop: 6, lineHeight: 18, fontWeight: '600', fontFamily: fonts.medium, },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
   section: {
     fontSize: 13,
@@ -489,13 +521,14 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
   rowLeft: { flex: 1, paddingRight: 12 },
   rowTypeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  rowType: { fontSize: 15, fontWeight: '900', color: colors.text },
+  rowType: { fontSize: 15, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
   srcPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },
   srcPillPos: { backgroundColor: 'rgba(16, 185, 129, 0.15)' },
-  srcPillNeg: { backgroundColor: 'rgba(255, 101, 132, 0.15)' },
-  srcPillTxt: { fontSize: 11, fontWeight: '800', color: colors.text, textTransform: 'capitalize' },
-  rowDate: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
-  rowAmt: { fontSize: 16, fontWeight: '900', color: '#059669' },
+  srcPillNeg: { backgroundColor: 'rgba(255, 74, 114, 0.15)' },
+  srcPillTxt: { fontSize: 11, fontWeight: '800', color: colors.text, textTransform: 'capitalize', fontFamily: fonts.bold, },
+  rowDate: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600', fontFamily: fonts.medium, },
+  rowAmt: { fontSize: 16, fontWeight: '900', color: '#059669', fontFamily: fonts.bold, },
   rowAmtGoodwill: { color: '#B45309' },
   rowAmtDebit: { color: colors.secondary },
   emptyCard: {
@@ -507,7 +540,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  emptyTitle: { fontSize: 17, fontWeight: '900', color: colors.text, marginTop: spacing.sm },
-  emptySub: { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: 'center', lineHeight: 20, fontWeight: '600' },
-  muted: { fontSize: 15, color: colors.textMuted },
+  emptyTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm },
+  emptySub: { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: 'center', lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
+  muted: { fontSize: 15, color: colors.textMuted, fontFamily: fonts.regular, },
 });

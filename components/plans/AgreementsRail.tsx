@@ -2,7 +2,7 @@
  * Horizontal “connections” strip — dating-app polish (photo-forward + plan context).
  */
 import { Avatar } from '@/components/Avatar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { AgreementRailItem } from '@/lib/plans/fetchAgreementsRail';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -94,7 +94,7 @@ const cardShadow = {
 };
 
 const ringShadow = {
-  shadowColor: '#6C63FF',
+  shadowColor: '#5E52FF',
   shadowOffset: { width: 0, height: 4 },
   shadowOpacity: 0.12,
   shadowRadius: 8,
@@ -150,6 +150,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.35,
     flexShrink: 1,
@@ -158,6 +159,7 @@ const styles = StyleSheet.create({
   roleHint: {
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -167,6 +169,7 @@ const styles = StyleSheet.create({
   planTitle: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     lineHeight: 18,
     textAlign: 'center',
@@ -186,17 +189,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
   statusPillText: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: 0.3,
   },
   whenHint: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     flexShrink: 1,
   },

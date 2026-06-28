@@ -3,9 +3,9 @@ import { inferMeetTypeIcon } from '@/lib/plans/inferMeetTypeIcon';
 import { invalidateMeetTypesCache } from '@/lib/plans/meetTypes';
 import type { DbMeetType } from '@/types/database';
 
-/** Catalog / seeded meet types have `created_by` NULL. */
+/** User-owned meet type the signed-in user may edit/delete (excludes admin-managed catalog rows). */
 export function isUserMeetType(type: DbMeetType, userId: string): boolean {
-  return !!type.created_by && type.created_by === userId;
+  return !!type.created_by && type.created_by === userId && !type.is_admin_managed;
 }
 
 export async function countPlansUsingMeetType(

@@ -3,7 +3,7 @@
  * interest pills, Hinge-style prompt + answer blocks.
  */
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
 import type { MeetingIntent, OnboardingDraft } from '@/types/onboarding';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -169,6 +169,7 @@ const styles = StyleSheet.create({
   intentPillTxt: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: onboarding.text,
     letterSpacing: 0.2,
   },
@@ -179,6 +180,7 @@ const styles = StyleSheet.create({
     right: 16,
     fontSize: 28,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: -0.5,
     textShadowColor: 'rgba(0,0,0,0.45)',
@@ -198,14 +200,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   locationTxt: {
     flex: 1,
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: onboarding.text,
     lineHeight: 19,
   },
@@ -213,6 +216,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: onboarding.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -223,6 +227,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: onboarding.text,
     fontWeight: '500',
+    fontFamily: fonts.regular,
   },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tagGradient: {
@@ -233,6 +238,7 @@ const styles = StyleSheet.create({
   tagTextOn: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
   },
   promptCard: {
@@ -246,6 +252,7 @@ const styles = StyleSheet.create({
   promptQ: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: onboarding.muted,
     marginBottom: onboarding.spacing.sm,
     lineHeight: 18,
@@ -254,6 +261,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 24,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: onboarding.text,
     letterSpacing: -0.2,
   },

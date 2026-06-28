@@ -21,13 +21,13 @@ export const TIER_THEME: Record<SubscriptionTier, TierTheme> = {
   },
   SILVER: {
     icon: 'shield-checkmark-outline',
-    ring: ['rgba(192,197,206,0.55)', 'rgba(108,99,255,0.18)'],
+    ring: ['rgba(192,197,206,0.55)', 'rgba(94, 82, 255,0.18)'],
     accent: '#6B7280',
     tagline: 'Boost visibility & filters',
   },
   GOLD: {
     icon: 'star',
-    ring: ['rgba(245,158,11,0.5)', 'rgba(108,99,255,0.3)'],
+    ring: ['rgba(245,158,11,0.5)', 'rgba(94, 82, 255,0.3)'],
     accent: '#D97706',
     tagline: 'Group plans & travel mode',
   },

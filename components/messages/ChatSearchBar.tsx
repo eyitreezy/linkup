@@ -1,7 +1,7 @@
 /**
  * Inline search bar for chat thread header.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.98)',
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     paddingHorizontal: spacing.sm,
     minHeight: 40,
   },
@@ -108,9 +108,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingVertical: 8,
     fontWeight: '500',
+    fontFamily: fonts.regular,
   },
   cancelBtn: { paddingHorizontal: 4, paddingVertical: 8 },
-  cancelTxt: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  cancelTxt: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -124,7 +126,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
   },
-  countLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted, minWidth: 72, textAlign: 'center' },
+  countLabel: { fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted, minWidth: 72, textAlign: 'center' },
 });

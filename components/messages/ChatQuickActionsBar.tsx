@@ -1,7 +1,7 @@
 /**
  * Plan / Offer / Place / Media — shown when composer + toggle is open (WhatsApp-style).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -74,18 +74,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
   iconWrapAccent: {
-    backgroundColor: 'rgba(255, 101, 132, 0.18)',
-    borderColor: 'rgba(255, 101, 132, 0.38)',
+    backgroundColor: 'rgba(255, 74, 114, 0.18)',
+    borderColor: 'rgba(255, 74, 114, 0.38)',
   },
   label: {
     marginTop: 4,
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: 0.2,
   },

@@ -2,7 +2,7 @@
  * Bumble-style modal when an outgoing message is blocked for contact sharing.
  */
 import { Button } from '@/components/Button';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { CONTACT_SHARE_BLOCKED_BODY } from '@/lib/messaging/contactSharePolicy';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
@@ -56,6 +56,7 @@ const styles = StyleSheet.create({
   body: {
     marginTop: spacing.xs,
     fontSize: 15,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,

@@ -3,10 +3,11 @@
  */
 import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
 import { TierBadge } from '@/components/TierBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { isUserVerified } from '@/lib/verification/access';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { formatPlanDistanceLabel, planHasMeetupCoords } from '@/lib/plans/planDistanceLabel';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
@@ -26,6 +27,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 type Props = {
   row: PlanFeedRow;
   distanceKm: number | null;
+  viewerHasLocation?: boolean;
   currentUserId: string | undefined;
   /** Latest offer from the current user as bidder, if any. */
   userOffer?: DbPlanOffer | null;
@@ -121,6 +123,7 @@ function deriveOfferCta(offer: DbPlanOffer | null | undefined, warmTone?: boolea
 function PlanCardInner({
   row,
   distanceKm,
+  viewerHasLocation = true,
   currentUserId,
   userOffer,
   viewerProfile,
@@ -160,9 +163,19 @@ function PlanCardInner({
     [showCreatorPresence, viewerProfile, row.creatorProfile?.preferences, creatorPresence]
   );
   const moodMeta = useMemo(() => moodDiscoverMeta(row), [row]);
-
-  const distLabel =
-    distanceKm != null ? (distanceKm < 1 ? 'Near you' : `${distanceKm.toFixed(1)} km`) : 'Nearby';
+  const planHasLocation = planHasMeetupCoords(row);
+  const distPillLabel = formatPlanDistanceLabel({
+    distanceKm,
+    viewerHasLocation,
+    planHasLocation,
+    style: 'pill',
+  });
+  const distLineLabel = formatPlanDistanceLabel({
+    distanceKm,
+    viewerHasLocation,
+    planHasLocation,
+    style: 'line',
+  });
 
   if (datingList) {
     return (
@@ -197,7 +210,7 @@ function PlanCardInner({
               style={styles.datingDistPill}
             >
               <Ionicons name="navigate-outline" size={14} color="#fff" />
-              <Text style={styles.datingDistPillTxt}>{distLabel}</Text>
+              <Text style={styles.datingDistPillTxt}>{distPillLabel}</Text>
             </LinearGradient>
             <View style={styles.datingHeroRight}>
               {verified ? (
@@ -269,14 +282,14 @@ function PlanCardInner({
             </View>
           </View>
 
+          {price ? (
+            <Text style={styles.datingPrice} numberOfLines={1}>
+              {price}
+            </Text>
+          ) : null}
           <Text style={styles.datingTitle} numberOfLines={2}>
             {row.title}
           </Text>
-          {desc.length > 0 ? (
-            <Text style={styles.datingDesc} numberOfLines={3}>
-              {desc}
-            </Text>
-          ) : null}
 
           <View style={styles.datingMetaRow}>
             <View style={styles.datingMetaChip}>
@@ -300,18 +313,6 @@ function PlanCardInner({
               </View>
             ) : null}
           </View>
-
-          {warmTone ? (
-            <View style={styles.datingVibeHint}>
-              <Ionicons name="heart" size={14} color={colors.secondary} />
-              <Text style={styles.datingVibeHintTxt}>Open to ideas — details when you connect</Text>
-            </View>
-          ) : price ? (
-            <View style={styles.datingMetaChip}>
-              <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
-              <Text style={styles.datingMetaChipTxt}>{price}</Text>
-            </View>
-          ) : null}
 
           {!isOwn ? (
             <View style={styles.datingCtaWrap}>
@@ -412,11 +413,7 @@ function PlanCardInner({
             {!boosted && creatorSpotlighted ? <CreatorSpotlightChip /> : null}
             {hostTier === 'PLATINUM' ? <TierBadge tier="PLATINUM" compact /> : null}
           </View>
-          {distanceKm != null ? (
-            <Text style={styles.dist}>{distanceKm < 1 ? '< 1 km away' : `${distanceKm.toFixed(1)} km away`}</Text>
-          ) : (
-            <Text style={styles.dist}>Nearby</Text>
-          )}
+          <Text style={styles.dist}>{distLineLabel}</Text>
           <HostPresenceChip presence={presenceUi} />
         </View>
       </View>
@@ -486,7 +483,7 @@ function PlanCardInner({
         {warmTone ? (
           <View style={styles.footerItem}>
             <Ionicons name="heart-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.footerTxt, { fontStyle: 'italic' }]}>Open to ideas — details when you connect</Text>
+            <Text style={[styles.footerTxt, { fontStyle: 'italic' }]}>Open to ideas. Details when you connect.</Text>
           </View>
         ) : price ? (
           <View style={styles.footerItem}>
@@ -567,19 +564,21 @@ const styles = StyleSheet.create({
   avatarWrap: {},
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#E8EAEF' },
   avatarPh: { alignItems: 'center', justifyContent: 'center' },
-  avatarPhTxt: { fontSize: 18, fontWeight: '800', color: colors.textMuted },
+  avatarPhTxt: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted },
   topMeta: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  name: { fontSize: 16, fontWeight: '800', color: colors.text, maxWidth: '55%' },
+  name: { fontSize: 16, fontWeight: '800', color: colors.text, maxWidth: '55%', fontFamily: fonts.bold, },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  badgeTxt: { fontSize: 11, fontWeight: '800', color: colors.primary },
+  badgeTxt: { fontSize: 11, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
   trustChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.sm,
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
   },
-  trustChipTxt: { fontSize: 10, fontWeight: '800', color: '#059669' },
+  trustChipTxt: { fontSize: 10, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#059669' },
   profileChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -589,10 +588,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: 'rgba(5, 150, 105, 0.08)',
   },
-  profileChipTxt: { fontSize: 10, fontWeight: '700', color: '#047857' },
-  dist: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  profileChipTxt: { fontSize: 10, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#047857' },
+  dist: { fontSize: 13, color: colors.textMuted, marginTop: 2, fontFamily: fonts.regular, },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: 6 },
-  planTitle: { fontSize: 19, fontWeight: '800', color: colors.text, flex: 1, letterSpacing: -0.3 },
+  planTitle: { fontSize: 19, fontWeight: '800', color: colors.text, flex: 1, letterSpacing: -0.3, fontFamily: fonts.bold, },
   boostPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,7 +602,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: colors.secondary,
   },
-  boostPillTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  boostPillTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   listMoodRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -616,18 +617,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: 'rgba(250, 204, 21, 0.2)',
   },
-  listMoodUrgentTxt: { fontSize: 11, fontWeight: '900', color: '#a16207' },
+  listMoodUrgentTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#a16207' },
   listMoodType: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(255, 101, 132, 0.12)',
+    backgroundColor: 'rgba(255, 74, 114, 0.12)',
     maxWidth: '70%',
   },
-  listMoodTypeTxt: { fontSize: 11, fontWeight: '800', color: colors.secondary },
+  listMoodTypeTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.secondary },
   listMoodTtl: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  hideHint: { fontSize: 11, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs },
-  desc: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginBottom: spacing.sm },
+  hideHint: { fontSize: 11, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs, fontFamily: fonts.regular, },
+  desc: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginBottom: spacing.sm, fontFamily: fonts.regular, },
   heroImg: {
     width: '100%',
     height: 168,
@@ -646,11 +649,13 @@ const styles = StyleSheet.create({
   },
   footer: { gap: 8 },
   footerItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  footerTxt: { fontSize: 13, color: colors.text, flex: 1, fontWeight: '600' },
+  footerTxt: { fontSize: 13, color: colors.text, flex: 1, fontWeight: '600',
+    fontFamily: fonts.medium,},
   offerBlock: { marginTop: spacing.md, gap: 6 },
   offerStatusHint: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
   },
@@ -663,14 +668,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   offerBtnMuted: {
     borderColor: 'rgba(15, 23, 42, 0.1)',
     backgroundColor: 'rgba(15, 23, 42, 0.04)',
   },
   offerBtnDisabled: { opacity: 0.85 },
-  offerBtnTxt: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  offerBtnTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   offerBtnTxtMuted: { color: colors.textMuted },
   offerBtnTxtDisabled: { color: colors.textMuted },
   cardDating: {
@@ -680,7 +686,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.12,
@@ -727,7 +733,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.45)',
   },
-  datingDistPillTxt: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  datingDistPillTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   datingHeroRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   datingVerifiedPill: {
     flexDirection: 'row',
@@ -740,7 +747,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
   },
-  datingVerifiedPillTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  datingVerifiedPillTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   datingBoostMini: {
     width: 34,
     height: 34,
@@ -753,7 +761,8 @@ const styles = StyleSheet.create({
   datingBody: { padding: spacing.lg },
   datingHostRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.md },
   datingHostMeta: { flex: 1, minWidth: 0 },
-  datingHostName: { fontSize: 18, fontWeight: '800', color: colors.text, letterSpacing: -0.3 },
+  datingHostName: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
   datingChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   datingTrustChip: {
     paddingHorizontal: 8,
@@ -761,7 +770,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
   },
-  datingTrustChipTxt: { fontSize: 10, fontWeight: '800', color: '#059669' },
+  datingTrustChipTxt: { fontSize: 10, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#059669' },
   datingProfileChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -771,7 +781,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: 'rgba(5, 150, 105, 0.08)',
   },
-  datingProfileChipTxt: { fontSize: 10, fontWeight: '700', color: '#047857' },
+  datingProfileChipTxt: { fontSize: 10, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#047857' },
   datingMoodUrgent: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -780,25 +791,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(202, 138, 4, 0.35)',
   },
-  datingMoodUrgentTxt: { fontSize: 10, fontWeight: '900', color: '#a16207' },
+  datingMoodUrgentTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#a16207' },
   datingMoodTypeChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(255, 101, 132, 0.14)',
+    backgroundColor: 'rgba(255, 74, 114, 0.14)',
     maxWidth: '100%',
   },
-  datingMoodTypeChipTxt: { fontSize: 10, fontWeight: '800', color: colors.secondary },
-  datingMoodTtlChip: { backgroundColor: 'rgba(255, 101, 132, 0.1)' },
+  datingMoodTypeChipTxt: { fontSize: 10, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.secondary },
+  datingMoodTtlChip: { backgroundColor: 'rgba(255, 74, 114, 0.1)' },
+  datingPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    letterSpacing: -0.2,
+    marginBottom: 6,
+  },
   datingTitle: {
     fontSize: 22,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.5,
     lineHeight: 28,
     marginBottom: 8,
   },
-  datingDesc: { fontSize: 15, color: colors.textMuted, lineHeight: 22, marginBottom: spacing.md },
   datingMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   datingMetaChip: {
     flexDirection: 'row',
@@ -807,22 +828,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.09)',
+    backgroundColor: 'rgba(94, 82, 255, 0.09)',
     maxWidth: '100%',
     flexShrink: 1,
   },
-  datingMetaChipPink: { backgroundColor: 'rgba(255, 101, 132, 0.1)' },
-  datingMetaChipTxt: { fontSize: 13, fontWeight: '700', color: colors.text, flexShrink: 1 },
-  datingVibeHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: spacing.sm,
-    paddingVertical: 8,
-  },
-  datingVibeHintTxt: { fontSize: 13, fontWeight: '600', color: colors.textMuted, fontStyle: 'italic', flex: 1 },
+  datingMetaChipPink: { backgroundColor: 'rgba(255, 74, 114, 0.1)' },
+  datingMetaChipTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, flexShrink: 1 },
   datingCtaWrap: { marginTop: spacing.md, gap: 8 },
-  datingCtaHint: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textAlign: 'center' },
+  datingCtaHint: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textAlign: 'center', fontFamily: fonts.medium, },
   datingCtaGrad: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -831,7 +845,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: radius.button,
   },
-  datingCtaGradTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  datingCtaGradTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   datingCtaMuted: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -843,9 +858,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(15, 23, 42, 0.1)',
     backgroundColor: 'rgba(15, 23, 42, 0.04)',
   },
-  datingCtaMutedTxt: { fontSize: 15, fontWeight: '800', color: colors.textMuted },
+  datingCtaMutedTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted },
   datingHideHint: {
     fontSize: 11,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.sm,

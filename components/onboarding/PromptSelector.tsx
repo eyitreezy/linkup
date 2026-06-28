@@ -1,6 +1,6 @@
 import { authSoftLabelStyle, Input } from '@/components/Input';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { HINGE_PROMPTS } from '@/lib/onboarding/constants';
 import type { PromptAnswer } from '@/types/onboarding';
 import { MotiView } from 'moti';
@@ -97,7 +97,8 @@ const styles = StyleSheet.create({
     marginHorizontal: -onboarding.spacing.xs,
     borderRadius: radius.button,
   },
-  promptPickText: { fontSize: 15, fontWeight: '600', color: colors.primary },
+  promptPickText: { fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.primary },
   promptAnswerBlock: {
     marginBottom: onboarding.spacing.lg,
     paddingBottom: onboarding.spacing.lg,
@@ -116,6 +117,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     lineHeight: 22,
     color: onboarding.text,
     letterSpacing: -0.2,
@@ -128,5 +130,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   removeBtnPressed: { opacity: 0.75, backgroundColor: 'rgba(22, 163, 74, 0.1)' },
-  remove: { fontSize: 14, fontWeight: '700', color: onboarding.accent },
+  remove: { fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: onboarding.accent },
 });

@@ -11,7 +11,7 @@ import {
 } from '@/components/messages/MessageActionsSheet';
 import { ChatSafetyEntrySheet } from '@/components/trust/ChatSafetyEntrySheet';
 import { ReportSheet } from '@/components/trust/ReportSheet';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   DEFAULT_CHAT_APPEARANCE,
@@ -420,10 +420,11 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   back: { width: 36, padding: 4 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800', color: colors.text },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   scroll: { padding: spacing.md, paddingBottom: spacing.xl * 2 },
   hero: { alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
-  groupName: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  groupName: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center', fontFamily: fonts.bold, },
   nameInput: {
     fontSize: 20,
     fontWeight: '800',
@@ -435,9 +436,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   planLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  planLinkTxt: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  sectionSub: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm },
+  planLinkTxt: { fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, fontFamily: fonts.bold, },
+  sectionSub: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm, fontFamily: fonts.regular, },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -447,14 +449,16 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   memberBody: { flex: 1, gap: 4 },
-  memberName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  memberName: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   adminPill: {
-    backgroundColor: 'rgba(108,99,255,0.15)',
+    backgroundColor: 'rgba(94, 82, 255,0.15)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.sm,
   },
-  adminPillTxt: { fontSize: 11, fontWeight: '900', color: colors.primary },
+  adminPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,9 +468,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   actionRowDisabled: { opacity: 0.5 },
-  actionLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
+  actionLabel: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   leaveBtn: { marginTop: spacing.xl, alignItems: 'center', paddingVertical: spacing.md },
-  leaveTxt: { fontSize: 16, fontWeight: '800', color: colors.secondary },
+  leaveTxt: { fontSize: 16, fontWeight: '800', color: colors.secondary, fontFamily: fonts.bold, },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: colors.background,
@@ -475,8 +480,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     maxHeight: '70%',
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: spacing.md, color: colors.text },
+  modalTitle: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, marginBottom: spacing.md, color: colors.text },
   emptyGuests: { color: colors.textMuted, marginBottom: spacing.md },
   modalClose: { alignItems: 'center', paddingVertical: spacing.md },
-  modalCloseTxt: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  modalCloseTxt: { fontSize: 16, fontWeight: '700', color: colors.primary, fontFamily: fonts.medium, },
 });

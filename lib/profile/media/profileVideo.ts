@@ -1,7 +1,9 @@
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
+import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
 import { PROFILE_MEDIA_VIDEO_KIND, PROFILE_VIDEO_MAX_BYTES, PROFILE_VIDEO_MIME_TYPES } from '@/lib/profile/media/constants';
 import { supabase } from '@/lib/supabase';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 export type ProfileVideoRecord = {
   id: string;
@@ -70,10 +72,22 @@ export async function deleteProfileVideo(userId: string, mediaId?: string | null
   }
 }
 
+async function localFileSize(uri: string): Promise<number> {
+  if (Platform.OS === 'web') {
+    const res = await fetch(uri);
+    if (!res.ok) throw new Error('Video file not found.');
+    const blob = await res.blob();
+    return blob.size;
+  }
+
+  const file = new File(uri);
+  if (!file.exists) throw new Error('Video file not found.');
+  return file.size;
+}
+
 export async function uploadProfileVideo(userId: string, localUri: string): Promise<ProfileVideoRecord> {
-  const info = await FileSystem.getInfoAsync(localUri);
-  if (!info.exists) throw new Error('Video file not found.');
-  if (typeof info.size === 'number' && info.size > PROFILE_VIDEO_MAX_BYTES) {
+  const size = await localFileSize(localUri);
+  if (size > PROFILE_VIDEO_MAX_BYTES) {
     throw new Error('Video is too large. Please upload a shorter clip (under 30 seconds).');
   }
 
@@ -92,17 +106,21 @@ export async function uploadProfileVideo(userId: string, localUri: string): Prom
   });
   if (uploadErr) throw uploadErr;
 
+  const publicUrl = publicVideoUrl(path);
   const { data, error } = await supabase
     .from('media')
-    .insert({
-      parent_table: 'profiles',
-      parent_id: userId,
-      storage_bucket: 'profile-videos',
-      storage_path: path,
-      mime_type: mime,
-      metadata: { kind: PROFILE_MEDIA_VIDEO_KIND },
-      created_by: userId,
-    })
+    .insert(
+      buildMediaInsertPayload({
+        parent_table: 'profiles',
+        parent_id: userId,
+        storage_bucket: 'profile-videos',
+        storage_path: path,
+        mime_type: mime,
+        media_url: publicUrl,
+        metadata: { kind: PROFILE_MEDIA_VIDEO_KIND },
+        created_by: userId,
+      })
+    )
     .select('id, storage_path, mime_type')
     .single();
 
@@ -110,7 +128,7 @@ export async function uploadProfileVideo(userId: string, localUri: string): Prom
 
   return {
     id: data.id,
-    url: publicVideoUrl(data.storage_path),
+    url: publicUrl,
     storagePath: data.storage_path,
     mimeType: data.mime_type,
   };

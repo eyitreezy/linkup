@@ -2,7 +2,7 @@
  * Inline notice when escrow exceeds Tier 1 cap — requirements before secure payment.
  */
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
 import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
 import type { EscrowPattern, SubscriptionTier } from '@/types/database';
@@ -57,7 +57,7 @@ export function HighValueEscrowNoticeCard({
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.1)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.1)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.topGlow}
@@ -82,7 +82,7 @@ export function HighValueEscrowNoticeCard({
         <ReqRow met={hasPlatinum} label="Platinum subscription on your account" />
         <ReqRow met={hasTier3} label="Identity verification Tier 3 (you)" />
         {patternC ? (
-          <ReqRow met={!!counterpartyOk} label="Guest-funded plan — guest also needs Tier 3" />
+          <ReqRow met={!!counterpartyOk} label="Guest-funded plan: guest also needs Tier 3" />
         ) : null}
       </View>
 
@@ -103,7 +103,7 @@ export function HighValueEscrowNoticeCard({
       ) : (
         <View style={styles.readyBanner}>
           <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <Text style={styles.readyTxt}>Requirements met — you can proceed to secure payment.</Text>
+          <Text style={styles.readyTxt}>Requirements met. You can proceed to secure payment.</Text>
         </View>
       )}
     </View>
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     overflow: 'hidden',
     ...cardShadow,
   },
@@ -156,12 +156,14 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
-  title: { fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
+  title: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
   body: {
     fontSize: 14,
     fontWeight: '600',
@@ -197,7 +199,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D8DCE6',
   },
-  reqTxt: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text },
+  reqTxt: { flex: 1, fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   reqTxtMet: { color: '#047857' },
   ctaGrad: {
     flexDirection: 'row',
@@ -208,7 +211,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.button,
   },
-  ctaTxt: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  ctaTxt: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   readyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -219,5 +223,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.25)',
   },
-  readyTxt: { flex: 1, fontSize: 13, fontWeight: '700', color: '#047857', lineHeight: 18 },
+  readyTxt: { flex: 1, fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: '#047857', lineHeight: 18 },
 });

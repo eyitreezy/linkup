@@ -1,5 +1,5 @@
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { checkPermission, invalidatePermissionCache } from '@/lib/subscription/checkPermission';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -97,20 +97,23 @@ export default function PrivacySafetyScreen() {
 
   return (
     <SettingsStickyShell contentContainerStyle={styles.scroll}>
-          <View style={styles.leadBlock}>
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.leadAccent}
-            />
-            <View style={styles.leadTextCol}>
-              <Text style={styles.leadKicker}>Trust</Text>
-              <Text style={styles.leadTitle}>Privacy & safety</Text>
-              <Text style={styles.leadSub}>
-                Blocked people won&apos;t appear in your plans feed. Reports and serious issues: reach Help &amp;
-                Support.
-              </Text>
+          <View style={styles.heroHeader}>
+            <View style={styles.heroLeft}>
+              <LinearGradient
+                colors={[colors.primary, '#8B7CFF', colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroBadge}
+              >
+                <Ionicons name="shield-checkmark" size={22} color="#fff" />
+              </LinearGradient>
+              <View style={styles.heroText}>
+                <Text style={styles.heroKicker}>Trust</Text>
+                <Text style={styles.heroTitle}>Privacy & safety</Text>
+                <Text style={styles.heroSub}>
+                  Manage blocks and privacy controls for a safer feed.
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -139,14 +142,14 @@ export default function PrivacySafetyScreen() {
                   <Text style={styles.blockedSectionHeading}>Platinum privacy</Text>
                 </View>
                 <LinearGradient
-                  colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+                  colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.sectionRule}
                 />
               </View>
               <LinearGradient
-                colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+                colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.cardOuter}
@@ -210,7 +213,7 @@ export default function PrivacySafetyScreen() {
               </Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -219,7 +222,7 @@ export default function PrivacySafetyScreen() {
 
           {blocks.length === 0 ? (
             <LinearGradient
-              colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+              colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardOuter}
@@ -234,7 +237,7 @@ export default function PrivacySafetyScreen() {
             </LinearGradient>
           ) : (
             <LinearGradient
-              colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+              colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.cardOuter}
@@ -270,50 +273,56 @@ export default function PrivacySafetyScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: spacing.xl },
-  leadBlock: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
+  scroll: { paddingBottom: 120 },
+  heroHeader: {
     marginBottom: spacing.lg,
   },
-  leadAccent: {
-    width: 5,
-    marginTop: 8,
-    borderRadius: 3,
-    height: 52,
+  heroLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  heroBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  leadTextCol: { flex: 1, minWidth: 0 },
-  leadKicker: {
+  heroText: { flex: 1, minWidth: 0 },
+  heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
-  leadTitle: {
-    fontSize: 26,
+  heroTitle: {
+    fontSize: 30,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
-    letterSpacing: -0.45,
-    marginBottom: 6,
+    letterSpacing: -0.7,
   },
-  leadSub: {
+  heroSub: {
     fontSize: 15,
-    color: colors.textMuted,
-    lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 6,
+    lineHeight: 21,
   },
   helpCtaOuter: {
-    marginHorizontal: spacing.md,
     borderRadius: radius.button,
     overflow: 'hidden',
     marginBottom: spacing.lg,
     ...(Platform.OS === 'ios'
       ? {
-          shadowColor: '#6C63FF',
+          shadowColor: '#5E52FF',
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.22,
           shadowRadius: 14,
@@ -333,11 +342,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: -0.15,
   },
   sectionHead: {
     marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
   },
   sectionHeadRow: {
     flexDirection: 'row',
@@ -355,12 +364,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.2,
     textTransform: 'uppercase',
   },
   blockedCount: {
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0,
   },
@@ -372,7 +383,6 @@ const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: radius.xl,
     padding: 2,
-    marginHorizontal: spacing.md,
     marginBottom: spacing.xs,
   },
   cardInner: {
@@ -411,6 +421,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 19,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.3,
     textAlign: 'center',
@@ -422,6 +433,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   blockRow: {
     flexDirection: 'row',
@@ -439,16 +451,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
   blockTextCol: { flex: 1, minWidth: 0 },
-  blockId: { fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
-  blockHint: { fontSize: 12, color: colors.textMuted, marginTop: 2, fontWeight: '600' },
-  blockDate: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  blockId: { fontSize: 15, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, letterSpacing: -0.2 },
+  blockHint: { fontSize: 12, color: colors.textMuted, marginTop: 2, fontWeight: '600', fontFamily: fonts.medium, },
+  blockDate: { fontSize: 13, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
   prefRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,8 +477,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   prefTextCol: { flex: 1, minWidth: 0 },
-  prefLabel: { fontSize: 16, fontWeight: '700', color: colors.text },
-  prefSub: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginTop: 4 },
+  prefLabel: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  prefSub: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginTop: 4, fontFamily: fonts.regular, },
   note: {
     fontSize: 13,
     color: colors.textMuted,

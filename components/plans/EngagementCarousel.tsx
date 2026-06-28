@@ -2,7 +2,7 @@
  * Horizontal engagements strip with optional auto-advance when there are enough cards.
  */
 import { Avatar } from '@/components/Avatar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { EngagementCarouselItem } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
@@ -220,6 +220,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
@@ -248,23 +249,26 @@ const styles = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   cardTopText: { flex: 1, minWidth: 0 },
-  otherName: { fontSize: 15, fontWeight: '800', color: colors.text },
-  planTitle: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2, lineHeight: 18 },
+  otherName: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  planTitle: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 2, lineHeight: 18, fontFamily: fonts.medium, },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm },
   typePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
-  typePillTxt: { fontSize: 11, fontWeight: '800', color: colors.primary },
+  typePillTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(255, 101, 132, 0.12)',
+    backgroundColor: 'rgba(255, 74, 114, 0.12)',
   },
-  statusPillTxt: { fontSize: 11, fontWeight: '800', color: colors.secondary },
+  statusPillTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.secondary },
   ctaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,7 +276,8 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 2,
   },
-  ctaTxt: { fontSize: 14, fontWeight: '800', color: colors.primary },
+  ctaTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   skeletonCard: {},
   skeletonRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   skeletonTextCol: { flex: 1, gap: 8 },

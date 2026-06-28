@@ -22,8 +22,8 @@ class MainActivity : ReactActivity() {
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
     super.onCreate(null)
-    // Edge-to-edge + adjustResize often leaves IME/layout broken; fit system windows restores predictable insets & keyboard resize.
-    WindowCompat.setDecorFitsSystemWindows(window, true)
+    // Expo SDK 55 / Android 15+ — draw edge-to-edge; safe areas handled in JS (react-native-safe-area-context).
+    WindowCompat.setDecorFitsSystemWindows(window, false)
   }
 
   /**

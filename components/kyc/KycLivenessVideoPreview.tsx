@@ -1,7 +1,7 @@
 /**
  * Playback for KYC selfie clips — native controls, mirrored preview for front-camera recordings.
  */
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useState } from 'react';
@@ -80,5 +80,6 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#1A1D26',
   },
-  fallbackTxt: { color: 'rgba(255,255,255,0.85)', textAlign: 'center', fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  fallbackTxt: { color: 'rgba(255,255,255,0.85)', textAlign: 'center', fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, lineHeight: 20 },
 });

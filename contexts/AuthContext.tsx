@@ -82,9 +82,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return s;
   }, [isSupabaseConfigured, loadUserRow]);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (session?.user?.id) await loadUserRow(session.user.id);
-  };
+  }, [session?.user?.id, loadUserRow]);
 
   useEffect(() => {
     const linkSub = Linking.addEventListener('url', ({ url }) => captureAuthLinkIfPresent(url));
@@ -139,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         lastLoadedUserIdRef.current = null;
+        setLoading(false);
         setDbUser(null);
         setProfile(null);
         setIsAdmin(false);
@@ -181,15 +182,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session?.user?.id, isSupabaseConfigured, loadUserRow]);
 
   const signOut = async () => {
-    if (!isSupabaseConfigured) {
-      lastLoadedUserIdRef.current = null;
-      setSession(null);
-      setDbUser(null);
-      setProfile(null);
-      setIsAdmin(false);
-      setAdminRecordId(null);
-      return;
-    }
+    lastLoadedUserIdRef.current = null;
+    setLoading(false);
+    setSession(null);
+    setDbUser(null);
+    setProfile(null);
+    setIsAdmin(false);
+    setAdminRecordId(null);
+
+    if (!isSupabaseConfigured) return;
+
     const { error } = await supabase.auth.signOut();
     if (error && __DEV__) console.warn('[Auth] signOut:', error.message);
     if (error) {

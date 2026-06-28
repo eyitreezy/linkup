@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { DbTicketReply } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
@@ -52,8 +52,8 @@ const styles = StyleSheet.create({
   },
   rowAdmin: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
   rowMember: {
     alignSelf: 'flex-end',
@@ -74,6 +74,7 @@ const styles = StyleSheet.create({
   internalLbl: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#B45309',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
@@ -81,6 +82,7 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     lineHeight: 22,
   },
@@ -91,6 +93,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
 });

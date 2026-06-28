@@ -2,7 +2,7 @@
  * Primary / secondary action buttons — LinkUp theme.
  */
 import { APP_CTA_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   primaryFullWidthDepth:
     Platform.OS === 'ios'
       ? {
-          shadowColor: '#6C63FF',
+          shadowColor: '#5E52FF',
           shadowOffset: { width: 0, height: 10 },
           shadowOpacity: 0.28,
           shadowRadius: 18,
@@ -141,6 +141,7 @@ const styles = StyleSheet.create({
   textAuth: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     letterSpacing: -0.2,
   },
   ghostBorder: {
@@ -150,6 +151,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     textAlign: 'center',
   },
 });

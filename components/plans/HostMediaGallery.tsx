@@ -1,7 +1,7 @@
 /**
  * Full-width host media carousel — Tinder / Bumble / Hinge style.
  */
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import type { HostMediaItem } from '@/lib/profile/media/buildHostMediaSequence';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -277,7 +277,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(237,232,255,0.5)',
     gap: 8,
   },
-  loadingTxt: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  loadingTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   progressRow: {
     position: 'absolute',
     top: 10,
@@ -297,7 +298,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   progressSegVideo: {
-    backgroundColor: 'rgba(255,101,132,0.55)',
+    backgroundColor: 'rgba(255, 74, 114,0.55)',
   },
   counter: {
     position: 'absolute',
@@ -305,6 +306,7 @@ const styles = StyleSheet.create({
     right: 14,
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: 'rgba(255,255,255,0.92)',
     backgroundColor: 'rgba(15,23,42,0.45)',
     paddingHorizontal: 8,
@@ -339,7 +341,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(108,99,255,0.88)',
+    backgroundColor: 'rgba(94, 82, 255,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -356,6 +358,7 @@ const styles = StyleSheet.create({
   videoDuration: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
     backgroundColor: 'rgba(15,23,42,0.5)',
     paddingHorizontal: 8,

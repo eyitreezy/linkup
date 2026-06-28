@@ -43,6 +43,12 @@ export function notificationIcon(type: string): IonName {
       return 'shield-checkmark-outline';
     case 'account_restriction':
       return 'lock-closed-outline';
+    case 'meet_type_submitted':
+      return 'layers-outline';
+    case 'meet_type_approved':
+      return 'checkmark-circle-outline';
+    case 'meet_type_rejected':
+      return 'close-circle-outline';
     default:
       return 'notifications-outline';
   }

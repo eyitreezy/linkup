@@ -13,11 +13,12 @@ import { HighValueEscrowNoticeCard } from '@/components/plans/agreement/HighValu
 import { MeetupFundingReminderBanner } from '@/components/plans/agreement/MeetupFundingReminderBanner';
 import { PlanSummaryCard } from '@/components/plans/agreement/PlanSummaryCard';
 import { DiscoveryGradientBg } from '@/components/ui/DiscoveryGradientBg';
+import { PlanFlowScreenSkeleton } from '@/components/ui/PlanFlowScreenSkeleton';
 import { Screen } from '@/components/Screen';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
@@ -40,7 +41,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Platform,
   Pressable,
@@ -49,7 +49,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function agreedPriceLabel(plan: DbPlan, offer: DbPlanOffer | null): string {
   const cents = plan.agreed_price_cents ?? offer?.amount_cents ?? plan.starting_price_cents;
@@ -78,9 +77,9 @@ function cancelBandFromOutcome(outcome: CancellationOutcome): CancellationBandSu
   return 'late';
 }
 
-function AgreementTopNav({ topInset }: { topInset: number }) {
+function AgreementTopNav() {
   return (
-    <View style={[styles.topNav, { paddingTop: Math.max(topInset, spacing.xs) }]}>
+    <View style={styles.topNav}>
       <Pressable
         onPress={() => router.back()}
         style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
@@ -104,8 +103,7 @@ function AgreementTopNav({ topInset }: { topInset: number }) {
 }
 
 export default function PlanAgreementScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const insets = useSafeAreaInsets();
+  const { id, offerId: offerIdParam } = useLocalSearchParams<{ id: string; offerId?: string }>();
   const { user, dbUser } = useAuth();
   const [plan, setPlan] = useState<DbPlan | null>(null);
   const [offer, setOffer] = useState<DbPlanOffer | null>(null);
@@ -164,8 +162,20 @@ export default function PlanAgreementScreen() {
       const pl = p as DbPlan;
 
       let off: DbPlanOffer | null = null;
-      if (pl.accepted_offer_id) {
+      if (offerIdParam) {
+        const { data: o } = await supabase.from('plan_offers').select('*').eq('id', offerIdParam).single();
+        if (o) off = o as DbPlanOffer;
+      } else if (pl.accepted_offer_id) {
         const { data: o } = await supabase.from('plan_offers').select('*').eq('id', pl.accepted_offer_id).single();
+        if (o) off = o as DbPlanOffer;
+      } else if (pl.is_group_plan && user?.id) {
+        const { data: o } = await supabase
+          .from('plan_offers')
+          .select('*')
+          .eq('plan_id', pl.id)
+          .eq('bidder_id', user.id)
+          .eq('status', 'accepted')
+          .maybeSingle();
         if (o) off = o as DbPlanOffer;
       }
 
@@ -216,7 +226,7 @@ export default function PlanAgreementScreen() {
     } finally {
       setLoadDone(true);
     }
-  }, [id, user?.id]);
+  }, [id, offerIdParam, user?.id]);
 
   useEffect(() => {
     if (!id || !isSupabaseConfigured || !hasVotedMutualCancel) return;
@@ -228,7 +238,7 @@ export default function PlanAgreementScreen() {
         (payload) => {
           const next = payload.new as { status?: string };
           if (next.status === 'cancelled') {
-            showFeedback('success', 'Mutual cancellation', 'Plan mutually cancelled — refund processed.');
+            showFeedback('success', 'Mutual cancellation', 'Plan mutually cancelled. Refund processed.');
             goToDiscoveryFeed();
           }
         }
@@ -253,27 +263,18 @@ export default function PlanAgreementScreen() {
     }, [load])
   );
 
-  if (!user) {
+  if (!user || !loadDone) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <View style={[styles.center, { paddingTop: insets.top }]}>
-            <ActivityIndicator color={colors.primary} size="large" />
-          </View>
-        </View>
-      </Screen>
-    );
-  }
-
-  if (!loadDone) {
-    return (
-      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-        <View style={styles.flex}>
-          <DiscoveryGradientBg />
-          <View style={[styles.center, { paddingTop: insets.top }]}>
-            <ActivityIndicator color={colors.primary} size="large" />
-          </View>
+          {user ? <AgreementTopNav /> : null}
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <PlanFlowScreenSkeleton />
+          </ScrollView>
         </View>
       </Screen>
     );
@@ -284,7 +285,7 @@ export default function PlanAgreementScreen() {
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav topInset={insets.top} />
+          <AgreementTopNav />
           <View style={styles.fallbackPad}>
             <Text style={styles.muted}>This plan could not be loaded.</Text>
             <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
@@ -296,12 +297,12 @@ export default function PlanAgreementScreen() {
     );
   }
 
-  if (!plan.accepted_offer_id || !offer) {
+  if (!offer || (!plan.is_group_plan && !plan.accepted_offer_id)) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav topInset={insets.top} />
+          <AgreementTopNav />
           <View style={styles.fallbackPad}>
             <Text style={styles.muted}>No accepted offer for this plan.</Text>
             <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
@@ -318,7 +319,7 @@ export default function PlanAgreementScreen() {
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav topInset={insets.top} />
+          <AgreementTopNav />
           <View style={styles.fallbackPad}>
             <Text style={styles.title}>Plan cancelled</Text>
             <Text style={styles.muted}>This agreement is no longer active.</Text>
@@ -341,7 +342,7 @@ export default function PlanAgreementScreen() {
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav topInset={insets.top} />
+          <AgreementTopNav />
           <View style={styles.fallbackPad}>
             <Text style={styles.muted}>You don&apos;t have access to this agreement.</Text>
           </View>
@@ -361,8 +362,13 @@ export default function PlanAgreementScreen() {
   const notes = planRow.agreed_notes ?? offerRow.message ?? null;
   const priceLabel = agreedPriceLabel(planRow, offerRow);
 
-  const awaitingPay = planRow.status === 'awaiting_payment';
-  const needsConfirm = planRow.status === 'agreed';
+  const slotAccepted = offerRow.status === 'accepted';
+  const awaitingPay =
+    planRow.status === 'awaiting_payment' ||
+    (planRow.is_group_plan && slotAccepted && paymentRequired);
+  const needsConfirm =
+    planRow.status === 'agreed' ||
+    (planRow.is_group_plan && slotAccepted && !paymentRequired && planRow.status === 'negotiating');
 
   const escrowCents = paymentRequired
     ? (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? null)
@@ -421,6 +427,7 @@ export default function PlanAgreementScreen() {
         );
         return;
       }
+      console.error('Payment setup failed — full error:', res.error);
       showFeedback('error', 'Payment setup failed', res.error);
       return;
     }
@@ -512,7 +519,7 @@ export default function PlanAgreementScreen() {
     const result = data as { status?: string };
     if (result.status === 'completed') {
       setMutualCancelOpen(false);
-      showFeedback('success', 'Mutual cancellation', 'Plan mutually cancelled — refund processed.');
+      showFeedback('success', 'Mutual cancellation', 'Plan mutually cancelled. Refund processed.');
       goToDiscoveryFeed();
       return;
     }
@@ -529,7 +536,7 @@ export default function PlanAgreementScreen() {
     if (!user) return;
     const otherId = isHost ? offerRow.bidder_id : planRow.creator_id;
     try {
-      await openDirectChat(supabase, user.id, otherId);
+      await openDirectChat(supabase, user.id, otherId, { skipOfferGate: true });
     } catch (e) {
       showFeedback('error', 'Chat', e instanceof Error ? e.message : 'Could not open chat');
     }
@@ -622,7 +629,7 @@ export default function PlanAgreementScreen() {
     'Confirming plans and sending secure payments requires a verified identity on LinkUp.';
 
   const leadSub = paymentRequired
-    ? 'Review the summary below. Secure payment happens on the next screen — not while you negotiate.'
+    ? 'Review the summary below. Secure payment happens on the next screen, not while you negotiate.'
     : 'Review the meetup summary and confirm when you are ready.';
 
   const guestTier = (dbUser?.subscription_tier ?? 'FREE') as SubscriptionTier;
@@ -691,7 +698,7 @@ export default function PlanAgreementScreen() {
               >
                 <Text style={styles.cancelOptionTitle}>I want to cancel</Text>
                 <Text style={styles.cancelOptionDesc}>
-                  Standard cancellation — see refund policy below
+                  Standard cancellation. See refund policy below
                 </Text>
               </Pressable>
               <Pressable
@@ -704,7 +711,7 @@ export default function PlanAgreementScreen() {
               >
                 <Text style={styles.cancelOptionTitleWarning}>The host didn&apos;t show up</Text>
                 <Text style={styles.cancelOptionDesc}>
-                  Report a no-show — full refund
+                  Report a no-show. Full refund
                   {noShowGoodwillPreview > 0
                     ? ` and up to ₦${(noShowGoodwillPreview / 100).toLocaleString()} goodwill credit`
                     : ''}
@@ -782,7 +789,7 @@ export default function PlanAgreementScreen() {
           onConfirm={() => void onLegalGateConfirm()}
         />
 
-        <AgreementTopNav topInset={insets.top} />
+        <AgreementTopNav />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -814,10 +821,10 @@ export default function PlanAgreementScreen() {
             secondary={
               needsConfirm
                 ? bothConfirmed
-                  ? 'Both confirmed — finalize in one step'
+                  ? 'Both confirmed. Finalize in one step'
                   : userConfirmed
                     ? `Waiting for ${isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host'} to confirm`
-                    : 'Review details — both people must confirm the summary'
+                    : 'Review details. Both people must confirm the summary'
                 : awaitingPay
                   ? 'Awaiting secure payment'
                   : "You're all set"
@@ -869,7 +876,7 @@ export default function PlanAgreementScreen() {
               <Text style={styles.trustSectionLabel}>Accepted terms</Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -1007,7 +1014,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -1024,7 +1031,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -1038,6 +1045,7 @@ const styles = StyleSheet.create({
   feedTopLabel: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: 0.2,
   },
@@ -1058,6 +1066,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1066,6 +1075,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 28,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.5,
     marginBottom: 6,
@@ -1075,6 +1085,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   userHeaderCard: {
     marginHorizontal: spacing.md,
@@ -1084,7 +1095,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
@@ -1098,7 +1109,8 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl * 2 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   fallbackPad: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
+  title: { fontSize: 22, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.sm },
   muted: {
     fontSize: 15,
     color: colors.textMuted,
@@ -1107,7 +1119,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   linkBtn: { paddingVertical: spacing.md },
-  linkTxt: { color: colors.primary, fontWeight: '800', fontSize: 16 },
+  linkTxt: { color: colors.primary, fontWeight: '800',
+    fontFamily: fonts.bold, fontSize: 16 },
   sectionDot: {
     width: 6,
     height: 6,
@@ -1123,6 +1136,7 @@ const styles = StyleSheet.create({
   trustSectionLabel: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -1138,7 +1152,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     marginBottom: spacing.md,
     ...Platform.select({
       ios: {
@@ -1150,16 +1164,17 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
-  trustTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  trustLine: { fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
-  trustLineMuted: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  trustTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.sm },
+  trustLine: { fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20, fontFamily: fonts.medium, },
+  trustLineMuted: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 4, fontFamily: fonts.medium, },
   messageCtaOuter: {
     borderRadius: radius.button,
     overflow: 'hidden',
     marginBottom: spacing.md,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.18,
         shadowRadius: 12,
@@ -1182,7 +1197,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  messageCtaText: { fontSize: 16, fontWeight: '800', color: colors.primary, flexShrink: 1 },
+  messageCtaText: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, flexShrink: 1 },
   dualActionRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -1198,7 +1214,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.14,
         shadowRadius: 8,
@@ -1228,6 +1244,7 @@ const styles = StyleSheet.create({
   dualMessageText: {
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     flexShrink: 1,
   },
@@ -1239,7 +1256,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.22,
         shadowRadius: 12,
@@ -1259,6 +1276,7 @@ const styles = StyleSheet.create({
   dualViewText: {
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
     textAlign: 'center',
     lineHeight: 20,
@@ -1276,13 +1294,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
-  sheetTitle: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: spacing.md },
+  sheetTitle: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.md },
   cancelOption: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     padding: spacing.md,
     marginBottom: spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.96)',
@@ -1291,15 +1310,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.25)',
     backgroundColor: 'rgba(239, 68, 68, 0.06)',
   },
-  cancelOptionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  cancelOptionTitleWarning: { fontSize: 16, fontWeight: '800', color: colors.danger, marginBottom: 4 },
-  cancelOptionDesc: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19 },
+  cancelOptionTitle: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  cancelOptionTitleWarning: { fontSize: 16, fontWeight: '800', color: colors.danger, marginBottom: 4, fontFamily: fonts.bold, },
+  cancelOptionDesc: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19, fontFamily: fonts.medium, },
   mutualCancelLink: {
     alignItems: 'center',
     paddingVertical: spacing.sm,
     marginBottom: spacing.sm,
   },
-  mutualCancelLinkText: { fontSize: 14, fontWeight: '800', color: colors.primary },
+  mutualCancelLinkText: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   mutualCancelDesc: {
     fontSize: 14,
     fontWeight: '600',
@@ -1314,7 +1335,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mutualCancelConfirmLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  mutualCancelConfirmLabel: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   mutualCancelWaiting: {
     fontSize: 13,
     fontWeight: '700',
@@ -1330,7 +1352,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
   outcomeDoneBtn: {
     marginTop: spacing.sm,
@@ -1340,5 +1362,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  outcomeDoneLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  outcomeDoneLabel: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
 });

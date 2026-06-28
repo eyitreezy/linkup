@@ -1,5 +1,5 @@
 import { evaluatePasswordStrength } from '@/lib/auth/passwordStrength';
-import { spacing } from '@/constants/theme';
+import { spacing, fonts } from '@/constants/theme';
 import { StyleSheet, Text, View } from 'react-native';
 
 type Props = { password: string };
@@ -38,6 +38,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  label: { fontSize: 12, fontWeight: '800' },
-  hint: { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 4, lineHeight: 16 },
+  label: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold,},
+  hint: { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 4, lineHeight: 16, fontFamily: fonts.regular, },
 });

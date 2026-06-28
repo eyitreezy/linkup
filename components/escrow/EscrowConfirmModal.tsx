@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps } from 'react';
@@ -39,7 +39,7 @@ export function EscrowConfirmModal({
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.1)', 'rgba(255,101,132,0.05)', 'transparent']}
+            colors={['rgba(94, 82, 255,0.1)', 'rgba(255, 74, 114,0.05)', 'transparent']}
             style={styles.topGlow}
           />
           <View style={styles.iconWrap}>
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     overflow: 'hidden',
   },
   topGlow: {
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.sm,
     textAlign: 'center',
@@ -110,6 +111,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     textAlign: 'center',
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   row: { flexDirection: 'row', gap: spacing.sm },
   btn: { flex: 1, minHeight: 48, borderRadius: radius.button, alignItems: 'center', justifyContent: 'center' },
@@ -121,6 +123,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   btnGhost: { borderWidth: 1, borderColor: '#D8DCE6', backgroundColor: colors.surface },
-  btnGhostTxt: { fontSize: 16, fontWeight: '800', color: colors.text },
-  btnPrimaryTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  btnGhostTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  btnPrimaryTxt: { fontSize: 16, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
 });

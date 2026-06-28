@@ -13,9 +13,12 @@ import { defaultPrimaryRef, orderPhotoUrls } from '@/lib/profile/media/photoOrde
 import { ProfileCardPreview } from '@/components/onboarding/ProfileCardPreview';
 import { PromptSelector } from '@/components/onboarding/PromptSelector';
 import { TagSelector } from '@/components/onboarding/TagSelector';
-import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
+import { SettingsStickyShell, SettingsStickyTopNav } from '@/components/settings/SettingsStickyShell';
+import { Screen } from '@/components/Screen';
+import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
+import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { INTEREST_TAGS, LANGUAGE_OPTIONS } from '@/lib/onboarding/constants';
 import {
@@ -38,7 +41,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -56,7 +58,7 @@ function EditSectionHeader({ title, icon }: { title: string; icon?: keyof typeof
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       <LinearGradient
-        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.sectionRule}
@@ -68,7 +70,7 @@ function EditSectionHeader({ title, icon }: { title: string; icon?: keyof typeof
 function FormCard({ children }: { children: ReactNode }) {
   return (
     <LinearGradient
-      colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+      colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.formCardOuter}
@@ -100,6 +102,7 @@ function GradientChip({ label, selected, onPress }: { label: string; selected: b
 }
 
 export default function EditProfileScreen() {
+  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user, profile, refreshProfile } = useAuth();
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultOnboardingDraft());
   const [showDate, setShowDate] = useState(false);
@@ -186,7 +189,7 @@ export default function EditProfileScreen() {
   }, [profile?.user_id]);
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <>
       <AppFeedbackModal
         visible={feedback != null}
         onClose={() => setFeedback(null)}
@@ -196,7 +199,18 @@ export default function EditProfileScreen() {
         message={feedback?.message ?? ''}
         primaryLabel={feedback?.variant === 'success' ? 'Done' : 'Got it'}
       />
-      <SettingsStickyShell contentContainerStyle={styles.scroll}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <LinearGradient
+            colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
+            locations={[0, 0.32, 0.62, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={bleedBgStyle}
+            pointerEvents="none"
+          />
+          <SettingsStickyTopNav />
+          <KeyboardSafeScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
             <View style={styles.leadBlock}>
               <LinearGradient
                 colors={[colors.primary, colors.secondary]}
@@ -483,12 +497,15 @@ export default function EditProfileScreen() {
             {!canSave ? (
               <Text style={styles.saveHint}>Complete required fields above to enable save.</Text>
             ) : null}
-      </SettingsStickyShell>
-    </KeyboardAvoidingView>
+          </KeyboardSafeScrollView>
+        </View>
+      </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   scroll: { paddingBottom: spacing.xl },
   leadBlock: {
@@ -507,6 +524,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -515,6 +533,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.45,
     marginBottom: 6,
@@ -524,6 +543,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   sectionHead: {
     marginBottom: spacing.sm,
@@ -544,6 +564,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -592,6 +613,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     letterSpacing: 0.2,
     lineHeight: 18,
@@ -603,7 +625,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  dateTxt: { fontSize: 16, color: colors.text, fontWeight: '600', flex: 1 },
+  dateTxt: { fontSize: 16, color: colors.text, fontWeight: '600',
+    fontFamily: fonts.medium, flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.md },
   chipPress: { borderRadius: radius.button, overflow: 'hidden' },
   chipGrad: {
@@ -617,10 +640,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.95)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  chipTxt: { fontSize: 13, fontWeight: '800', color: colors.text },
-  chipTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', textAlign: 'center' },
+  chipTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  chipTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', textAlign: 'center', fontFamily: fonts.bold, },
   slider: { width: '100%', height: 40, marginBottom: spacing.sm },
   sliderAgeMax: { width: '100%', height: 40, marginBottom: spacing.md },
   rowBetween: {
@@ -634,15 +658,16 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   switchCopy: { flex: 1, minWidth: 0 },
-  switchLabel: { fontSize: 16, fontWeight: '800', color: colors.text },
-  switchHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+  switchLabel: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  switchHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, lineHeight: 17, fontFamily: fonts.medium, },
   saveOuter: {
     marginTop: spacing.lg,
     borderRadius: radius.button,
     overflow: 'hidden',
     ...(Platform.OS === 'ios'
       ? {
-          shadowColor: '#6C63FF',
+          shadowColor: '#5E52FF',
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.22,
           shadowRadius: 14,
@@ -659,7 +684,8 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
     paddingHorizontal: spacing.lg,
   },
-  saveTxt: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', letterSpacing: -0.2 },
+  saveTxt: { color: '#FFFFFF', fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, letterSpacing: -0.2 },
   saveHint: {
     textAlign: 'center',
     fontSize: 13,

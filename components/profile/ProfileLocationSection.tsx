@@ -2,7 +2,7 @@
  * Profile / onboarding location — search suggestions + optional current GPS fill.
  */
 import { LocationSearchField } from '@/components/location/LocationSearchField';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { readCurrentProfileLocation } from '@/lib/profile/readCurrentProfileLocation';
 import type { ProfileLocationPatch } from '@/lib/profile/profileLocation';
 import { Ionicons } from '@expo/vector-icons';
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     borderRadius: radius.lg,
     minHeight: ONBOARDING_FIELD_MIN_HEIGHT,
     paddingHorizontal: spacing.md,
@@ -145,7 +145,8 @@ const styles = StyleSheet.create({
   },
   currentLocIcon: { width: 28, alignItems: 'center', marginRight: spacing.sm },
   currentLocPressed: { opacity: 0.92 },
-  currentLocText: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text },
+  currentLocText: { flex: 1, fontSize: 16, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text },
   requiredHint: {
     marginTop: spacing.sm,
     fontSize: 13,

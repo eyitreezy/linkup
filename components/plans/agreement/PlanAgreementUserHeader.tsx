@@ -2,7 +2,7 @@
  * PL6a — dual avatars + names + verification (trust header).
  */
 import { Avatar } from '@/components/Avatar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
@@ -113,7 +113,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
   },
   names: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%', paddingHorizontal: spacing.md },
-  name: { fontSize: 17, fontWeight: '800', color: colors.text, flexShrink: 1 },
-  and: { fontSize: 16, color: colors.textMuted, fontWeight: '700' },
-  caption: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
+  name: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, flexShrink: 1 },
+  and: { fontSize: 16, color: colors.textMuted, fontWeight: '700', fontFamily: fonts.medium, },
+  caption: { fontSize: 13, color: colors.textMuted, marginTop: 4, fontFamily: fonts.regular, },
 });

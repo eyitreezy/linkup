@@ -1,6 +1,6 @@
 import { TierBadge } from '@/components/TierBadge';
 import { APP_CTA_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
   hasActiveGoldTrial,
   hasActiveSilverTrial,
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.22,
         shadowRadius: 16,
@@ -127,6 +127,7 @@ const styles = StyleSheet.create({
   heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: 'rgba(255,255,255,0.9)',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -134,6 +135,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: -0.35,
     marginBottom: 4,
@@ -141,6 +143,7 @@ const styles = StyleSheet.create({
   heroSub: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: 'rgba(255,255,255,0.92)',
     lineHeight: 20,
   },
@@ -155,5 +158,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
   },
-  activePillTxt: { fontSize: 11, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
+  activePillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff', letterSpacing: 0.3 },
 });

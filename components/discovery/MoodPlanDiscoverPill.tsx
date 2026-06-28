@@ -4,9 +4,10 @@
  */
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
+import { MOOD_REACH_LABELS } from '@/lib/plans/moodReachFilter';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -148,13 +149,6 @@ type Props = {
   currentUserId?: string;
 };
 
-const REACH_LABELS: Record<string, string> = {
-  city: 'City-wide',
-  city_adjacent: 'City + nearby',
-  city_widest: 'Widest reach',
-  all_cities: 'All cities',
-};
-
 export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
   row,
   cardW,
@@ -169,7 +163,7 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
   const isLive = useMoodWindowLive(row.mood_expires_at);
   const isOwnPlan = !!(currentUserId && row.creator_id === currentUserId);
   const reachLabel =
-    isOwnPlan && row.mood_reach ? REACH_LABELS[row.mood_reach] ?? row.mood_reach : null;
+    isOwnPlan && row.mood_reach ? MOOD_REACH_LABELS[row.mood_reach as keyof typeof MOOD_REACH_LABELS] ?? row.mood_reach : null;
   const boosted = isPlanBoostActive(row.boosted_until);
 
   const [hovered, setHovered] = useState(false);
@@ -236,7 +230,7 @@ export const MoodPlanDiscoverPill = memo(function MoodPlanDiscoverPill({
             style={StyleSheet.absoluteFill}
           />
           <LinearGradient
-            colors={['rgba(108,99,255,0.07)', 'rgba(255,101,132,0.05)', 'transparent']}
+            colors={['rgba(94, 82, 255,0.07)', 'rgba(255, 74, 114,0.05)', 'transparent']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0.85 }}
             style={StyleSheet.absoluteFill}
@@ -363,7 +357,7 @@ const styles = StyleSheet.create({
     bottom: -6,
     borderWidth: 3,
     borderColor: 'rgba(255,48,72,0.35)',
-    backgroundColor: 'rgba(255,101,132,0.08)',
+    backgroundColor: 'rgba(255, 74, 114,0.08)',
   },
   liveSparkle: {
     ...StyleSheet.absoluteFillObject,
@@ -394,7 +388,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.95)',
     borderWidth: 1,
-    borderColor: 'rgba(255,101,132,0.35)',
+    borderColor: 'rgba(255, 74, 114,0.35)',
   },
   rowWrap: {
     flexDirection: 'row',
@@ -424,17 +418,17 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     backgroundColor: '#F8F5FF',
     borderWidth: 2,
-    borderColor: 'rgba(108,99,255,0.35)',
+    borderColor: 'rgba(94, 82, 255,0.35)',
   },
   pillAvatarPh: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(108,99,255,0.12)',
+    backgroundColor: 'rgba(94, 82, 255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,101,132,0.28)',
+    borderColor: 'rgba(255, 74, 114,0.28)',
   },
   pillCenter: {
     flex: 1,
@@ -445,6 +439,7 @@ const styles = StyleSheet.create({
   pillTitle: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.35,
     lineHeight: 20,
@@ -452,11 +447,13 @@ const styles = StyleSheet.create({
   pillHost: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     letterSpacing: -0.12,
   },
   reachRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
-  reachLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  reachLabel: { fontSize: 11, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   chevronSpin: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -468,7 +465,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignSelf: 'stretch',
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(108,99,255,0.22)',
+    borderLeftColor: 'rgba(94, 82, 255,0.22)',
     minWidth: 48,
     overflow: 'hidden',
     position: 'relative',
@@ -483,6 +480,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     lineHeight: 23,
     letterSpacing: -0.35,
@@ -501,17 +499,18 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.65)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
   },
   avatarPh: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(108,99,255,0.12)',
+    backgroundColor: 'rgba(94, 82, 255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hostName: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  hostName: { flex: 1, fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   metaFooter: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -525,14 +524,15 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   urgentPill: {
-    backgroundColor: 'rgba(255,101,132,0.2)',
+    backgroundColor: 'rgba(255, 74, 114,0.2)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(255,101,132,0.35)',
+    borderColor: 'rgba(255, 74, 114,0.35)',
   },
-  urgentPillTxt: { fontSize: 11, fontWeight: '900', color: colors.secondary },
+  urgentPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.secondary },
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -540,8 +540,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(255,101,132,0.08)',
+    backgroundColor: 'rgba(255, 74, 114,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,101,132,0.2)',
+    borderColor: 'rgba(255, 74, 114,0.2)',
   },
 });

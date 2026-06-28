@@ -1,4 +1,4 @@
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 import { Stack } from 'expo-router';
 import { Platform } from 'react-native';
 
@@ -10,7 +10,8 @@ export default function SettingsLayout() {
         headerTintColor: colors.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.background },
-        headerTitleStyle: { fontWeight: '800' },
+        headerTitleStyle: { fontWeight: '800',
+    fontFamily: fonts.bold,},
         ...(Platform.OS === 'android'
           ? { statusBarTranslucent: false, headerTopInsetEnabled: false }
           : null),

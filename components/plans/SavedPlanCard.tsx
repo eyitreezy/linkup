@@ -2,7 +2,7 @@
  * Compact saved-plan row — dense list layout with a color accent stripe.
  */
 import { Avatar } from '@/components/Avatar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { SavedPlanListItem } from '@/lib/plans/fetchSavedPlans';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,7 +75,7 @@ export function SavedPlanCard({ item, onPressCard, onUnsave }: Props) {
           accessibilityLabel="Remove from saved"
         >
           <LinearGradient
-            colors={['rgba(108, 99, 255, 0.14)', 'rgba(255, 101, 132, 0.12)']}
+            colors={['rgba(94, 82, 255, 0.14)', 'rgba(255, 74, 114, 0.12)']}
             style={styles.bookmarkBg}
           >
             <Ionicons name="bookmark" size={22} color={colors.primary} />
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderLeftWidth: 0,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
   },
   cardMain: { padding: spacing.md, paddingRight: 52 },
   cardPressed: { opacity: 0.96 },
@@ -128,16 +128,17 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
   bookmarkPressed: { opacity: 0.65 },
   body: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   textCol: { flex: 1, minWidth: 0 },
-  title: { fontSize: 17, fontWeight: '800', color: colors.text, letterSpacing: -0.3, lineHeight: 22 },
+  title: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3, lineHeight: 22 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  meta: { fontSize: 14, fontWeight: '700', color: colors.textMuted, flexShrink: 1 },
+  meta: { fontSize: 14, fontWeight: '700', color: colors.textMuted, flexShrink: 1, fontFamily: fonts.medium, },
   verified: { marginTop: 1 },
-  detail: { fontSize: 13, color: colors.textMuted, marginTop: 4, fontWeight: '500' },
-  price: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: 8 },
-  priceMuted: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 8 },
+  detail: { fontSize: 13, color: colors.textMuted, marginTop: 4, fontWeight: '500', fontFamily: fonts.regular, },
+  price: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: 8, fontFamily: fonts.bold, },
+  priceMuted: { fontSize: 14, fontWeight: '600', color: colors.textMuted, marginTop: 8, fontFamily: fonts.medium, },
 });

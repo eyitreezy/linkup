@@ -1,7 +1,7 @@
 /**
  * Chat header entry: report user vs plan dispute (Badoo-style bottom sheet).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Modal,
@@ -109,8 +109,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  title: { fontSize: 20, fontWeight: '800', color: colors.text },
-  hint: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: spacing.md },
+  title: { fontSize: 20, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  hint: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: spacing.md, fontFamily: fonts.regular, },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -124,6 +125,7 @@ const styles = StyleSheet.create({
   },
   rowDisabled: { opacity: 0.55 },
   rowText: { flex: 1 },
-  rowTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  rowSub: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18 },
+  rowTitle: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  rowSub: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18, fontFamily: fonts.regular, },
 });

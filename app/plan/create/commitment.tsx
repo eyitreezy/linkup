@@ -7,7 +7,7 @@ import { CreatePlanWizardBack } from '@/components/plans/create/CreatePlanWizard
 import { CreatePlanWizardFooter } from '@/components/plans/create/CreatePlanWizardFooter';
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
@@ -15,7 +15,9 @@ import { requiresVerificationGate } from '@/lib/verification/access';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
+import { PLAN_WIZARD_GRADIENT } from '@/constants/gradients';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 export default function CreatePlanCommitmentScreen() {
   const { draft } = usePlanDraft();
@@ -60,11 +62,10 @@ export default function CreatePlanCommitmentScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
+    <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
         <View style={{ flex: 1 }}>
           <LinearGradient
-            colors={['#EDE8FF', '#FFF5F8', '#FDF2F8', colors.background]}
+            colors={[...PLAN_WIZARD_GRADIENT]}
             locations={[0, 0.3, 0.65, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
@@ -77,10 +78,15 @@ export default function CreatePlanCommitmentScreen() {
           />
           <CreatePlanStickyProgress current={1} />
           <CreatePlanWizardBack />
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+          <KeyboardSafeScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            style={{ flex: 1 }}
+            footer={<CreatePlanWizardFooter onPress={onNext} />}
+          >
             <View style={styles.hero}>
               <LinearGradient
-                colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.1)']}
+                colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.1)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.heroGrad}
@@ -93,11 +99,9 @@ export default function CreatePlanCommitmentScreen() {
               </LinearGradient>
             </View>
             <CommitmentEscrowForm />
-          </ScrollView>
-          <CreatePlanWizardFooter onPress={onNext} />
+          </KeyboardSafeScrollView>
         </View>
       </Screen>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -109,16 +113,18 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
   heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 6,
   },
-  heroTitle: { fontSize: 24, fontWeight: '900', color: colors.text, letterSpacing: -0.4 },
-  heroSub: { fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22, fontWeight: '600' },
+  heroTitle: { fontSize: 24, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.4 },
+  heroSub: { fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22, fontWeight: '600', fontFamily: fonts.medium, },
 });

@@ -1,7 +1,7 @@
 /**
  * Sent / Received filter — pill segmented control with gradient active state.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -62,12 +62,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     borderRadius: radius.button,
     padding: 4,
     gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   segment: {
     flex: 1,
@@ -86,12 +86,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     zIndex: 1,
   },
   labelOnGradient: {
     color: '#fff',
     fontWeight: '800',
+    fontFamily: fonts.bold,
     textShadowColor: 'rgba(0,0,0,0.18)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,

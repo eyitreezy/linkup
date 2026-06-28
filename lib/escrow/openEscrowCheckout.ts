@@ -16,11 +16,15 @@ export type OpenEscrowCheckoutArgs = {
 };
 
 /** Opens Flutterwave checkout via server initialize (required — no client-side amount). */
-export async function openEscrowCheckout(args: OpenEscrowCheckoutArgs): Promise<{
+export async function openEscrowCheckout(
+  args: OpenEscrowCheckoutArgs,
+  opts?: { presentInApp?: boolean }
+): Promise<{
   ok: boolean;
   error?: string;
   reference: string;
   url?: string;
+  returnUrl?: string;
 }> {
   if (!args.email?.trim()) {
     return { ok: false, error: 'Add an email on your account to pay.', reference: '' };
@@ -54,6 +58,15 @@ export async function openEscrowCheckout(args: OpenEscrowCheckoutArgs): Promise<
   const row = data as { payment_link?: string; tx_ref?: string; error?: string } | null;
   if (!row?.payment_link || !row.tx_ref) {
     return { ok: false, error: row?.error ?? 'Could not start escrow checkout.', reference: '' };
+  }
+
+  if (opts?.presentInApp) {
+    return {
+      ok: true,
+      reference: row.tx_ref,
+      url: row.payment_link,
+      returnUrl: callbackUrl,
+    };
   }
 
   const opened = await openFlutterwaveCheckoutInBrowser(row.payment_link, callbackUrl);

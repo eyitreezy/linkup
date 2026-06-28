@@ -1,7 +1,7 @@
 /**
  * PL6a — Bumble-style structured plan summary.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.09,
@@ -62,27 +62,30 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
   },
-  planTitle: { fontSize: 20, fontWeight: '800', color: colors.text, marginBottom: spacing.md, lineHeight: 26 },
+  planTitle: { fontSize: 20, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.md, lineHeight: 26 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.1)',
+    borderTopColor: 'rgba(94, 82, 255, 0.1)',
   },
   rowEmphasize: {
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
     marginHorizontal: -spacing.lg,
     paddingHorizontal: spacing.lg,
   },
   iconWrap: { width: 36, alignItems: 'center', paddingTop: 2 },
   rowBody: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted, marginBottom: 4 },
-  rowValue: { fontSize: 16, fontWeight: '600', color: colors.text, lineHeight: 22 },
-  rowValueEm: { fontSize: 17, fontWeight: '800', color: colors.text },
+  rowLabel: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted, marginBottom: 4 },
+  rowValue: { fontSize: 16, fontWeight: '600', color: colors.text, lineHeight: 22, fontFamily: fonts.medium, },
+  rowValueEm: { fontSize: 17, fontWeight: '800', color: colors.text, fontFamily: fonts.bold, },
 });

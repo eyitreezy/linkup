@@ -1,7 +1,7 @@
 import { Avatar } from '@/components/Avatar';
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
 import { VerificationBadge } from '@/components/trust/VerificationBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,11 +42,11 @@ export function HostMemberCard({
       accessibilityRole="button"
       accessibilityLabel={`View ${name} profile`}
       onPress={onPress}
-      android_ripple={{ color: 'rgba(108,99,255,0.18)' }}
+      android_ripple={{ color: 'rgba(94, 82, 255,0.18)' }}
       style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
     >
       <LinearGradient
-        colors={['rgba(108,99,255,0.1)', 'rgba(255,101,132,0.06)']}
+        colors={['rgba(94, 82, 255,0.1)', 'rgba(255, 74, 114,0.06)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.card}
@@ -97,13 +97,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.16)',
+    borderColor: 'rgba(94, 82, 255,0.16)',
     backgroundColor: colors.surface,
   },
   meta: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  name: { fontSize: 17, fontWeight: '800', color: colors.text, flexShrink: 1 },
-  role: { fontSize: 13, fontWeight: '700', color: colors.secondary, marginTop: 2 },
+  name: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, flexShrink: 1 },
+  role: { fontSize: 13, fontWeight: '700', color: colors.secondary, marginTop: 2, fontFamily: fonts.medium, },
   ctaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,7 +114,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.1)',
+    backgroundColor: 'rgba(94, 82, 255,0.1)',
   },
-  ctaTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  ctaTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
 });

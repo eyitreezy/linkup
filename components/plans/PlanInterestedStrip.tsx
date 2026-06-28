@@ -1,15 +1,20 @@
 /**
- * Host view — interested users strip (Gold+) or blurred upsell.
+ * Host view — interested users strip (Gold+) or gated upsell (matches linkup-web).
  */
 import { Avatar } from '@/components/Avatar';
+import { TierBadge } from '@/components/TierBadge';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { usePermission } from '@/hooks/usePermission';
-import { fetchHiddenEngagementUserIds } from '@/lib/plans/incognitoEngagement';
+import {
+  fetchHiddenEngagementUserIds,
+  filterEngagementsByIncognito,
+} from '@/lib/plans/incognitoEngagement';
 import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type EngRow = {
   user_id: string;
@@ -23,19 +28,19 @@ type Props = {
   currentUserId: string;
 };
 
+const BLUR_STACK = [0, 1, 2] as const;
+const LAVENDER_STACK = '#D2C9FF';
+
 export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props) {
   const { allowed, loading: permLoading } = usePermission('plans.see_all_likes', {
     skip: currentUserId !== hostUserId,
   });
   const [rows, setRows] = useState<EngRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [interestCount, setInterestCount] = useState(0);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const load = useCallback(async () => {
-    if (!allowed) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     const { data: eng } = await supabase
       .from('plan_engagements')
@@ -43,18 +48,22 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       .eq('plan_id', planId)
       .in('kind', ['view', 'save'])
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(40);
 
-    const userIds = [...new Set((eng ?? []).map((e) => e.user_id as string))];
-    if (userIds.length === 0) {
+    const engagements = eng ?? [];
+    const userIds = [...new Set(engagements.map((e) => e.user_id as string))];
+    const hiddenIds = await fetchHiddenEngagementUserIds(userIds);
+    const visible = filterEngagementsByIncognito(engagements, hiddenIds);
+    const visibleUserIds = [...new Set(visible.map((e) => e.user_id as string))];
+    setInterestCount(visibleUserIds.length);
+
+    if (!allowed) {
       setRows([]);
       setLoading(false);
       return;
     }
 
-    const incognitoIds = await fetchHiddenEngagementUserIds(userIds);
-    const visibleIds = userIds.filter((uid) => !incognitoIds.has(uid));
-    if (visibleIds.length === 0) {
+    if (visibleUserIds.length === 0) {
       setRows([]);
       setLoading(false);
       return;
@@ -63,9 +72,12 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
     const { data: profiles } = await supabase
       .from('profiles')
       .select('user_id, display_name, avatar_url')
-      .in('user_id', visibleIds);
+      .in('user_id', visibleUserIds);
 
-    setRows((profiles ?? []) as EngRow[]);
+    const filteredProfiles = (profiles ?? []).filter(
+      (p) => !hiddenIds.has(p.user_id as string)
+    );
+    setRows(filteredProfiles as EngRow[]);
     setLoading(false);
   }, [allowed, planId]);
 
@@ -78,14 +90,20 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
   if (permLoading || loading) {
     return (
       <View style={styles.wrap}>
-        <ActivityIndicator color={colors.primary} />
+        <Text style={styles.loadingTxt}>Loading interested users…</Text>
+        <ActivityIndicator color={colors.primary} style={styles.loadingSpinner} />
       </View>
     );
   }
 
   if (!allowed) {
+    const interestLabel =
+      interestCount === 1
+        ? '1 person is interested'
+        : `${interestCount} people are interested`;
+
     return (
-      <Pressable style={styles.wrap} onPress={() => setUpgradeOpen(true)}>
+      <View style={styles.wrap}>
         <UpgradePrompt
           visible={upgradeOpen}
           feature="plans.see_all_likes"
@@ -96,14 +114,28 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
           }}
           onDismiss={() => setUpgradeOpen(false)}
         />
-        <Text style={styles.title}>Interested</Text>
-        <View style={styles.blurRow}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <View key={i} style={styles.blurAvatar} />
-          ))}
-          <Text style={styles.blurTxt}>Upgrade to see who is interested</Text>
-        </View>
-      </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.gatedRow, pressed && styles.gatedPressed]}
+          onPress={() => setUpgradeOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Upgrade to Gold to see who is interested"
+        >
+          <View style={styles.avatarStack}>
+            {BLUR_STACK.map((i) => (
+              <View
+                key={i}
+                style={[styles.blurAvatar, i > 0 && styles.blurAvatarOverlap]}
+              />
+            ))}
+          </View>
+          <View style={styles.gatedCopy}>
+            <Text style={styles.gatedTitle}>{interestLabel}</Text>
+            <Text style={styles.gatedSub}>Upgrade to Gold to see who</Text>
+          </View>
+          <TierBadge tier="GOLD" compact />
+          <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
+        </Pressable>
+      </View>
     );
   }
 
@@ -112,26 +144,40 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.title}>Interested</Text>
-      <View style={styles.avatarRow}>
-        {shown.map((r) => (
-          <Pressable key={r.user_id} onPress={() => router.push(`/user/${r.user_id}` as Href)}>
-            <Avatar uri={r.avatar_url} name={r.display_name ?? '?'} size={44} />
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Interested</Text>
+        {rows.length > 0 ? (
+          <Pressable
+            onPress={() => router.push(`/plan/${planId}/negotiate` as Href)}
+            accessibilityRole="button"
+            accessibilityLabel="Connect with all interested members"
+            hitSlop={8}
+          >
+            <Text style={styles.connectLink}>Connect with all →</Text>
           </Pressable>
-        ))}
-        {overflow > 0 ? <Text style={styles.moreTxt}>+ {overflow} more</Text> : null}
+        ) : null}
       </View>
-      {rows.length > 0 ? (
-        <Pressable
-          style={styles.connectBtn}
-          onPress={() => router.push(`/plan/${planId}/negotiate` as Href)}
-          accessibilityRole="button"
-          accessibilityLabel="Connect with all interested members via manage offers"
-        >
-          <Text style={styles.connectTxt}>Connect with all →</Text>
-        </Pressable>
+      {rows.length === 0 ? (
+        <Text style={styles.emptyTxt}>No interest yet.</Text>
       ) : (
-        <Text style={styles.emptyTxt}>No views or saves yet.</Text>
+        <View style={styles.avatarRow}>
+          {shown.map((r) => (
+            <Pressable
+              key={r.user_id}
+              onPress={() => router.push(`/user/${r.user_id}` as Href)}
+              style={styles.avatarRing}
+              accessibilityRole="button"
+              accessibilityLabel={r.display_name ?? 'View profile'}
+            >
+              <Avatar uri={r.avatar_url} name={r.display_name ?? '?'} size={40} />
+            </Pressable>
+          ))}
+          {overflow > 0 ? (
+            <View style={styles.morePill}>
+              <Text style={styles.morePillTxt}>+{overflow} more</Text>
+            </View>
+          ) : null}
+        </View>
       )}
     </View>
   );
@@ -139,26 +185,121 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
 
 const styles = StyleSheet.create({
   wrap: {
-    marginHorizontal: spacing.md,
+    alignSelf: 'stretch',
     marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.xl,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  title: { fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: spacing.sm },
-  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  moreTxt: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  connectBtn: { marginTop: spacing.sm },
-  connectTxt: { fontSize: 14, fontWeight: '800', color: colors.primary },
-  emptyTxt: { fontSize: 13, color: colors.textMuted },
-  blurRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  blurAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(200,200,210,0.8)',
+  loadingTxt: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
-  blurTxt: { fontSize: 14, fontWeight: '700', color: colors.textMuted, flex: 1 },
+  loadingSpinner: { marginTop: spacing.sm },
+  gatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  gatedPressed: { opacity: 0.92 },
+  avatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  blurAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: LAVENDER_STACK,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    opacity: 0.92,
+  },
+  blurAvatarOverlap: {
+    marginLeft: -10,
+  },
+  gatedCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  gatedTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    letterSpacing: -0.15,
+  },
+  gatedSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    letterSpacing: -0.2,
+  },
+  connectLink: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: spacing.sm,
+  },
+  avatarRing: {
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.12,
+        shadowRadius: 3,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  morePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.button,
+    backgroundColor: LAVENDER_STACK,
+  },
+  morePillTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+  },
+  emptyTxt: {
+    marginTop: spacing.sm,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
 });

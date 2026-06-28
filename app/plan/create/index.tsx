@@ -10,7 +10,7 @@ import { authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeMoodExpiresAt } from '@/lib/plans/moodPlanComputations';
@@ -20,7 +20,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, KeyboardAvoidingView } from 'react-native';
+import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
+import { PLAN_WIZARD_GRADIENT } from '@/constants/gradients';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const DURATIONS = [
   { m: 30, label: '30m' },
@@ -107,11 +109,10 @@ export default function CreatePlanStepMeetScreen() {
             draft.moodCustomEnd.getTime() > draft.moodCustomStart.getTime()))));
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
+    <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
         <View style={styles.flex}>
           <LinearGradient
-            colors={['#EDE8FF', '#FFF5F8', '#E8FAF4', colors.background]}
+            colors={[...PLAN_WIZARD_GRADIENT]}
             locations={[0, 0.25, 0.55, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0.85, y: 1 }}
@@ -124,11 +125,12 @@ export default function CreatePlanStepMeetScreen() {
           />
           <CreatePlanStickyProgress current={0} />
           <CreatePlanWizardBack />
-          <ScrollView
+          <KeyboardSafeScrollView
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scroll}
             style={styles.flex}
+            footer={<CreatePlanWizardFooter onPress={onContinue} disabled={!stepValid} />}
           >
           <CreatePlanHeroCarousel />
 
@@ -136,7 +138,7 @@ export default function CreatePlanStepMeetScreen() {
             <View style={styles.titleAccent} />
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>When & how you’ll meet</Text>
-              <Text style={styles.sub}>Meet type, timing, duration — mood plans add spark in Discover.</Text>
+              <Text style={styles.sub}>Choose your meet type, timing and duration. Mood plans add extra spark in Discover.</Text>
             </View>
           </View>
 
@@ -270,11 +272,9 @@ export default function CreatePlanStepMeetScreen() {
             </>
           )}
 
-          </ScrollView>
-          <CreatePlanWizardFooter onPress={onContinue} disabled={!stepValid} />
+          </KeyboardSafeScrollView>
         </View>
       </Screen>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -290,8 +290,9 @@ const styles = StyleSheet.create({
     height: 52,
     backgroundColor: colors.secondary,
   },
-  title: { fontSize: 26, fontWeight: '900', color: colors.text, letterSpacing: -0.5, marginBottom: 6 },
-  sub: { fontSize: 16, color: colors.textMuted, lineHeight: 23, fontWeight: '600' },
+  title: { fontSize: 26, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.5, marginBottom: 6 },
+  sub: { fontSize: 16, color: colors.textMuted, lineHeight: 23, fontWeight: '600', fontFamily: fonts.medium, },
   section: {
     fontSize: 13,
     fontWeight: '900',
@@ -313,23 +314,26 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: radius.button,
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
     backgroundColor: 'rgba(255,255,255,0.85)',
   },
-  durTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
-  durTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  durTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  durTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
   dateField: {
-    borderColor: 'rgba(255, 101, 132, 0.35)',
+    borderColor: 'rgba(255, 74, 114, 0.35)',
     backgroundColor: 'rgba(255,255,255,0.92)',
   },
   datePressed: { opacity: 0.96 },
-  dateTxt: { fontSize: 16, fontWeight: '700', color: colors.text },
+  dateTxt: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
   moodLiveField: {
     borderColor: 'rgba(255, 120, 80, 0.35)',
     backgroundColor: 'rgba(255,255,255,0.92)',
     paddingVertical: spacing.md,
     gap: 6,
   },
-  moodLiveTxt: { fontSize: 16, fontWeight: '800', color: colors.text },
-  moodLiveSub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 18 },
+  moodLiveTxt: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  moodLiveSub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 18, fontFamily: fonts.medium, },
 });

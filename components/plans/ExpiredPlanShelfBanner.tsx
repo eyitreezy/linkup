@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
@@ -67,6 +67,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#64748b',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
@@ -75,7 +76,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  when: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  title: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.3 },
-  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '500' },
+  when: { fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  title: { fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.3, fontFamily: fonts.bold, },
+  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '500', fontFamily: fonts.regular, },
 });

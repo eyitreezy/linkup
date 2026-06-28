@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.12)',
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
     backgroundColor: 'rgba(255,255,255,0.96)',
     ...Platform.select({
       ios: {

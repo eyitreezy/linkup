@@ -2,6 +2,7 @@
  * E1 — Escrow detail: Flutterwave funding, trust copy, timeline, release & disputes.
  */
 import { EscrowConfirmModal } from '@/components/escrow/EscrowConfirmModal';
+import { FlutterwaveCheckoutModal } from '@/components/checkout/FlutterwaveCheckoutModal';
 import { EscrowCounterpartyHeader, type EscrowParty } from '@/components/escrow/EscrowCounterpartyHeader';
 import { EscrowFundCTA } from '@/components/escrow/EscrowFundCTA';
 import { EscrowScreenHeader } from '@/components/escrow/EscrowScreenHeader';
@@ -13,10 +14,12 @@ import { EscrowTimeline } from '@/components/escrow/EscrowTimeline';
 import { FundingDeadlineUrgencyBanner } from '@/components/escrow/FundingDeadlineUrgencyBanner';
 import { OpenDisputeModal } from '@/components/escrow/OpenDisputeModal';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
+import { PlanFlowScreenSkeleton } from '@/components/ui/PlanFlowScreenSkeleton';
 import { Screen } from '@/components/Screen';
 import { DiscoveryGradientBg } from '@/components/ui/DiscoveryGradientBg';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFlutterwaveCheckout } from '@/hooks/useFlutterwaveCheckout';
 import { buildEscrowTimeline } from '@/lib/escrow/buildEscrowTimeline';
 import { formatEscrowMoney, isMeetupWithinHours, meetupHoursUntilLabel } from '@/lib/escrow/escrowPaymentPreview';
 import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
@@ -29,6 +32,7 @@ import {
   releaseEscrowFunds,
 } from '@/lib/escrow/escrowActions';
 import { openEscrowCheckout } from '@/lib/escrow/openEscrowCheckout';
+import { shouldUseFlutterwaveInAppWebView } from '@/lib/flutterwave/shouldUseFlutterwaveInAppWebView';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -39,7 +43,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -48,7 +51,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function stepActiveIndex(escrow: DbEscrowTransaction, plan: DbPlan | null): number {
   if (escrow.status === 'released') return 3;
@@ -59,12 +61,12 @@ function stepActiveIndex(escrow: DbEscrowTransaction, plan: DbPlan | null): numb
 
 export default function EscrowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const insets = useSafeAreaInsets();
   const { user, dbUser } = useAuth();
   const [escrow, setEscrow] = useState<DbEscrowTransaction | null>(null);
   const [plan, setPlan] = useState<DbPlan | null>(null);
   const [dispute, setDispute] = useState<DbEscrowDispute | null>(null);
   const [counterparty, setCounterparty] = useState<EscrowParty | null>(null);
+  const [loadDone, setLoadDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [fundConfirmOpen, setFundConfirmOpen] = useState(false);
@@ -74,63 +76,77 @@ export default function EscrowDetailScreen() {
   const [hostName, setHostName] = useState('Host');
   const [guestName, setGuestName] = useState('Guest');
   const actionLock = useRef(false);
+  const { session: checkoutSession, beginCheckout, dismissCheckout } = useFlutterwaveCheckout();
 
   const load = useCallback(async () => {
-    if (!id || !isSupabaseConfigured || !user?.id) return;
-    const { data: eRow } = await supabase.from('escrow_transactions').select('*').eq('id', id).single();
-    if (!eRow) {
-      setEscrow(null);
+    if (!id || !isSupabaseConfigured || !user?.id) {
+      setLoadDone(true);
       return;
     }
-    const esc = eRow as DbEscrowTransaction;
-    setEscrow(esc);
+    setLoadDone(false);
+    try {
+      const { data: eRow } = await supabase.from('escrow_transactions').select('*').eq('id', id).single();
+      if (!eRow) {
+        setEscrow(null);
+        setPlan(null);
+        setDispute(null);
+        setCounterparty(null);
+        return;
+      }
+      const esc = eRow as DbEscrowTransaction;
 
-    const { data: pRow } = await supabase.from('plans').select('*').eq('id', esc.plan_id).single();
-    setPlan(pRow ? (pRow as DbPlan) : null);
+      const partyIds = [esc.host_id, esc.guest_id].filter(Boolean) as string[];
+      const cpId =
+        esc.host_id && esc.guest_id
+          ? user.id === esc.host_id
+            ? esc.guest_id
+            : esc.host_id
+          : user.id === esc.payer_id
+            ? esc.payee_id
+            : esc.payer_id;
 
-    const { data: dRow } = await supabase
-      .from('escrow_disputes')
-      .select('*')
-      .eq('escrow_id', id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    setDispute(dRow ? (dRow as DbEscrowDispute) : null);
+      const [{ data: pRow }, { data: dRow }, profsRes] = await Promise.all([
+        supabase.from('plans').select('*').eq('id', esc.plan_id).single(),
+        supabase
+          .from('escrow_disputes')
+          .select('*')
+          .eq('escrow_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        partyIds.length
+          ? supabase
+              .from('profiles')
+              .select('user_id, display_name, avatar_url, verified_badge')
+              .in('user_id', partyIds)
+          : Promise.resolve({ data: [] as { user_id: string; display_name: string | null; avatar_url: string | null; verified_badge: boolean | null }[] }),
+      ]);
 
-    const partyIds = [esc.host_id, esc.guest_id].filter(Boolean) as string[];
-    const cpId =
-      esc.host_id && esc.guest_id
-        ? user.id === esc.host_id
-          ? esc.guest_id
-          : esc.host_id
-        : user.id === esc.payer_id
-          ? esc.payee_id
-          : esc.payer_id;
+      setEscrow(esc);
+      setPlan(pRow ? (pRow as DbPlan) : null);
+      setDispute(dRow ? (dRow as DbEscrowDispute) : null);
 
-    const { data: profs } = partyIds.length
-      ? await supabase
-          .from('profiles')
-          .select('user_id, display_name, avatar_url, verified_badge')
-          .in('user_id', partyIds)
-      : { data: [] as { user_id: string; display_name: string | null; avatar_url: string | null; verified_badge: boolean | null }[] };
+      const profs = profsRes.data ?? [];
+      const profMap = new Map(profs.map((p) => [p.user_id as string, p]));
+      if (esc.host_id) {
+        setHostName(profMap.get(esc.host_id)?.display_name ?? 'Host');
+      }
+      if (esc.guest_id) {
+        setGuestName(profMap.get(esc.guest_id)?.display_name ?? 'Guest');
+      }
 
-    const profMap = new Map((profs ?? []).map((p) => [p.user_id as string, p]));
-    if (esc.host_id) {
-      setHostName(profMap.get(esc.host_id)?.display_name ?? 'Host');
-    }
-    if (esc.guest_id) {
-      setGuestName(profMap.get(esc.guest_id)?.display_name ?? 'Guest');
-    }
-
-    const prof = profMap.get(cpId);
-    if (prof) {
-      setCounterparty({
-        name: prof.display_name ?? 'Member',
-        avatarUrl: prof.avatar_url,
-        verified: !!prof.verified_badge,
-      });
-    } else {
-      setCounterparty({ name: 'Member', avatarUrl: null, verified: false });
+      const prof = profMap.get(cpId);
+      if (prof) {
+        setCounterparty({
+          name: prof.display_name ?? 'Member',
+          avatarUrl: prof.avatar_url,
+          verified: !!prof.verified_badge,
+        });
+      } else {
+        setCounterparty({ name: 'Member', avatarUrl: null, verified: false });
+      }
+    } finally {
+      setLoadDone(true);
     }
   }, [id, user?.id]);
 
@@ -141,13 +157,11 @@ export default function EscrowDetailScreen() {
   );
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
     if (!id || !isSupabaseConfigured) return;
-    const channel = supabase
-      .channel(`escrow:${id}`)
+    const channel = supabase.channel(
+      `escrow:${id}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`
+    );
+    channel
       .on(
         'postgres_changes',
         {
@@ -160,7 +174,7 @@ export default function EscrowDetailScreen() {
           const next = payload.new as DbEscrowTransaction;
           setEscrow((prev) => {
             if (prev && prev.status !== 'funded' && next.status === 'funded') {
-              Alert.alert('Escrow funded', 'Payment confirmed — your plan is now active.');
+              Alert.alert('Escrow funded', 'Payment confirmed. Your plan is now active.');
             }
             return next;
           });
@@ -188,7 +202,7 @@ export default function EscrowDetailScreen() {
           ? escrow.payee_id
           : escrow.payer_id;
     try {
-      await openDirectChat(supabase, user.id, other);
+      await openDirectChat(supabase, user.id, other, { skipOfferGate: true });
     } catch (e) {
       Alert.alert('Chat', e instanceof Error ? e.message : 'Could not open chat');
     }
@@ -237,20 +251,30 @@ export default function EscrowDetailScreen() {
         }
       }
 
-      const opened = await openEscrowCheckout({
-        email: user.email ?? '',
-        amountKobo,
-        escrowId: escrow.id,
-        planId: escrow.plan_id,
-        escrowLeg,
-      });
+      const opened = await openEscrowCheckout(
+        {
+          email: user.email ?? '',
+          amountKobo,
+          escrowId: escrow.id,
+          planId: escrow.plan_id,
+          escrowLeg,
+        },
+        { presentInApp: shouldUseFlutterwaveInAppWebView() }
+      );
       if (!opened.ok) {
         Alert.alert('Checkout', opened.error ?? 'Could not open payment.');
         return;
       }
-      const { error } = await recordEscrowPaymentInitiated(supabase, escrow.id, opened.reference);
-      if (error) Alert.alert('Escrow', error);
-      else void load();
+      if (opened.url && opened.returnUrl && shouldUseFlutterwaveInAppWebView()) {
+        const began = await beginCheckout(opened.url, opened.returnUrl);
+        if (!began.ok) {
+          Alert.alert('Checkout', began.error ?? 'Could not open payment.');
+          return;
+        }
+        const { error } = await recordEscrowPaymentInitiated(supabase, escrow.id, opened.reference);
+        if (error) Alert.alert('Escrow', error);
+        return;
+      }
     });
   }
 
@@ -310,13 +334,34 @@ export default function EscrowDetailScreen() {
     });
   }
 
-  if (!escrow || !user) {
+  if (!user || !loadDone) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <View style={[styles.center, { paddingTop: insets.top }]}>
-            <ActivityIndicator color={colors.primary} size="large" />
+          {user ? <EscrowScreenHeader /> : null}
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <PlanFlowScreenSkeleton />
+          </ScrollView>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!escrow) {
+    return (
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <View style={styles.flex}>
+          <DiscoveryGradientBg />
+          <EscrowScreenHeader />
+          <View style={styles.fallbackPad}>
+            <Text style={styles.fallbackTxt}>This escrow could not be loaded.</Text>
+            <Pressable onPress={() => router.back()} style={styles.fallbackBtn}>
+              <Text style={styles.fallbackBtnTxt}>Go back</Text>
+            </Pressable>
           </View>
         </View>
       </Screen>
@@ -347,7 +392,7 @@ export default function EscrowDetailScreen() {
     patternB && escrow.status === 'pending_funding' && iPaidMySplitLeg && !bothSplitLegs;
   const stepIdx = stepActiveIndex(escrow, plan);
   const whenLabel = formatIsoDateTime(plan?.agreed_scheduled_at, plan?.scheduled_at ?? undefined);
-  const locationLabel = plan?.agreed_location ?? plan?.location_label ?? '—';
+  const locationLabel = plan?.agreed_location ?? plan?.location_label ?? 'Not set';
   const amountLabel = (escrow.amount_cents / 100).toFixed(0);
   const userPayCents =
     needHostLeg
@@ -391,7 +436,7 @@ export default function EscrowDetailScreen() {
         visible={fundConfirmOpen}
         title="Open secure checkout?"
         message={`You'll pay ${fundConfirmAmountLabel} via Flutterwave. Funds stay in escrow until the meetup is confirmed or a dispute is resolved.`}
-        confirmLabel="Continue to payment"
+        confirmLabel="Continue"
         cancelLabel="Not now"
         onCancel={() => setFundConfirmOpen(false)}
         onConfirm={() => void onConfirmFund()}
@@ -423,8 +468,19 @@ export default function EscrowDetailScreen() {
         onClose={() => setDisputeOpen(false)}
         onSubmit={(rid, lbl, d) => void onDisputeSubmit(rid, lbl, d)}
       />
+      <FlutterwaveCheckoutModal
+        visible={checkoutSession != null}
+        url={checkoutSession?.url ?? null}
+        returnUrl={checkoutSession?.returnUrl ?? null}
+        onDismiss={dismissCheckout}
+        onSuccess={() => {
+          dismissCheckout();
+          void load();
+        }}
+        title="Escrow payment"
+      />
 
-      <EscrowScreenHeader topInset={insets.top} />
+      <EscrowScreenHeader />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -445,7 +501,7 @@ export default function EscrowDetailScreen() {
             </Text>
             <Text style={styles.leadSub}>
               {showFund
-                ? 'This is the payment screen — Flutterwave checkout opens when you tap below.'
+                ? 'This is the payment screen. Flutterwave checkout opens when you tap below.'
                 : 'Track funding, meetup, and release in one place.'}
             </Text>
           </View>
@@ -455,7 +511,7 @@ export default function EscrowDetailScreen() {
           <View style={styles.meetupUrgent}>
             <Ionicons name="alarm-outline" size={20} color={colors.warning} />
             <Text style={styles.meetupUrgentTxt}>
-              Meetup {meetupWhenLabel} — {showFund ? 'fund escrow now' : 'complete funding soon'} so you&apos;re covered.
+              Meetup {meetupWhenLabel}. {showFund ? 'Fund escrow now' : 'Complete funding soon'} so you&apos;re covered.
             </Text>
           </View>
         ) : null}
@@ -515,7 +571,7 @@ export default function EscrowDetailScreen() {
         {showDisputedBanner ? (
           <View style={styles.warnBanner}>
             <Ionicons name="alert-circle" size={22} color={colors.danger} />
-            <Text style={styles.warnTxt}>Dispute in progress — payment actions are paused while we review.</Text>
+            <Text style={styles.warnTxt}>Dispute in progress. Payment actions are paused while we review.</Text>
           </View>
         ) : null}
 
@@ -678,7 +734,21 @@ export default function EscrowDetailScreen() {
 const styles = StyleSheet.create({
   screenRoot: { flex: 1, backgroundColor: 'transparent' },
   flex: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  fallbackPad: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  fallbackTxt: {
+    fontSize: 15,
+    color: colors.textMuted,
+    lineHeight: 22,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+  },
+  fallbackBtn: { paddingVertical: spacing.md },
+  fallbackBtnTxt: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    fontSize: 16,
+  },
   scroll: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl * 2 },
   leadBlock: {
     flexDirection: 'row',
@@ -691,6 +761,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -699,11 +770,13 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.5,
     marginBottom: 6,
   },
-  leadSub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, fontWeight: '600' },
+  leadSub: { fontSize: 15, color: colors.textMuted, lineHeight: 22, fontWeight: '600',
+    fontFamily: fonts.medium,},
   meetupUrgent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -715,14 +788,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(245, 158, 11, 0.35)',
   },
-  meetupUrgentTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  meetupUrgentTxt: { flex: 1, fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 20 },
   messageCtaOuter: {
     borderRadius: radius.button,
     overflow: 'hidden',
     marginBottom: spacing.md,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.18,
         shadowRadius: 12,
@@ -742,7 +816,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
-  messageCtaText: { fontSize: 16, fontWeight: '800', color: colors.primary, flexShrink: 1 },
+  messageCtaText: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, flexShrink: 1 },
   badgeRow: { marginBottom: spacing.sm },
   warnBanner: {
     flexDirection: 'row',
@@ -753,9 +828,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     alignItems: 'flex-start',
   },
-  warnTxt: { flex: 1, color: '#991B1B', fontWeight: '600', lineHeight: 20 },
+  warnTxt: { flex: 1, color: '#991B1B', fontWeight: '600',
+    fontFamily: fonts.medium, lineHeight: 20 },
   ghostBtn: { paddingVertical: 14, alignItems: 'center', marginBottom: spacing.lg },
-  ghostBtnTxt: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  ghostBtnTxt: { color: colors.primary, fontSize: 16, fontWeight: '700', fontFamily: fonts.medium, },
   secondaryBtn: {
     borderWidth: 2,
     borderColor: colors.primary,
@@ -764,13 +840,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
-  secondaryBtnTxt: { color: colors.primary, fontSize: 16, fontWeight: '800' },
+  secondaryBtnTxt: { color: colors.primary, fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold,},
   infoCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     marginBottom: spacing.xl,
     ...Platform.select({
       ios: {
@@ -782,8 +859,9 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
-  infoTitle: { fontSize: 17, fontWeight: '900', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.2 },
-  infoSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: spacing.sm, fontWeight: '600' },
+  infoTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm, letterSpacing: -0.2 },
+  infoSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: spacing.sm, fontWeight: '600', fontFamily: fonts.medium, },
   waitSplitCard: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -793,7 +871,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
@@ -808,13 +886,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   waitSplitText: { flex: 1, minWidth: 0 },
-  waitSplitTitle: { fontSize: 16, fontWeight: '900', color: colors.text, marginBottom: 4, letterSpacing: -0.2 },
-  waitSplitSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600' },
+  waitSplitTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4, letterSpacing: -0.2 },
+  waitSplitSub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   successCard: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -834,7 +913,8 @@ const styles = StyleSheet.create({
       android: { elevation: 3 },
     }),
   },
-  successTitle: { fontSize: 18, fontWeight: '900', color: colors.text, marginTop: spacing.sm, letterSpacing: -0.2 },
+  successTitle: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginTop: spacing.sm, letterSpacing: -0.2 },
   successSub: {
     fontSize: 14,
     color: colors.textMuted,
@@ -854,6 +934,7 @@ const styles = StyleSheet.create({
   feeBreakdownTitle: {
     fontSize: 15,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -869,15 +950,17 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  feeBreakdownLabel: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
-  feeBreakdownLabelGoodwill: { fontSize: 14, fontWeight: '700', color: '#047857' },
-  feeBreakdownLabelBold: { fontSize: 14, fontWeight: '900', color: colors.text },
+  feeBreakdownLabel: { fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted },
+  feeBreakdownLabelGoodwill: { fontSize: 14, fontWeight: '700', color: '#047857', fontFamily: fonts.medium, },
+  feeBreakdownLabelBold: { fontSize: 14, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
   feeBreakdownStrike: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.textMuted,
     textDecorationLine: 'line-through',
   },
-  feeBreakdownGoodwill: { fontSize: 14, fontWeight: '900', color: '#047857' },
-  feeBreakdownAmountBold: { fontSize: 16, fontWeight: '900', color: colors.text },
+  feeBreakdownGoodwill: { fontSize: 14, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#047857' },
+  feeBreakdownAmountBold: { fontSize: 16, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
 });

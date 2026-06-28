@@ -9,7 +9,7 @@ import { PlanLocationSection } from '@/components/plans/create/PlanLocationSecti
 import { VisibilityPickCard } from '@/components/plans/create/VisibilityPickCard';
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { usePlanDraft, type PlanVisibility } from '@/contexts/PlanDraftContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -22,14 +22,17 @@ import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { usePermission } from '@/hooks/usePermission';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import { checkPermission } from '@/lib/subscription/checkPermission';
-import type { SubscriptionTier } from '@/lib/subscription/pricing';
+import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
+import { getFourthVisibilityOptionCopy, canCreatorSelectPremiumVisibility } from '@/lib/plans/tierRelativePremiumVisibility';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
+import { PLAN_WIZARD_GRADIENT } from '@/constants/gradients';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const EXAMPLES = ['Dinner in Lekki tonight', 'Gym partner this weekend', 'Coffee walk after work'];
@@ -38,8 +41,7 @@ const OPTIONS: {
   value: PlanVisibility;
   title: string;
   description: string;
-  icon: 'globe-outline' | 'navigate-outline' | 'people-outline' | 'diamond-outline';
-  tierBadge?: SubscriptionTier;
+  icon: 'globe-outline' | 'navigate-outline' | 'people-outline';
 }[] = [
   {
     value: 'public',
@@ -50,7 +52,7 @@ const OPTIONS: {
   {
     value: 'radius',
     title: 'Within radius',
-    description: 'Shown to people roughly within your discovery radius.',
+    description: 'Only visible to people within 50km of your meetup location.',
     icon: 'navigate-outline',
   },
   {
@@ -59,14 +61,9 @@ const OPTIONS: {
     description: 'Only your connections see this (once friends ship, this tightens automatically).',
     icon: 'people-outline',
   },
-  {
-    value: 'premium',
-    title: 'Gold & Platinum only',
-    description: 'Only Gold and Platinum members can discover this plan.',
-    icon: 'diamond-outline',
-    tierBadge: 'PLATINUM',
-  },
-];
+] as const;
+
+const PREMIUM_VISIBILITY_ICON = 'diamond-outline' as const;
 
 export default function CreatePlanDetailsScreen() {
   const { draft, setDraft, reset } = usePlanDraft();
@@ -74,17 +71,16 @@ export default function CreatePlanDetailsScreen() {
   const [loading, setLoading] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [upgradeFeature, setUpgradeFeature] = useState('privacy.plan_creation');
+  const [upgradeFeature, setUpgradeFeature] = useState('visibility.tier_audience');
   const { allowed: canSpotlight } = usePermission('spotlight.profile');
+  const creatorEffectiveTier = resolveClientEffectiveTier(dbUser);
+  const fourthVisibilityCopy = getFourthVisibilityOptionCopy(creatorEffectiveTier);
 
-  async function onSelectVisibility(value: PlanVisibility) {
-    if (value === 'premium' && user?.id) {
-      const perm = await checkPermission(user.id, 'privacy.plan_creation');
-      if (!perm.allowed) {
-        setUpgradeFeature('privacy.plan_creation');
-        setUpgradeOpen(true);
-        return;
-      }
+  function onSelectVisibility(value: PlanVisibility) {
+    if (value === 'premium' && !canCreatorSelectPremiumVisibility(creatorEffectiveTier)) {
+      setUpgradeFeature('visibility.tier_audience');
+      setUpgradeOpen(true);
+      return;
     }
     setDraft((d) => ({ ...d, visibility: value }));
   }
@@ -306,11 +302,10 @@ export default function CreatePlanDetailsScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
+    <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
         <View style={{ flex: 1 }}>
           <LinearGradient
-            colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.background]}
+            colors={[...PLAN_WIZARD_GRADIENT]}
             locations={[0, 0.28, 0.62, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -324,7 +319,15 @@ export default function CreatePlanDetailsScreen() {
           <UpgradePrompt
             visible={upgradeOpen}
             feature={upgradeFeature}
-            requiredTier={upgradeFeature === 'privacy.plan_creation' ? 'PLATINUM' : 'SILVER'}
+            requiredTier="SILVER"
+            title={
+              upgradeFeature === 'visibility.tier_audience' ? 'Tier-targeted visibility' : undefined
+            }
+            message={
+              upgradeFeature === 'visibility.tier_audience'
+                ? 'Upgrade to Silver to choose who can discover this plan based on membership tier.'
+                : undefined
+            }
             onUpgrade={() => {
               setUpgradeOpen(false);
               router.push('/subscription' as Href);
@@ -333,23 +336,31 @@ export default function CreatePlanDetailsScreen() {
           />
           <CreatePlanStickyProgress current={2} />
           <CreatePlanWizardBack />
-          <ScrollView
+          <KeyboardSafeScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="always"
             nestedScrollEnabled
             removeClippedSubviews={false}
             style={{ flex: 1 }}
+            footer={
+              <CreatePlanWizardFooter
+                title="Publish plan"
+                onPress={() => void publish()}
+                loading={loading}
+                disabled={!draft.title.trim()}
+              />
+            }
           >
         <View style={styles.leadBlock}>
           <View style={styles.leadAccent} />
           <View style={{ flex: 1 }}>
             <Text style={styles.lead}>Bring it to life</Text>
-            <Text style={styles.sub}>Title, story, location — then who can see it. Make it swipe-worthy.</Text>
+            <Text style={styles.sub}>Title, story, location, then who can see it. Make it swipe-worthy.</Text>
           </View>
         </View>
 
         <LinearGradient
-          colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.14)']}
+          colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.14)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.examplesOuter}
@@ -401,7 +412,7 @@ export default function CreatePlanDetailsScreen() {
               </View>
               <Text style={styles.premiumSub}>
                 Longer boosted placement in Discover after publish
-                {draft.isMoodPlan ? ' — extra priority for mood' : ''}.
+                {draft.isMoodPlan ? ', with extra priority for mood' : ''}.
               </Text>
             </View>
             <Switch
@@ -415,7 +426,7 @@ export default function CreatePlanDetailsScreen() {
             <LinearGradient colors={[colors.primary, colors.secondary]} style={styles.premiumTeaseIcon}>
               <Ionicons name="diamond" size={18} color="#fff" />
             </LinearGradient>
-            <Text style={styles.premiumTeaseTxt}>Premium — spotlight & longer visibility</Text>
+            <Text style={styles.premiumTeaseTxt}>Premium spotlight and longer visibility</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.secondary} />
           </Pressable>
         )}
@@ -432,21 +443,21 @@ export default function CreatePlanDetailsScreen() {
               description={opt.description}
               icon={opt.icon}
               selected={draft.visibility === opt.value}
-              onPress={() => void onSelectVisibility(opt.value)}
-              badge={opt.tierBadge}
+              onPress={() => onSelectVisibility(opt.value)}
             />
           ))}
-        </View>
-          </ScrollView>
-          <CreatePlanWizardFooter
-            title="Publish plan"
-            onPress={() => void publish()}
-            loading={loading}
-            disabled={!draft.title.trim()}
+          <VisibilityPickCard
+            title={fourthVisibilityCopy.label}
+            description={fourthVisibilityCopy.description}
+            icon={PREMIUM_VISIBILITY_ICON}
+            selected={draft.visibility === 'premium'}
+            onPress={() => onSelectVisibility('premium')}
+            badge={fourthVisibilityCopy.tierBadge}
           />
         </View>
+          </KeyboardSafeScrollView>
+        </View>
       </Screen>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -461,8 +472,9 @@ const styles = StyleSheet.create({
     height: 48,
     backgroundColor: colors.primary,
   },
-  lead: { fontSize: 26, fontWeight: '900', color: colors.text, letterSpacing: -0.4, marginBottom: 6 },
-  sub: { fontSize: 16, color: colors.textMuted, lineHeight: 23, fontWeight: '600' },
+  lead: { fontSize: 26, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.4, marginBottom: 6 },
+  sub: { fontSize: 16, color: colors.textMuted, lineHeight: 23, fontWeight: '600', fontFamily: fonts.medium, },
   examplesOuter: {
     borderRadius: radius.xl,
     padding: 2,
@@ -473,7 +485,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl - 1,
     backgroundColor: 'rgba(255,255,255,0.92)',
   },
-  exLabel: { fontSize: 12, fontWeight: '900', color: colors.primary, marginBottom: 10, letterSpacing: 0.3 },
+  exLabel: { fontSize: 12, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary, marginBottom: 10, letterSpacing: 0.3 },
   exChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -482,14 +495,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
   },
-  exChipTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
+  exChipTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   visHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.md, marginBottom: spacing.sm },
-  visTitle: { fontSize: 18, fontWeight: '900', color: colors.text },
+  visTitle: { fontSize: 18, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
   list: { marginTop: spacing.sm },
   premiumRow: {
     flexDirection: 'row',
@@ -508,8 +522,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   premiumTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  premiumTitle: { fontSize: 16, fontWeight: '900', color: colors.text },
-  premiumSub: { fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20, fontWeight: '600' },
+  premiumTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  premiumSub: { fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   premiumTease: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -517,7 +532,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.28)',
+    borderColor: 'rgba(94, 82, 255, 0.28)',
     marginTop: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.9)',
   },
@@ -528,5 +543,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  premiumTeaseTxt: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.text },
+  premiumTeaseTxt: { flex: 1, fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
 });

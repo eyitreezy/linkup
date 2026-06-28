@@ -3,7 +3,7 @@
  */
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
   normalizePhoneE164,
   requestPhoneOtp,
@@ -122,8 +122,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginTop: spacing.sm,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 6 },
-  hint: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 18 },
+  cardTitle: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, marginBottom: 6 },
+  hint: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 18, fontFamily: fonts.regular, },
   footnote: {
     fontSize: 11,
     color: colors.textMuted,
@@ -136,7 +137,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     textAlign: 'center',
   },
-  err: { color: colors.danger, fontSize: 13, marginTop: spacing.sm },
+  err: { color: colors.danger, fontSize: 13,
+    fontFamily: fonts.regular, marginTop: spacing.sm },
 });

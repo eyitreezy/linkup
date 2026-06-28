@@ -1,7 +1,7 @@
 /**
  * Google sign-in — branded outline button (OAuth via Supabase).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, ActivityIndicator } from 'react-native';
 
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   elevated: {
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     backgroundColor: '#FFFFFF',
     shadowColor: '#2D2640',
     shadowOffset: { width: 0, height: 6 },
@@ -83,5 +83,6 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.94, backgroundColor: '#FAFAFE' },
   disabled: { opacity: 0.65 },
-  label: { fontSize: 15, fontWeight: '600', color: colors.text, letterSpacing: -0.2 },
+  label: { fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, letterSpacing: -0.2 },
 });

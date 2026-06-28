@@ -1,6 +1,6 @@
 import { Button } from '@/components/Button';
 import { kycColors, kycShadow } from '@/components/kyc/kycTheme';
-import { spacing } from '@/constants/theme';
+import { spacing, fonts } from '@/constants/theme';
 import { clearSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 import { Href, router } from 'expo-router';
 import { useState } from 'react';
@@ -85,12 +85,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: kycColors.text,
     marginBottom: spacing.sm,
   },
-  lead: { fontSize: 15, color: kycColors.muted, lineHeight: 22, marginBottom: spacing.md },
+  lead: { fontSize: 15, color: kycColors.muted, lineHeight: 22, marginBottom: spacing.md, fontFamily: fonts.regular, },
   bullets: { marginBottom: spacing.lg, gap: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  tick: { color: kycColors.primary, fontWeight: '800', width: 28, fontSize: 16 },
-  rowText: { fontSize: 15, color: kycColors.text },
+  tick: { color: kycColors.primary, fontWeight: '800',
+    fontFamily: fonts.bold, width: 28, fontSize: 16 },
+  rowText: { fontSize: 15, color: kycColors.text, fontFamily: fonts.regular, },
 });

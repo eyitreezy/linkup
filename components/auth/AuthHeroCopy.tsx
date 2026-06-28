@@ -3,7 +3,7 @@
  */
 import { AUTH_CARD_MARGIN_H, AUTH_CARD_PADDING_H } from '@/components/auth/authLayout';
 import { useAuthHero } from '@/components/auth/AuthHeroContext';
-import { spacing } from '@/constants/theme';
+import { spacing, fonts } from '@/constants/theme';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 export function AuthHeroCopy() {
@@ -47,6 +47,7 @@ const styles = StyleSheet.create({
   headline: {
     fontSize: 28,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     letterSpacing: -0.6,
     lineHeight: 34,
@@ -60,6 +61,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: 'rgba(255,255,255,0.92)',
     fontWeight: '500',
+    fontFamily: fonts.regular,
     letterSpacing: -0.2,
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },

@@ -1,7 +1,7 @@
 /**
  * Admin — view and issue goodwill credits for a member.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import type { DbGoodwillCredit, GoodwillSource } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -165,15 +165,17 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
-  panelTitle: { fontSize: 16, fontWeight: '900', color: colors.text },
-  empty: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: spacing.md },
+  panelTitle: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  empty: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginBottom: spacing.md, fontFamily: fonts.medium, },
   creditRow: {
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  creditAmount: { fontSize: 15, fontWeight: '800', color: colors.text },
-  creditMeta: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  creditAmount: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  creditMeta: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, fontFamily: fonts.medium, },
   issueForm: { marginTop: spacing.md, gap: spacing.xs },
   fieldLbl: {
     fontSize: 12,
@@ -186,11 +188,12 @@ const styles = StyleSheet.create({
   },
   inp: {
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.surface,
   },
@@ -200,14 +203,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     backgroundColor: colors.surface,
   },
   choiceOn: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
-  choiceTxt: { fontSize: 13, fontWeight: '700', color: colors.textMuted, textTransform: 'capitalize' },
+  choiceTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted, textTransform: 'capitalize' },
   choiceTxtOn: { color: colors.primary },
   issueButton: {
     marginTop: spacing.md,
@@ -217,5 +221,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  issueButtonLabel: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  issueButtonLabel: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
 });

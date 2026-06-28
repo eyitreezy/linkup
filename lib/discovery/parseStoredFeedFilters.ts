@@ -1,4 +1,8 @@
 import type { FeedFilterState } from '@/components/plans/PlansFilterSheet';
+import {
+  hasDiscoverPriceFilter,
+  normalizeDiscoverPriceCents,
+} from '@/lib/discovery/discoverPriceFilter';
 import type { HostPresenceFilter } from '@/lib/presence/derivePresenceUi';
 
 type StoredFeedFilters = {
@@ -9,23 +13,21 @@ type StoredFeedFilters = {
   hostPresence?: HostPresenceFilter;
   /** Set when the user taps Apply in the filter sheet with at least one constraint. */
   clientFiltersActive?: boolean;
+  /** When true, maxDistanceKm strictly excludes out-of-range plans. */
+  distanceFilterActive?: boolean;
   /** @deprecated Old max-price slider stored cents in `maxPrice`, not `maxPriceCents`. Ignored. */
   maxPrice?: number | null;
 };
 
-function normalizePriceCents(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
-  return Math.round(value);
-}
-
-export function defaultDiscoverFeedFilter(fallbackMaxKm: number): FeedFilterState {
+export function defaultDiscoverFeedFilter(_fallbackMaxKm: number): FeedFilterState {
   return {
-    maxDistanceKm: fallbackMaxKm,
+    maxDistanceKm: null,
     minPriceCents: null,
     maxPriceCents: null,
     verifiedHostsOnly: false,
     hostPresence: 'all',
     clientFiltersActive: false,
+    distanceFilterActive: false,
   };
 }
 
@@ -34,19 +36,30 @@ function parseHostPresence(raw: unknown): HostPresenceFilter {
   return 'all';
 }
 
-/** True when Apply should turn on client-side price / distance / verified filtering. */
+/** True when Apply should turn on client-side price / verified / host-presence filtering. */
 export function isDiscoverFilterConstraintActive(
   f: Pick<
     FeedFilterState,
     'maxDistanceKm' | 'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
   >,
-  baseRadiusKm: number
+  _baseRadiusKm: number
 ): boolean {
   if (f.hostPresence !== 'all') return true;
   if (f.verifiedHostsOnly) return true;
-  if (f.minPriceCents != null) return true;
-  if (f.maxPriceCents != null) return true;
-  if (f.maxDistanceKm !== baseRadiusKm) return true;
+  if (hasDiscoverPriceFilter(f)) return true;
+  return false;
+}
+
+/** True when price, verified-host, or host-presence constraints are set (excludes distance). */
+export function hasAdvancedDiscoverFilters(
+  f: Pick<
+    FeedFilterState,
+    'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
+  >
+): boolean {
+  if (f.hostPresence !== 'all') return true;
+  if (f.verifiedHostsOnly) return true;
+  if (hasDiscoverPriceFilter(f)) return true;
   return false;
 }
 
@@ -56,20 +69,31 @@ export function parseStoredFeedFilters(raw: unknown, fallbackMaxKm: number): Fee
   if (!raw || typeof raw !== 'object') return defaults;
 
   const f = raw as StoredFeedFilters;
+  const storedMaxKm =
+    typeof f.maxDistanceKm === 'number' && f.maxDistanceKm > 0 ? f.maxDistanceKm : null;
+
+  const distanceFilterActive =
+    f.distanceFilterActive === true && storedMaxKm != null;
+
   const draft = {
-    maxDistanceKm:
-      typeof f.maxDistanceKm === 'number' && f.maxDistanceKm > 0 ? f.maxDistanceKm : fallbackMaxKm,
-    minPriceCents: normalizePriceCents(f.minPriceCents),
-    maxPriceCents:
-      f.clientFiltersActive === true ? normalizePriceCents(f.maxPriceCents) : null,
+    maxDistanceKm: distanceFilterActive ? storedMaxKm : null,
+    minPriceCents: normalizeDiscoverPriceCents(f.minPriceCents),
+    maxPriceCents: normalizeDiscoverPriceCents(f.maxPriceCents),
     verifiedHostsOnly: !!f.verifiedHostsOnly,
     hostPresence: parseHostPresence(f.hostPresence),
+    clientFiltersActive: false,
+    distanceFilterActive,
   };
 
-  const clientFiltersActive =
-    f.clientFiltersActive === true || isDiscoverFilterConstraintActive(draft, fallbackMaxKm);
+  const hasOtherConstraints = isDiscoverFilterConstraintActive(draft, fallbackMaxKm);
 
-  if (!clientFiltersActive) return defaults;
+  if (!distanceFilterActive && !hasOtherConstraints && f.clientFiltersActive !== true) {
+    return defaults;
+  }
 
-  return { ...draft, clientFiltersActive: true };
+  return {
+    ...draft,
+    clientFiltersActive: distanceFilterActive || hasOtherConstraints || f.clientFiltersActive === true,
+    distanceFilterActive,
+  };
 }

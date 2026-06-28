@@ -1,14 +1,20 @@
 import { Input } from '@/components/Input';
 import { DiscoverMoodStrip } from '@/components/discovery/DiscoverMoodStrip';
 import type { FeedViewMode } from '@/components/plans/NearbyPlansHeader';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { DiscoveryMood } from '@/lib/discovery/moodFilter';
 import type { HostPresenceFilter } from '@/lib/presence/derivePresenceUi';
 import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
+import { validateDiscoverPriceRange } from '@/lib/discovery/discoverPriceFilter';
 import { formatFilterPriceMajor, parseFilterPriceMajor } from '@/lib/discovery/feedPriceFilter';
 import { TierBadge } from '@/components/TierBadge';
-import { isDiscoverFilterConstraintActive } from '@/lib/discovery/parseStoredFeedFilters';
-import { effectiveDiscoveryRadiusKm } from '@/lib/plans/discoveryRadius';
+import { isDiscoverFilterConstraintActive, defaultDiscoverFeedFilter } from '@/lib/discovery/parseStoredFeedFilters';
+import {
+  clampMaxDistanceKm,
+  nextTierForSliderUpsell,
+  sliderMaxKmForTier,
+  SLIDER_MAX_KM,
+} from '@/lib/plans/discoveryRadius';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
@@ -28,13 +34,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type FeedFilterState = {
-  maxDistanceKm: number;
+  /** null = no max-distance filter applied (any distance). */
+  maxDistanceKm: number | null;
   minPriceCents: number | null;
   maxPriceCents: number | null;
   verifiedHostsOnly: boolean;
   hostPresence: HostPresenceFilter;
   /** When false, discover shows all non-expired plans (distance is sort-only). */
   clientFiltersActive: boolean;
+  /** When true, maxDistanceKm strictly excludes plans outside range. */
+  distanceFilterActive: boolean;
 };
 
 const HOST_PRESENCE_OPTIONS: { id: HostPresenceFilter; label: string }[] = [
@@ -53,8 +62,6 @@ type Props = {
   onApply: (next: FeedFilterState, nextMood: DiscoveryMood, nextFeedMode: FeedViewMode) => void;
   onUpgrade: () => void;
   baseRadiusKm: number;
-  browseRadiusKm: number;
-  hasWiderRadius: boolean;
   effectiveTier: SubscriptionTier;
 };
 
@@ -68,14 +75,14 @@ export function PlansFilterSheet({
   onApply,
   onUpgrade,
   baseRadiusKm,
-  browseRadiusKm,
-  hasWiderRadius,
   effectiveTier,
 }: Props) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const sheetHeight = winH * 0.92;
-  const [maxKm, setMaxKm] = useState(initial.maxDistanceKm);
+  const sliderMax = sliderMaxKmForTier(effectiveTier);
+  const upsellTier = nextTierForSliderUpsell(effectiveTier);
+  const [maxKm, setMaxKm] = useState<number | null>(initial.maxDistanceKm);
   const [minPriceText, setMinPriceText] = useState(() => formatFilterPriceMajor(initial.minPriceCents));
   const [maxPriceText, setMaxPriceText] = useState(() => formatFilterPriceMajor(initial.maxPriceCents));
   const [verifiedOnly, setVerifiedOnly] = useState(initial.verifiedHostsOnly);
@@ -83,10 +90,16 @@ export function PlansFilterSheet({
   const [mood, setMood] = useState<DiscoveryMood>(discoveryMood);
   const [displayMode, setDisplayMode] = useState<FeedViewMode>(feedMode);
   const [priceRangeErrorOpen, setPriceRangeErrorOpen] = useState(false);
+  const [distanceTouched, setDistanceTouched] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setMaxKm(initial.maxDistanceKm);
+      setMaxKm(
+        initial.maxDistanceKm != null
+          ? clampMaxDistanceKm(initial.maxDistanceKm, effectiveTier)
+          : null
+      );
+      setDistanceTouched(false);
       setMinPriceText(formatFilterPriceMajor(initial.minPriceCents));
       setMaxPriceText(formatFilterPriceMajor(initial.maxPriceCents));
       setVerifiedOnly(initial.verifiedHostsOnly);
@@ -94,31 +107,48 @@ export function PlansFilterSheet({
       setMood(discoveryMood);
       setDisplayMode(feedMode);
     }
-  }, [visible, initial, discoveryMood, feedMode]);
+  }, [visible, initial, discoveryMood, feedMode, effectiveTier]);
 
   function apply() {
     const minPriceCents = parseFilterPriceMajor(minPriceText);
     const maxPriceCents = parseFilterPriceMajor(maxPriceText);
-    if (minPriceCents != null && maxPriceCents != null && minPriceCents > maxPriceCents) {
+    if (validateDiscoverPriceRange(minPriceCents, maxPriceCents)) {
       setPriceRangeErrorOpen(true);
       return;
     }
     const verifiedHostsOnly = isPremium ? verifiedOnly : false;
-    onApply(
+    const distanceFilterActive = distanceTouched && maxKm != null;
+    const appliedMaxKm =
+      distanceFilterActive && maxKm != null ? clampMaxDistanceKm(maxKm, effectiveTier) : null;
+    const hasOtherConstraints = isDiscoverFilterConstraintActive(
       {
-        maxDistanceKm: maxKm,
+        maxDistanceKm: appliedMaxKm,
         minPriceCents,
         maxPriceCents,
         verifiedHostsOnly,
         hostPresence,
-        clientFiltersActive: isDiscoverFilterConstraintActive(
-          { maxDistanceKm: maxKm, minPriceCents, maxPriceCents, verifiedHostsOnly, hostPresence },
-          baseRadiusKm
-        ),
+      },
+      baseRadiusKm
+    );
+    onApply(
+      {
+        maxDistanceKm: appliedMaxKm,
+        minPriceCents,
+        maxPriceCents,
+        verifiedHostsOnly,
+        hostPresence,
+        distanceFilterActive,
+        clientFiltersActive: distanceFilterActive || hasOtherConstraints,
       },
       mood,
       displayMode
     );
+    onClose();
+  }
+
+  function clearFilters() {
+    const defaults = defaultDiscoverFeedFilter(baseRadiusKm);
+    onApply(defaults, 'all', displayMode);
     onClose();
   }
 
@@ -130,7 +160,7 @@ export function PlansFilterSheet({
         variant="warning"
         kicker="Filters"
         title="Price range"
-        message="Minimum price cannot be higher than maximum price."
+        message="Minimum price cannot be higher than maximum."
         primaryLabel="Got it"
       />
     <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
@@ -164,7 +194,9 @@ export function PlansFilterSheet({
                   <View style={styles.titleTextCol}>
                     <Text style={styles.title}>Discover filters</Text>
                     <Text style={styles.sectionLead}>
-                      Tune your feed — vibe first, then distance{isPremium ? ', price, and host signals' : ''}.
+                      {isPremium
+                        ? 'Refine your feed by vibe, distance, price, and host signals.'
+                        : 'Refine your feed by vibe and distance.'}
                     </Text>
                   </View>
                 </View>
@@ -225,7 +257,7 @@ export function PlansFilterSheet({
 
               <Text style={styles.sectionEyebrow}>Vibe</Text>
               <LinearGradient
-                colors={['rgba(108,99,255,0.45)', 'rgba(255,101,132,0.35)', 'rgba(16,185,129,0.25)']}
+                colors={['rgba(94, 82, 255,0.45)', 'rgba(255, 74, 114,0.35)', 'rgba(16,185,129,0.25)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.vibeBlockRing}
@@ -280,37 +312,34 @@ export function PlansFilterSheet({
 
               <Text style={styles.sectionEyebrow}>Location</Text>
               <View style={styles.sectionCard}>
-                <Text style={styles.label}>Max distance · {Math.round(maxKm)} km</Text>
+                <Text style={styles.label}>
+                  Max distance · {maxKm == null ? 'Any' : `${Math.round(maxKm)} km`}
+                </Text>
                 <Slider
                   style={styles.slider}
-                  minimumValue={5}
-                  maximumValue={Math.max(100, browseRadiusKm, baseRadiusKm, maxKm)}
+                  minimumValue={1}
+                  maximumValue={sliderMax}
                   step={1}
-                  value={maxKm}
-                  onValueChange={setMaxKm}
+                  value={Math.min(maxKm ?? 1, sliderMax)}
+                  onValueChange={(v) => {
+                    setMaxKm(v);
+                    setDistanceTouched(true);
+                  }}
                   minimumTrackTintColor={colors.primary}
                   maximumTrackTintColor={colors.border}
                   thumbTintColor={colors.primary}
                 />
-                {hasWiderRadius && effectiveTier !== 'FREE' ? (
-                  <Text style={styles.filterHintText}>
-                    Your {effectiveTier.charAt(0) + effectiveTier.slice(1).toLowerCase()} subscription
-                    extends your reach to{' '}
-                    <Text style={styles.filterHintBold}>
-                      {effectiveDiscoveryRadiusKm(baseRadiusKm, effectiveTier, true)} km
-                    </Text>
-                  </Text>
-                ) : (
+                {effectiveTier !== 'PLATINUM' ? (
                   <Pressable style={styles.widerRadiusUpsell} onPress={onUpgrade}>
                     <View style={styles.widerRadiusUpsellRow}>
                       <Ionicons name="navigate-outline" size={18} color={colors.primary} />
                       <Text style={styles.widerRadiusUpsellTxt}>
-                        Wider reach available on Silver and above
+                        Search up to {SLIDER_MAX_KM[upsellTier]}km on {upsellTier.charAt(0) + upsellTier.slice(1).toLowerCase()}
                       </Text>
-                      <TierBadge tier="SILVER" compact />
+                      <TierBadge tier={upsellTier} compact />
                     </View>
                   </Pressable>
-                )}
+                ) : null}
               </View>
 
               {!isPremium ? (
@@ -326,7 +355,8 @@ export function PlansFilterSheet({
                       <Text style={styles.upsellTitle}>Unlock refined filters</Text>
                     </View>
                     <Text style={styles.upsellBody}>
-                      Premium members set a budget ceiling and can require verified hosts — clearer matches with less noise.
+                      Premium members set a budget ceiling and can require verified hosts for clearer matches with
+                      less noise.
                     </Text>
                     <Text style={styles.upsellCta}>Explore Premium →</Text>
                   </LinearGradient>
@@ -372,13 +402,13 @@ export function PlansFilterSheet({
               <View style={[styles.footerActions, { paddingBottom: spacing.sm + insets.bottom }]}>
                 <View style={styles.footerRow}>
                   <Pressable
-                    onPress={onClose}
-                    style={({ pressed }) => [styles.footerCancel, pressed && styles.footerPressed]}
+                    onPress={clearFilters}
+                    style={({ pressed }) => [styles.footerClear, pressed && styles.footerPressed]}
                     accessibilityRole="button"
-                    accessibilityLabel="Cancel filters"
+                    accessibilityLabel="Clear discover filters"
                     hitSlop={8}
                   >
-                    <Text style={styles.footerCancelTxt}>Cancel</Text>
+                    <Text style={styles.footerClearTxt}>Clear</Text>
                   </Pressable>
                   <Pressable
                     onPress={apply}
@@ -425,7 +455,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: 'rgba(108,99,255,0.12)',
+    borderColor: 'rgba(94, 82, 255,0.12)',
   },
   sheetBody: {
     flex: 1,
@@ -446,7 +476,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(108,99,255,0.25)',
+    backgroundColor: 'rgba(94, 82, 255,0.25)',
   },
   titleRow: {
     flexDirection: 'row',
@@ -462,7 +492,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   titleTextCol: { flex: 1, minWidth: 0 },
-  title: { fontSize: 22, fontWeight: '800', color: colors.text, letterSpacing: -0.4 },
+  title: { fontSize: 22, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.4 },
   sectionLead: {
     marginTop: 6,
     fontSize: 14,
@@ -476,6 +507,7 @@ const styles = StyleSheet.create({
   sectionEyebrow: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -485,6 +517,7 @@ const styles = StyleSheet.create({
   sectionEyebrowInCard: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -503,7 +536,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108,99,255,0.08)',
+    borderColor: 'rgba(94, 82, 255,0.08)',
   },
   sectionCard: {
     marginBottom: spacing.lg,
@@ -511,9 +544,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: 'rgba(255,255,255,0.72)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.12)',
+    borderColor: 'rgba(94, 82, 255,0.12)',
   },
-  label: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  label: { fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, marginBottom: spacing.sm },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -530,6 +564,7 @@ const styles = StyleSheet.create({
   priceHint: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     marginTop: -spacing.xs,
     marginBottom: spacing.md,
@@ -542,28 +577,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.xs,
   },
-  switchLabel: { fontSize: 15, fontWeight: '600', color: colors.text, flex: 1, paddingRight: spacing.md },
+  switchLabel: { fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, flex: 1, paddingRight: spacing.md },
   upsellOuter: {
     marginBottom: spacing.lg,
     borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
   },
   upsell: {
     padding: spacing.md,
   },
   upsellIconRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  upsellTitle: { fontSize: 17, fontWeight: '800', color: colors.text, flex: 1 },
-  upsellBody: { fontSize: 14, color: colors.textMuted, marginTop: 8, lineHeight: 21, fontWeight: '500' },
-  upsellCta: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: spacing.md },
+  upsellTitle: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, flex: 1 },
+  upsellBody: { fontSize: 14, color: colors.textMuted, marginTop: 8, lineHeight: 21, fontWeight: '500', fontFamily: fonts.regular, },
+  upsellCta: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: spacing.md, fontFamily: fonts.bold, },
   footerActions: {
     flexShrink: 0,
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.lg,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108,99,255,0.14)',
+    borderTopColor: 'rgba(94, 82, 255,0.14)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -580,7 +617,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.sm,
   },
-  footerCancel: {
+  footerClear: {
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: 52,
@@ -591,9 +628,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(26, 29, 38, 0.12)',
     backgroundColor: 'rgba(255,255,255,0.95)',
   },
-  footerCancelTxt: {
+  footerClearTxt: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
   footerApplyOuter: {
@@ -603,7 +641,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.22,
         shadowRadius: 14,
@@ -625,6 +663,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: -0.2,
   },
   footerPressed: { opacity: 0.9 },
@@ -654,8 +693,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.button,
   },
-  presenceChipTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
-  presenceChipTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  presenceChipTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  presenceChipTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
   presenceHint: {
     marginTop: spacing.sm,
     fontSize: 12,
@@ -667,11 +707,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 18,
   },
   filterHintBold: {
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
   },
   widerRadiusUpsell: {
@@ -680,7 +722,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.2)',
+    borderColor: 'rgba(94, 82, 255,0.2)',
     backgroundColor: 'rgba(237,232,255,0.45)',
   },
   widerRadiusUpsellRow: {
@@ -692,6 +734,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
   },
   displayPillRow: {
@@ -730,6 +773,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: radius.button,
   },
-  displayPillTxt: { fontSize: 14, fontWeight: '800', color: colors.text },
-  displayPillTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  displayPillTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  displayPillTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
 });

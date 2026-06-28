@@ -42,13 +42,19 @@ export async function insertUserMeetType(
       supports_mood: false,
       icon,
       sort_order: 9000,
-      is_active: true,
+      is_active: false,
+      approval_status: 'pending',
+      is_admin_managed: false,
       created_by: userId,
     })
     .select('*')
     .single();
 
   if (error) return { row: null, error: error.message };
+
+  const row = data as DbMeetType;
+  // Admin inbox rows are created by DB trigger meet_types_notify_admins_pending on insert.
+
   invalidateMeetTypesCache();
-  return { row: data as DbMeetType, error: null };
+  return { row, error: null };
 }

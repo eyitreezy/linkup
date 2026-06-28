@@ -1,9 +1,10 @@
 /**
  * Admin — browse and moderate plans (search, filters, archive, suppress, delete).
  */
+import { AdminListSkeleton } from '@/components/admin/AdminListSkeleton';
 import { KycNoticeModal } from '@/components/kyc/KycNoticeModal';
 import { PlanShelfActionConfirmModal } from '@/components/plans/PlanShelfActionConfirmModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +12,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   ScrollView,
@@ -43,7 +43,7 @@ const panelStyles = StyleSheet.create({
     backgroundColor: colors.surface,
     padding: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     borderTopRightRadius: radius.lg,
     borderBottomRightRadius: radius.lg,
   },
@@ -76,7 +76,13 @@ function isPlanExpired(p: DbPlan): boolean {
 }
 
 /** Extracted for bundle hygiene — used by `app/admin/index.tsx`. */
-export function AdminPlansPanel() {
+export function AdminPlansPanel({
+  refreshing = false,
+  registerReload,
+}: {
+  refreshing?: boolean;
+  registerReload?: (reload: (() => Promise<void>) | null) => void;
+} = {}) {
   const [rows, setRows] = useState<DbPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
@@ -84,9 +90,9 @@ export function AdminPlansPanel() {
   const [dialog, setDialog] = useState<AdminPlanDialog>(null);
   const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean }) => {
     if (!isSupabaseConfigured) return;
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     const { data, error } = await supabase
       .from('plans')
       .select('*')
@@ -99,8 +105,13 @@ export function AdminPlansPanel() {
       });
       setRows([]);
     } else setRows((data ?? []) as DbPlan[]);
-    setLoading(false);
+    if (!options?.silent) setLoading(false);
   }, []);
+
+  useEffect(() => {
+    registerReload?.(() => load({ silent: true }));
+    return () => registerReload?.(null);
+  }, [load, registerReload]);
 
   useEffect(() => {
     void load();
@@ -221,8 +232,8 @@ export function AdminPlansPanel() {
         ))}
       </ScrollView>
 
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: spacing.lg }} color={colors.primary} size="large" />
+      {refreshing || (loading && rows.length === 0) ? (
+        <AdminListSkeleton count={5} />
       ) : (
         <FlatList
           data={filtered}
@@ -319,15 +330,16 @@ export function AdminPlansPanel() {
 }
 
 const styles = StyleSheet.create({
-  head: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: 4 },
-  sub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20 },
+  head: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  sub: { fontSize: 14, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 20, fontFamily: fonts.regular, },
   input: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -336,12 +348,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
   },
   chipOn: { backgroundColor: colors.primary },
-  chipTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  chipTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   chipTxtOn: { color: '#fff' },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.text, fontFamily: fonts.bold, },
   metaRow: {
     marginTop: 4,
     flexDirection: 'row',
@@ -349,13 +362,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  cardMeta: { fontSize: 13, color: colors.textMuted, fontWeight: '600', flexShrink: 1 },
+  cardMeta: { fontSize: 13, color: colors.textMuted, fontWeight: '600',
+    fontFamily: fonts.medium, flexShrink: 1 },
   expiredChip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  expiredChipTxt: { fontSize: 11, fontWeight: '900', color: '#fff' },
+  expiredChipTxt: { fontSize: 11, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
   mono: { marginTop: 6, fontSize: 11, color: colors.textMuted, fontFamily: 'monospace' },
   row: {
     flexDirection: 'row',
@@ -373,8 +387,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
   },
-  miniBtnTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
-  miniBtnTxtDanger: { fontSize: 13, fontWeight: '800', color: colors.danger },
+  miniBtnTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
+  miniBtnTxtDanger: { fontSize: 13, fontWeight: '800', color: colors.danger, fontFamily: fonts.bold, },
 });

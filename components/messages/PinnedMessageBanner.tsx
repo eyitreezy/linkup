@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -75,8 +75,9 @@ const styles = StyleSheet.create({
   },
   textCol: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  title: { fontSize: 11, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.4 },
-  sender: { fontSize: 12, fontWeight: '800', color: colors.text, marginBottom: 2 },
-  preview: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 17 },
+  title: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.4 },
+  sender: { fontSize: 12, fontWeight: '800', color: colors.text, marginBottom: 2, fontFamily: fonts.bold, },
+  preview: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 17, fontFamily: fonts.medium, },
   unpinBtn: { padding: 4 },
 });

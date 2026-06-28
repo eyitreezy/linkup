@@ -6,7 +6,7 @@
 
 import { authSoftLabelStyle, ONBOARDING_FIELD_MIN_HEIGHT } from '@/components/Input';
 
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 
 import { resolveGooglePlaceSuggestion } from '@/lib/location/placesAutocomplete';
 
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
 
     borderRadius: radius.lg,
 
@@ -470,6 +470,8 @@ const styles = StyleSheet.create({
 
     fontSize: 16,
 
+    fontFamily: fonts.regular,
+
     color: colors.text,
 
     minHeight: ONBOARDING_FIELD_MIN_HEIGHT,
@@ -488,7 +490,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
 
     borderRadius: radius.lg,
 
@@ -530,15 +532,17 @@ const styles = StyleSheet.create({
 
     borderBottomWidth: StyleSheet.hairlineWidth,
 
-    borderBottomColor: 'rgba(108, 99, 255, 0.12)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.12)',
 
   },
 
-  suggestRowPressed: { backgroundColor: 'rgba(108, 99, 255, 0.06)' },
+  suggestRowPressed: { backgroundColor: 'rgba(94, 82, 255, 0.06)' },
 
   suggestIcon: { marginRight: spacing.sm },
 
-  suggestText: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 20, fontWeight: '600' },
+  suggestText: { flex: 1, fontSize: 15, color: colors.text, lineHeight: 20, fontWeight: '600',
+
+    fontFamily: fonts.medium,},
 
   hint: {
 
@@ -561,6 +565,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
 
     fontWeight: '700',
+
+    fontFamily: fonts.medium,
 
     color: colors.danger,
 

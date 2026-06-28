@@ -1,17 +1,18 @@
 /**
- * Reusable keyboard-safe wrapper: KAV + optional typing backdrop (pass `backdropStyle` from `useKeyboardAnimation`).
+ * Reusable keyboard-safe wrapper: iOS keyboard-controller KAV + optional typing backdrop.
  */
 import { colors } from '@/constants/theme';
 import React from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated from 'react-native-reanimated';
 
 type Props = {
   children: React.ReactNode;
   style?: ViewStyle;
-  /** Passed to React Native `KeyboardAvoidingView` (header + status bar stack). */
+  /** Passed to `KeyboardAvoidingView` (header + status bar stack). */
   keyboardVerticalOffset?: number;
-  /** Use `padding` on iOS (default). */
+  /** Use keyboard avoidance on iOS (default). Android uses window resize. */
   avoidKeyboard?: boolean;
   /** From `useKeyboardAnimation().typingBackdropStyle` — subtle dim while IME is open. */
   backdropStyle?: Record<string, unknown>;
@@ -24,17 +25,23 @@ export function KeyboardAwareContainer({
   avoidKeyboard = true,
   backdropStyle,
 }: Props) {
-  const avoid = avoidKeyboard && Platform.OS === 'ios';
+  const useKav = avoidKeyboard && Platform.OS === 'ios';
+
+  const body = useKav ? (
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior="padding"
+      keyboardVerticalOffset={keyboardVerticalOffset}
+    >
+      {children}
+    </KeyboardAvoidingView>
+  ) : (
+    <View style={styles.flex}>{children}</View>
+  );
 
   return (
     <View style={[styles.root, style]}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={avoid ? 'padding' : undefined}
-        keyboardVerticalOffset={keyboardVerticalOffset}
-      >
-        {children}
-      </KeyboardAvoidingView>
+      {body}
       {backdropStyle ? (
         <Animated.View pointerEvents="none" style={[styles.dimOverlay, backdropStyle]} />
       ) : null}

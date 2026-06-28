@@ -1,5 +1,5 @@
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     top: 20,
     left: '12%',
     height: 2,
-    backgroundColor: 'rgba(108, 99, 255, 0.5)',
+    backgroundColor: 'rgba(94, 82, 255, 0.5)',
     borderRadius: 1,
     maxWidth: '76%',
   },
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   pillCurrent: {
     borderWidth: 2,
     borderColor: colors.primary,
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
   },
   pillGrad: {
     width: 32,
@@ -118,10 +118,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
   },
-  pillTxt: { fontSize: 13, fontWeight: '800', color: colors.textMuted },
+  pillTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted },
   pillTxtCurrent: { color: colors.primary },
-  pillTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff' },
-  lbl: { fontSize: 10, fontWeight: '800', textAlign: 'center' },
+  pillTxtOn: { fontSize: 13, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
+  lbl: { fontSize: 10, fontWeight: '800', textAlign: 'center', fontFamily: fonts.bold, },
   lblOn: { color: colors.text },
   lblCurrent: { color: colors.primary },
   lblOff: { color: colors.textMuted },

@@ -3,7 +3,7 @@
  */
 import { Avatar } from '@/components/Avatar';
 import { GroupAvatar } from '@/components/messages/GroupAvatar';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -114,8 +114,8 @@ const styles = StyleSheet.create({
     paddingRight: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
-    shadowColor: '#6C63FF',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 14,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 22,
   },
   cardUnread: {
-    borderColor: 'rgba(255, 101, 132, 0.42)',
+    borderColor: 'rgba(255, 74, 114, 0.42)',
     backgroundColor: 'rgba(255, 255, 255, 0.99)',
     shadowColor: colors.secondary,
     shadowOpacity: 0.16,
@@ -161,14 +161,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 4,
   },
-  name: { fontSize: 18, fontWeight: '800', color: colors.text, letterSpacing: -0.3, flexShrink: 1 },
+  name: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3, flexShrink: 1 },
   verified: { marginTop: 1 },
-  time: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  time: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontVariant: ['tabular-nums'], fontFamily: fonts.medium, },
   timeUnread: { color: colors.secondary },
   previewRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  preview: { flex: 1, fontSize: 15, lineHeight: 21, color: colors.textMuted, fontWeight: '500' },
-  previewUnread: { color: colors.text, fontWeight: '700' },
-  memberCount: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 2 },
+  preview: { flex: 1, fontSize: 15, lineHeight: 21, color: colors.textMuted, fontWeight: '500', fontFamily: fonts.regular, },
+  previewUnread: { color: colors.text, fontWeight: '700', fontFamily: fonts.medium, },
+  memberCount: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 2, fontFamily: fonts.medium, },
   dot: {
     width: 9,
     height: 9,

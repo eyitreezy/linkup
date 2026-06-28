@@ -12,19 +12,7 @@
  * Email copy is derived only from `notification.type` — never from title/body/data (avoids amounts & KYC leaks).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-type WebhookPayload = {
-  type?: string;
-  table?: string;
-  record?: {
-    id?: string;
-    user_id?: string;
-    type?: string;
-    title?: string;
-    body?: string;
-    priority?: string;
-  };
-};
+import { parseNotificationWebhookPayload } from '../_shared/webhookRecord.ts';
 
 function genericEmailForType(type: string | undefined): { subject: string; text: string } {
   const t = type ?? 'update';
@@ -83,6 +71,24 @@ function genericEmailForType(type: string | undefined): { subject: string; text:
       text: 'We received a safety report linked to your account or content. Open LinkUp or check support if you need help.',
     };
   }
+  if (t === 'meet_type_submitted') {
+    return {
+      subject: 'LinkUp — meet type pending approval',
+      text: 'A member submitted a new meet type for review. Open the Admin panel in LinkUp to approve or reject it.',
+    };
+  }
+  if (t === 'meet_type_approved') {
+    return {
+      subject: 'LinkUp — meet type approved',
+      text: 'Your custom meet type was approved and is ready to use when you create a plan. Open LinkUp to get started.',
+    };
+  }
+  if (t === 'meet_type_rejected') {
+    return {
+      subject: 'LinkUp — meet type not approved',
+      text: 'Your custom meet type was not approved. Open LinkUp to create a new type or pick from the catalog.',
+    };
+  }
   return {
     subject: 'LinkUp — notification',
     text: 'You have a new notification in LinkUp. Open the app to see more.',
@@ -110,15 +116,15 @@ Deno.serve(async (req) => {
     return new Response('Server misconfigured', { status: 500 });
   }
 
-  let payload: WebhookPayload;
+  let body: unknown;
   try {
-    payload = (await req.json()) as WebhookPayload;
+    body = await req.json();
   } catch {
     return new Response('Bad JSON', { status: 400 });
   }
 
-  const rec = payload.record;
-  if (payload.table !== 'notifications' || !rec?.user_id) {
+  const { table, eventType, record: rec } = parseNotificationWebhookPayload(body);
+  if (table !== 'notifications' || (eventType && eventType !== 'INSERT') || !rec?.user_id) {
     return new Response('Ignored', { status: 200 });
   }
 
@@ -129,8 +135,19 @@ Deno.serve(async (req) => {
     .eq('id', rec.user_id)
     .maybeSingle();
 
-  if (userErr || !user?.email) {
-    console.warn('No email for user', rec.user_id, userErr?.message);
+  let recipientEmail = user?.email?.trim() || null;
+  if (!recipientEmail) {
+    const { data: authData, error: authErr } = await supabase.auth.admin.getUserById(rec.user_id);
+    if (!authErr && authData?.user?.email) {
+      recipientEmail = authData.user.email.trim();
+    }
+  }
+
+  if (userErr && !recipientEmail) {
+    console.warn('No email for user', rec.user_id, userErr.message);
+  }
+  if (!recipientEmail) {
+    console.warn('No email for user', rec.user_id);
     return new Response('No recipient', { status: 200 });
   }
 
@@ -156,7 +173,7 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       from: resendFrom,
-      to: [user.email],
+      to: [recipientEmail],
       subject,
       text: `${text}\n\n— LinkUp`,
     }),

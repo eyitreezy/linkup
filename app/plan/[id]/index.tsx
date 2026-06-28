@@ -10,7 +10,7 @@ import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
 import { ReportSheet } from '@/components/trust/ReportSheet';
 import { VerificationBadge } from '@/components/trust/VerificationBadge';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { addPlanToDeviceCalendar, planCanAddToCalendar } from '@/lib/plans/addPlanToDeviceCalendar';
 import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanner';
@@ -24,6 +24,7 @@ import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { peekPlanDetailSeed, setPlanDetailSeed } from '@/lib/plans/planDetailSeed';
+import { subscribePlanOffersRealtime } from '@/lib/plans/subscribePlanOffersRealtime';
 import { extendMoodPlan } from '@/lib/plans/moodPlanCooldown';
 import { usePermission } from '@/hooks/usePermission';
 import { checkPermission } from '@/lib/subscription/checkPermission';
@@ -100,9 +101,9 @@ function offerStatusChip(status: OfferStatus): { label: string; bg: string; colo
     case 'accepted':
       return { label: 'Accepted', bg: 'rgba(16, 185, 129, 0.14)', color: colors.success };
     case 'pending':
-      return { label: 'Pending', bg: 'rgba(108, 99, 255, 0.12)', color: colors.primary };
+      return { label: 'Pending', bg: 'rgba(94, 82, 255, 0.12)', color: colors.primary };
     case 'countered':
-      return { label: 'Countered', bg: 'rgba(255, 101, 132, 0.12)', color: colors.secondary };
+      return { label: 'Countered', bg: 'rgba(255, 74, 114, 0.12)', color: colors.secondary };
     case 'declined':
       return { label: 'Declined', bg: 'rgba(239, 68, 68, 0.12)', color: colors.danger };
     case 'expired':
@@ -129,6 +130,9 @@ function formatProposalSnippet(iso: string | null): string | null {
 }
 
 const SAVE_BTN_GRADIENT = [colors.primary, colors.secondary] as const;
+/** Pill caps for Save plan / Make offer — matches plan detail interest CTAs. */
+const PLAN_DUAL_CTA_RADIUS = 300;
+const PLAN_DUAL_CTA_MIN_HEIGHT = 52;
 
 /** Outline “Save plan” vs solid “Saved” — separate trees avoid bleed after unsave. */
 function PlanSaveButtonContent({ saved }: { saved: boolean }) {
@@ -140,7 +144,7 @@ function PlanSaveButtonContent({ saved }: { saved: boolean }) {
         end={{ x: 1, y: 0 }}
         style={styles.dualSaveFilled}
       >
-        <Text style={styles.dualSaveLabelActive}>Saved</Text>
+        <Text style={[styles.dualSaveLabel, styles.dualSaveLabelActive]}>Saved</Text>
       </LinearGradient>
     );
   }
@@ -267,6 +271,18 @@ export default function PlanOverviewScreen() {
       void load();
     }, [load])
   );
+
+  useEffect(() => {
+    if (!id || !isSupabaseConfigured) return;
+    const loadRef = { current: load };
+    loadRef.current = load;
+    return subscribePlanOffersRealtime({
+      planId: id,
+      onRefresh: () => {
+        void loadRef.current();
+      },
+    });
+  }, [id, load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -396,7 +412,7 @@ export default function PlanOverviewScreen() {
     }
     const other = plan.creator_id === user.id ? acc.bidder_id : plan.creator_id;
     try {
-      await openDirectChat(supabase, user.id, other);
+      await openDirectChat(supabase, user.id, other, { skipOfferGate: true });
     } catch (e) {
       showFeedback('error', 'Chat', e instanceof Error ? e.message : 'Could not open chat');
     }
@@ -574,7 +590,7 @@ export default function PlanOverviewScreen() {
 
           <View style={styles.metaBlock}>
             <View style={styles.metaRow}>
-              <View style={[styles.metaIcon, { backgroundColor: 'rgba(108,99,255,0.15)' }]}>
+              <View style={[styles.metaIcon, { backgroundColor: 'rgba(94, 82, 255,0.15)' }]}>
                 <Ionicons name="calendar" size={18} color={colors.primary} />
               </View>
               <View style={styles.metaTextCol}>
@@ -584,7 +600,7 @@ export default function PlanOverviewScreen() {
             </View>
             {plan.location_label ? (
               <View style={styles.metaRow}>
-                <View style={[styles.metaIcon, { backgroundColor: 'rgba(255,101,132,0.15)' }]}>
+                <View style={[styles.metaIcon, { backgroundColor: 'rgba(255, 74, 114,0.15)' }]}>
                   <Ionicons name="location" size={18} color={colors.secondary} />
                 </View>
                 <View style={styles.metaTextCol}>
@@ -594,7 +610,7 @@ export default function PlanOverviewScreen() {
               </View>
             ) : null}
             <View style={styles.metaRow}>
-              <View style={[styles.metaIcon, { backgroundColor: 'rgba(108,99,255,0.12)' }]}>
+              <View style={[styles.metaIcon, { backgroundColor: 'rgba(94, 82, 255,0.12)' }]}>
                 <Ionicons name="pricetag" size={18} color={colors.primary} />
               </View>
               <View style={styles.metaTextCol}>
@@ -605,7 +621,7 @@ export default function PlanOverviewScreen() {
           </View>
 
           <LinearGradient
-            colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.12)']}
+            colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.12)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.statusPill}
@@ -656,13 +672,30 @@ export default function PlanOverviewScreen() {
       ) : null}
 
       {isCreator ? (
-        <View style={styles.planActionGrid}>
+        <View style={styles.planActionsCard}>
+          <View style={styles.planActionsHeader}>
+            <LinearGradient
+              colors={[colors.primary, '#8B7CFF', colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.planActionsIcon}
+            >
+              <Ionicons name="rocket-outline" size={18} color="#fff" />
+            </LinearGradient>
+            <View style={styles.planActionsHeaderCopy}>
+              <Text style={styles.planActionsTitle}>Promote & manage</Text>
+              <Text style={styles.planActionsSub}>Boost visibility, track interest, and handle offers</Text>
+            </View>
+          </View>
+          <View style={styles.planActionGrid}>
           <PlanBoostControls
             planId={plan.id}
             creatorId={plan.creator_id}
             dbUser={dbUser}
             boosted={boosted}
             boostedUntil={plan.boosted_until}
+            planVisibility={plan.visibility}
+            boostRadiusKm={plan.boost_radius_km}
             moodClosed={moodClosed}
             onBoosted={() => void load()}
             onShowFeedback={(title, message) => showFeedback('success', title, message)}
@@ -724,6 +757,7 @@ export default function PlanOverviewScreen() {
               </LinearGradient>
             </Pressable>
           </View>
+        </View>
         </View>
       ) : null}
 
@@ -1150,10 +1184,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
   },
-  centerTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  centerTitle: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, textAlign: 'center' },
   centerSub: {
     marginTop: spacing.sm,
     fontSize: 14,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
@@ -1173,20 +1210,23 @@ const styles = StyleSheet.create({
   heroAccent: { height: 5, width: '100%' },
   heroInner: { padding: spacing.lg },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, flexWrap: 'wrap' },
-  title: { fontSize: 24, fontWeight: '800', color: colors.text, flex: 1, letterSpacing: -0.5 },
+  title: { fontSize: 24, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, flex: 1, letterSpacing: -0.5 },
   boostPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.button,
   },
-  boostPillTxt: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  boostPillTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   groupPill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108,99,255,0.15)',
+    backgroundColor: 'rgba(94, 82, 255,0.15)',
   },
-  groupPillTxt: { fontSize: 11, fontWeight: '900', color: colors.primary },
+  groupPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary },
   groupChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1199,10 +1239,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.22)',
+    borderColor: 'rgba(94, 82, 255,0.22)',
     backgroundColor: 'rgba(255,255,255,0.94)',
   },
-  groupChatLabel: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  groupChatLabel: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   extendBtn: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
@@ -1213,8 +1254,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(251, 191, 36, 0.35)',
     alignItems: 'center',
   },
-  extendBtnTxt: { fontSize: 14, fontWeight: '800', color: '#B45309' },
-  desc: { fontSize: 15, color: colors.textMuted, marginTop: 10, lineHeight: 22 },
+  extendBtnTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#B45309' },
+  desc: { fontSize: 15, color: colors.textMuted, marginTop: 10, lineHeight: 22, fontFamily: fonts.regular, },
   metaBlock: { marginTop: spacing.md, gap: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 10 },
   metaIcon: {
@@ -1225,8 +1267,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   metaTextCol: { flex: 1, minWidth: 0 },
-  metaLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
-  metaVal: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 2, lineHeight: 22 },
+  metaLabel: { fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
+  metaVal: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 2, lineHeight: 22, fontFamily: fonts.medium, },
   statusPill: {
     marginTop: spacing.lg,
     alignSelf: 'flex-start',
@@ -1234,7 +1277,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.button,
   },
-  statusText: { fontSize: 13, fontWeight: '800', color: colors.primary, textTransform: 'capitalize' },
+  statusText: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, textTransform: 'capitalize' },
   peopleSectionBorder: {
     borderRadius: radius.xl,
     padding: 2,
@@ -1245,8 +1289,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl - 1,
     padding: spacing.lg,
   },
-  peopleSectionTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
-  peopleSectionSub: { fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 },
+  peopleSectionTitle: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  peopleSectionSub: { fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20, fontFamily: fonts.regular, },
   hostingHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1254,9 +1299,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
   },
-  hostingHintTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.text, lineHeight: 20 },
+  hostingHintTxt: { flex: 1, fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 20 },
   personRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1266,8 +1312,9 @@ const styles = StyleSheet.create({
   },
   personMeta: { flex: 1, minWidth: 0 },
   personNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  personName: { fontSize: 17, fontWeight: '800', color: colors.text, flexShrink: 1 },
-  personRole: { fontSize: 13, fontWeight: '700', color: colors.secondary, marginTop: 2 },
+  personName: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, flexShrink: 1 },
+  personRole: { fontSize: 13, fontWeight: '700', color: colors.secondary, marginTop: 2, fontFamily: fonts.medium, },
   personChevron: { marginTop: 16 },
   calendarBtn: {
     borderRadius: radius.button,
@@ -1299,8 +1346,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     minHeight: 48,
   },
-  calendarBtnTxt: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  calendarBtnTxtHalf: { fontSize: 14, fontWeight: '800', color: '#fff', textAlign: 'center', flexShrink: 1 },
+  calendarBtnTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
+  calendarBtnTxtHalf: { fontSize: 14, fontWeight: '800', color: '#fff', textAlign: 'center', flexShrink: 1, fontFamily: fonts.bold, },
   agreementOutlineInner: {
     borderRadius: radius.button - 4,
     backgroundColor: colors.surface,
@@ -1317,6 +1365,7 @@ const styles = StyleSheet.create({
   agreementOutlineTxt: {
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: -0.2,
     flexShrink: 1,
@@ -1333,13 +1382,58 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: spacing.sm,
   },
-  agreementMessageTxt: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
+  agreementMessageTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#FFFFFF', letterSpacing: -0.2 },
   primaryBtn: { marginBottom: spacing.sm },
+  planActionsCard: {
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.14)',
+    padding: spacing.md,
+    shadowColor: '#2a1f55',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  planActionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(94, 82, 255, 0.1)',
+  },
+  planActionsIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planActionsHeaderCopy: { flex: 1, minWidth: 0 },
+  planActionsTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  planActionsSub: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
   planActionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm + 4,
-    marginBottom: spacing.sm,
   },
   activeWindowRow: {
     flexDirection: 'row',
@@ -1361,10 +1455,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
   activeWindowTextWarn: {
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.warning,
   },
   planActionGridCell: {
@@ -1380,24 +1476,34 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: radius.button,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
   },
   planDetailInterestBtn: {
     borderRadius: 300,
   },
   planDetailBtnPrimaryGrad: {
     width: '100%',
-    minHeight: 48,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: spacing.md,
     borderRadius: radius.button,
   },
   planDetailBtnPrimaryTxt: {
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: -0.2,
     color: '#FFFFFF',
     textAlign: 'center',
@@ -1418,7 +1524,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.28,
         shadowRadius: 18,
@@ -1438,6 +1544,7 @@ const styles = StyleSheet.create({
   creatorManageTxt: {
     fontSize: 14,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
     letterSpacing: -0.2,
   },
@@ -1451,17 +1558,20 @@ const styles = StyleSheet.create({
   dualActionFlex: {
     flex: 1,
     minWidth: 0,
-    borderRadius: radius.button,
+    borderRadius: PLAN_DUAL_CTA_RADIUS,
     overflow: 'hidden',
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
   },
   dualSaveFullWidth: {
     width: '100%',
-    borderRadius: radius.button,
+    borderRadius: PLAN_DUAL_CTA_RADIUS,
     overflow: 'hidden',
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
   },
   dualSaveGradientRing: {
     padding: 2,
-    borderRadius: radius.button,
+    borderRadius: PLAN_DUAL_CTA_RADIUS,
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
   },
   /** Full cell height beside solid gradient (Message) */
   agreementRingFill: {
@@ -1469,25 +1579,26 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   dualSaveInner: {
-    borderRadius: radius.button - 2,
+    borderRadius: PLAN_DUAL_CTA_RADIUS - 2,
     backgroundColor: '#FFFFFF',
-    minHeight: 48,
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT - 4,
     paddingVertical: 14,
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dualSaveFilled: {
-    minHeight: 48,
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
     paddingVertical: 14,
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.button,
+    borderRadius: PLAN_DUAL_CTA_RADIUS,
   },
   dualSaveLabel: {
     fontSize: 15,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: -0.2,
     color: colors.primary,
   },
@@ -1495,15 +1606,20 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   dualOfferGradient: {
-    minHeight: 48,
-    paddingVertical: 12,
+    flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
+    paddingVertical: 14,
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: PLAN_DUAL_CTA_RADIUS,
   },
   dualOfferLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     letterSpacing: -0.2,
     color: '#fff',
   },
@@ -1515,14 +1631,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl + spacing.sm,
     paddingTop: spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.14)',
+    borderTopColor: 'rgba(94, 82, 255, 0.14)',
   },
   offersSectionCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
@@ -1539,11 +1655,12 @@ const styles = StyleSheet.create({
   offersSectionTitle: {
     fontSize: 20,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.4,
   },
   offersCountPill: {
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
@@ -1551,11 +1668,13 @@ const styles = StyleSheet.create({
   offersCountPillText: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
   },
   offersSectionSubtitle: {
     marginTop: 6,
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     lineHeight: 20,
   },
@@ -1568,6 +1687,7 @@ const styles = StyleSheet.create({
   offersLoadingHint: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
   offersEmpty: {
@@ -1586,6 +1706,7 @@ const styles = StyleSheet.create({
   offersEmptyTitle: {
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
   },
@@ -1593,6 +1714,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -1601,7 +1723,7 @@ const styles = StyleSheet.create({
   offersList: { marginTop: spacing.xs },
   offerRowDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     marginVertical: spacing.md,
   },
   offerRow: {
@@ -1610,9 +1732,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   offerRowHighlight: {
-    backgroundColor: 'rgba(108, 99, 255, 0.07)',
+    backgroundColor: 'rgba(94, 82, 255, 0.07)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
   },
@@ -1627,12 +1749,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     minWidth: 0,
   },
   offerRowTime: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
   offerRowMid: {
@@ -1645,6 +1769,7 @@ const styles = StyleSheet.create({
   offerRowAmount: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     flexShrink: 1,
   },
@@ -1656,6 +1781,7 @@ const styles = StyleSheet.create({
   offerStatusPillText: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
   },
   offerMatchRibbon: {
     flexDirection: 'row',
@@ -1670,6 +1796,7 @@ const styles = StyleSheet.create({
   offerMatchRibbonText: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#FFFFFF',
   },
   offerProposalRow: {
@@ -1682,6 +1809,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 18,
   },
@@ -1689,6 +1817,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: fonts.regular,
     color: colors.text,
     lineHeight: 20,
   },

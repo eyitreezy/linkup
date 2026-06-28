@@ -1,0 +1,21 @@
+/**
+ * Screens with KeyboardStickyView bottom chrome (chat composer, wizard footers).
+ * On Android, disable window resize so sticky translate is the only lift — avoids
+ * double compensation and ghost gaps with manifest `adjustResize`.
+ */
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { Platform } from 'react-native';
+import { AndroidSoftInputModes, KeyboardController } from 'react-native-keyboard-controller';
+
+export function useKeyboardStickyFooterMode(active = true) {
+  useFocusEffect(
+    useCallback(() => {
+      if (!active || Platform.OS !== 'android') return undefined;
+      KeyboardController.setInputMode(AndroidSoftInputModes.SOFT_INPUT_ADJUST_NOTHING);
+      return () => {
+        KeyboardController.setDefaultMode();
+      };
+    }, [active])
+  );
+}

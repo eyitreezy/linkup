@@ -1,7 +1,7 @@
 /**
  * Discovery toolbar — location, filter, optional undo (display mode lives in filter sheet).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -41,7 +41,7 @@ export function NearbyPlansHeader({
             accessibilityLabel={onPressLocation ? `Location: ${locationLabel}. Open travel mode` : undefined}
           >
             <LinearGradient
-              colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.1)']}
+              colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.1)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.locPill}
@@ -117,9 +117,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.18)',
+    borderColor: 'rgba(94, 82, 255,0.18)',
   },
-  locTxt: { fontSize: 13, fontWeight: '700', color: colors.primary, flexShrink: 1 },
+  locTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary, flexShrink: 1 },
   incognitoChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -128,23 +129,25 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radius.button,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.18)',
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    borderColor: 'rgba(94, 82, 255,0.18)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
-  incognitoLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  incognitoLabel: { fontSize: 12, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
   undoChip: {
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
   },
-  undoTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  undoTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   filterBtn: {
     borderRadius: radius.button,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.22)',
+    borderColor: 'rgba(94, 82, 255,0.22)',
   },
   filterBtnPressed: { opacity: 0.9 },
   filterBtnGrad: {

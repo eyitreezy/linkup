@@ -3,7 +3,7 @@
  */
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { APP_CHIP_GRADIENT, APP_CTA_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { usePermission } from '@/hooks/usePermission';
@@ -116,7 +116,7 @@ export function GroupPlanSettingsSection({ visible }: Props) {
         onDismiss={() => setUpgradeOpen(false)}
       />
       <LinearGradient
-        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.28)']}
+        colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.28)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.ring}
@@ -186,7 +186,7 @@ export function GroupPlanSettingsSection({ visible }: Props) {
           </View>
 
           <LinearGradient
-            colors={['rgba(245,158,11,0.12)', 'rgba(108,99,255,0.08)']}
+            colors={['rgba(245,158,11,0.12)', 'rgba(94, 82, 255,0.08)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.platinumBlock}
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.1,
         shadowRadius: 14,
@@ -278,13 +278,15 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
-  title: { fontSize: 20, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
-  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, fontWeight: '600' },
+  title: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
+  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, marginTop: 4, fontWeight: '600', fontFamily: fonts.medium, },
   section: { marginBottom: spacing.md },
   sectionLabel: {
     fontSize: 12,
@@ -301,9 +303,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.14)',
+    borderColor: 'rgba(94, 82, 255,0.14)',
   },
   stepBtnOuter: { borderRadius: 14, overflow: 'hidden' },
   stepBtnDisabled: { opacity: 0.55 },
@@ -326,8 +328,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   stepCenter: { alignItems: 'center', minWidth: 72 },
-  stepVal: { fontSize: 32, fontWeight: '900', color: colors.text, letterSpacing: -1 },
-  stepUnit: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 2 },
+  stepVal: { fontSize: 32, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -1 },
+  stepUnit: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   capRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -336,14 +339,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: 2,
   },
-  capHint: { flex: 1, fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600', minWidth: 160 },
-  capStrong: { fontWeight: '900', color: colors.text },
+  capHint: { flex: 1, fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600',
+    fontFamily: fonts.medium, minWidth: 160 },
+  capStrong: { fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
   tierPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  tierPillTxt: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 0.4 },
+  tierPillTxt: { fontSize: 10, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff', letterSpacing: 0.4 },
   platinumBlock: {
     borderRadius: radius.lg,
     padding: spacing.md,
@@ -355,6 +360,7 @@ const styles = StyleSheet.create({
   platinumKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#B45309',
     textTransform: 'uppercase',
     letterSpacing: 0.7,
@@ -373,11 +379,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
   },
   multiTextCol: { flex: 1, paddingRight: spacing.xs },
-  multiLabel: { fontSize: 15, fontWeight: '800', color: colors.text },
-  multiSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2, lineHeight: 17 },
+  multiLabel: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  multiSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2, lineHeight: 17, fontFamily: fonts.medium, },
   platinumCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -386,7 +393,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 6,
   },
-  platinumCtaTxt: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  platinumCtaTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   cityPickerWrap: {
     marginTop: spacing.md,
   },

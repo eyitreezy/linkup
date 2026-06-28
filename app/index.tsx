@@ -29,7 +29,7 @@ export default function Index() {
     };
   }, []);
 
-  if (pendingAuthLink === null || loading) {
+  if (pendingAuthLink === null) {
     return <View style={styles.blank} />;
   }
 
@@ -37,11 +37,15 @@ export default function Index() {
     return <Redirect href={'/auth/callback' as Href} />;
   }
 
-  if (session?.user) {
-    return <Redirect href={postAuthHref(profile)} />;
+  if (!session?.user) {
+    return <Redirect href={'/(auth)/login' as Href} />;
   }
 
-  return <Redirect href={'/(auth)/login' as Href} />;
+  if (loading) {
+    return <View style={styles.blank} />;
+  }
+
+  return <Redirect href={postAuthHref(profile)} />;
 }
 
 const styles = StyleSheet.create({

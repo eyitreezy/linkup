@@ -14,21 +14,27 @@ import {
   type MessageDeleteKind,
 } from '@/components/messages/MessageDeleteConfirmModal';
 import { ChatComposer } from '@/components/messages/ChatComposer';
+import { GroupMentionPicker } from '@/components/messages/GroupMentionPicker';
+import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
 import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
 import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
 import { ChatSafetyEntrySheet } from '@/components/trust/ChatSafetyEntrySheet';
 import { ReportSheet } from '@/components/trust/ReportSheet';
-import { colors, radius, spacing } from '@/constants/theme';
-import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { ChatThreadSkeleton } from '@/components/messages/ChatThreadSkeleton';
+import { CHAT_LIST_BOTTOM_PAD } from '@/lib/keyboard/constants';
+import { useChatThreadKeyboard } from '@/hooks/useChatThreadKeyboard';
+import { useKeyboardStickyFooterMode } from '@/hooks/useKeyboardStickyFooterMode';
+import { KeyboardStickyView, KeyboardAvoidingView as ControllerKeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePresenceActions } from '@/contexts/PresenceContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { moderateMessageText } from '@/lib/ai';
+import { buildChatSuggestionContext, type ChatPlanSuggestionSource } from '@/lib/chat/buildChatSuggestionContext';
 import {
   CHAT_PAGE_SIZE,
   fetchMessagesOlderThan,
   buildReplyQuoteFromTarget,
-  messageCopyText,
   messageDisplayText,
   mimeToMediaKind,
   normalizeChatMessageRow,
@@ -59,6 +65,14 @@ import {
   fetchActiveGroupMembers,
   type GroupChatMemberRow,
 } from '@/lib/messaging/groupChatMembers';
+import {
+  encodeGroupMentions,
+  filterMentionMembers,
+  formatGroupMentionsForDisplay,
+  getActiveMentionQuery,
+  insertMentionLabel,
+  type GroupMentionMember,
+} from '@/lib/messaging/groupMentions';
 import { subscribeGroupMembersRealtime } from '@/lib/messaging/subscribeGroupMembersRealtime';
 import { subscribeConversationRealtime } from '@/lib/messaging/subscribeConversationRealtime';
 import {
@@ -81,6 +95,7 @@ import {
   UNVERIFIED_DAILY_MESSAGE_CAP,
 } from '@/lib/messaging/trustCaps';
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
+import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -96,18 +111,18 @@ import {
   Alert,
   FlatList,
   ImageBackground,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type NativeSyntheticEvent,
+  type TextInputSelectionChangeEventData,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ProfilePreferences } from '@/types/database';
+import type { PlanStatus, ProfilePreferences } from '@/types/database';
 
 const MAX_VIDEO_BYTES = 14 * 1024 * 1024;
 
@@ -126,7 +141,7 @@ type EditModalState = { messageId: string; draft: string } | null;
 export default function GroupChatThreadScreen() {
   const { id: conversationId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { composerLiftStyle, chatListFooterStyle, typingBackdropStyle } = useKeyboardAnimation();
+  useKeyboardStickyFooterMode();
   const { user, dbUser, profile } = useAuth();
   const { signalTyping, clearTyping } = usePresenceActions();
   const [groupMeta, setGroupMeta] = useState<{
@@ -134,6 +149,7 @@ export default function GroupChatThreadScreen() {
     avatarUrl: string | null;
     planId: string | null;
     planTitle: string | null;
+    linkedPlan: ChatPlanSuggestionSource;
   } | null>(null);
   const [members, setMembers] = useState<GroupChatMemberRow[]>([]);
   const viewerTier = resolveClientEffectiveTier(dbUser);
@@ -141,6 +157,8 @@ export default function GroupChatThreadScreen() {
   const [mediaById, setMediaById] = useState<Record<string, ChatMediaRow>>({});
   const [signedByPath, setSignedByPath] = useState<Record<string, string>>({});
   const [text, setText] = useState('');
+  const [composerSelection, setComposerSelection] = useState({ start: 0, end: 0 });
+  const [mentionPickerSuppressed, setMentionPickerSuppressed] = useState(false);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -173,6 +191,14 @@ export default function GroupChatThreadScreen() {
   const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
   const contactBlockFromSendRef = useRef(false);
   const listRef = useRef<FlatList<UiMessage>>(null);
+  const {
+    listFooterStyle,
+    typingBackdropStyle,
+    scrollToBottomForced,
+    pinListToBottom,
+    onComposerFocus,
+    onListScroll,
+  } = useChatThreadKeyboard({ listRef });
   const verifiedUser = isMessagingFullyVerified(dbUser?.verification_status);
 
   const [appearance, setAppearance] = useState<ChatAppearanceState>(DEFAULT_CHAT_APPEARANCE);
@@ -204,6 +230,44 @@ export default function GroupChatThreadScreen() {
     return map;
   }, [members]);
 
+  const mentionMembers = useMemo<GroupMentionMember[]>(
+    () =>
+      members.map((m) => ({
+        userId: m.user_id,
+        displayName: m.user?.display_name?.trim() || 'Member',
+      })),
+    [members]
+  );
+
+  const mentionNameByUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of mentionMembers) map.set(m.userId, m.displayName);
+    return map;
+  }, [mentionMembers]);
+
+  const mentionAvatarByUserId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const m of members) map.set(m.user_id, m.user?.avatar_url ?? null);
+    return map;
+  }, [members]);
+
+  const activeMention = useMemo(
+    () => getActiveMentionQuery(text, composerSelection.end),
+    [text, composerSelection.end]
+  );
+
+  useEffect(() => {
+    if (!activeMention) setMentionPickerSuppressed(false);
+  }, [activeMention]);
+
+  const mentionPickerMembers = useMemo(
+    () =>
+      filterMentionMembers(mentionMembers, activeMention?.query ?? '', {
+        excludeUserId: user?.id,
+      }),
+    [mentionMembers, activeMention?.query, user?.id]
+  );
+
   const senderDisplayName = useCallback(
     (senderId: string | null, fallback?: string | null) => {
       if (!senderId) return fallback ?? 'System';
@@ -211,6 +275,17 @@ export default function GroupChatThreadScreen() {
       return member?.user?.display_name ?? fallback ?? 'Member';
     },
     [memberByUserId]
+  );
+
+  const smartSuggestions = useMemo(
+    () =>
+      buildChatSuggestionContext(groupMeta?.linkedPlan ?? null, {
+        userId: user?.id,
+        isGroupChat: true,
+        messages,
+        composeValue: text,
+      }),
+    [groupMeta?.linkedPlan, messages, text, user?.id]
   );
 
   const messagesById = useMemo(() => {
@@ -271,15 +346,29 @@ export default function GroupChatThreadScreen() {
         return;
       }
       let planTitle: string | null = null;
+      let linkedPlan: ChatPlanSuggestionSource = null;
       if (conv.plan_id) {
-        const { data: plan } = await supabase.from('plans').select('title').eq('id', conv.plan_id).maybeSingle();
+        const { data: plan } = await supabase
+          .from('plans')
+          .select('title, status, scheduled_at, agreed_scheduled_at, meet_type_id, creator_id')
+          .eq('id', conv.plan_id)
+          .maybeSingle();
         planTitle = plan?.title ?? null;
+        if (plan) {
+          linkedPlan = {
+            status: plan.status as PlanStatus,
+            scheduled_at: plan.agreed_scheduled_at ?? plan.scheduled_at ?? null,
+            meet_type_id: plan.meet_type_id ?? null,
+            creator_id: plan.creator_id,
+          };
+        }
       }
       setGroupMeta({
         name: conv.group_name ?? 'Group chat',
         avatarUrl: conv.group_avatar_url ?? null,
         planId: conv.plan_id ?? null,
         planTitle,
+        linkedPlan,
       });
     })();
   }, [conversationId, user]);
@@ -374,6 +463,11 @@ export default function GroupChatThreadScreen() {
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
+
+  useEffect(() => {
+    if (loading || messages.length === 0) return;
+    pinListToBottom();
+  }, [loading, messages.length, pinListToBottom]);
 
   useEffect(() => {
     if (!conversationId || !isSupabaseConfigured) return;
@@ -515,6 +609,46 @@ export default function GroupChatThreadScreen() {
 
   const assertOutgoingContactAllowed = useCallback(async (_snippet: string) => true, []);
 
+  const handleComposerSelectionChange = useCallback(
+    (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
+      setComposerSelection(event.nativeEvent.selection);
+    },
+    []
+  );
+
+  const handleComposerChange = useCallback(
+    (next: string) => {
+      setText(next);
+      if (conversationId && next.trim().length > 0) signalTyping(conversationId);
+      setComposerSelection((prev) => {
+        const end = prev.end > next.length ? next.length : prev.end;
+        const start = prev.start > next.length ? next.length : prev.start;
+        if (next.length > text.length) {
+          const inserted = next.slice(end - (next.length - text.length), end);
+          if (inserted.includes('@')) setMentionPickerSuppressed(false);
+        }
+        return { start, end };
+      });
+    },
+    [conversationId, signalTyping, text]
+  );
+
+  const handleSelectMention = useCallback(
+    (member: GroupMentionMember) => {
+      if (!activeMention) return;
+      const { text: next, selection } = insertMentionLabel(
+        text,
+        activeMention.start,
+        composerSelection.end,
+        member
+      );
+      setMentionPickerSuppressed(true);
+      setText(next);
+      setComposerSelection({ start: selection, end: selection });
+    },
+    [activeMention, composerSelection.end, text]
+  );
+
   const sendText = useCallback(async () => {
     if (!user || !conversationId || !text.trim() || sending) return;
 
@@ -537,82 +671,89 @@ export default function GroupChatThreadScreen() {
       }
     }
 
-    const body = text.trim();
+    const body = encodeGroupMentions(text.trim(), mentionMembers);
     const contactOk = await assertOutgoingContactAllowed(body);
     if (!contactOk) return;
 
     clearTyping();
-    const mod = await moderateMessageText(body);
-
-    if (mod.status === 'blocked') {
-      Alert.alert('Message blocked', mod.reason ?? 'Policy violation');
-      return;
-    }
-    if (mod.status === 'flagged') {
-      Alert.alert('Heads up', 'This message may be reviewed under our safety policies.');
-    }
 
     const replyId = replyTarget?.messageId ?? null;
     const tempKey = `temp-${Date.now()}`;
-    const optimistic: UiMessage = {
-      id: tempKey,
-      tempKey,
-      text: body,
-      body,
-      media_id: null,
-      sender_id: user.id,
-      created_at: new Date().toISOString(),
-      edited_at: null,
-      deleted_at: null,
-      reply_to_message_id: replyId,
-      is_forwarded: false,
-      forwarded_from_message_id: null,
-      receipt_hidden: false,
-    };
-    setMessages((p) => [...p, optimistic]);
-    setText('');
-    setReplyTarget(null);
-    setSending(true);
 
-    const insertPayload: Record<string, unknown> = {
-      conversation_id: conversationId,
-      sender_id: user.id,
-      text: body,
-      moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
-    };
-    if (replyId) insertPayload.reply_to_message_id = replyId;
+    try {
+      const mod = await moderateMessageText(body);
 
-    const { data, error } = await runMessageSelect((cols) =>
-      supabase
-        .from('messages')
-        .insert(insertPayload)
-        .select(cols)
-        .single()
-    );
+      if (mod.status === 'blocked') {
+        Alert.alert('Message blocked', mod.reason ?? 'Policy violation');
+        return;
+      }
+      if (mod.status === 'flagged') {
+        Alert.alert('Heads up', 'This message may be reviewed under our safety policies.');
+      }
 
-    setSending(false);
+      const optimistic: UiMessage = {
+        id: tempKey,
+        tempKey,
+        text: body,
+        body,
+        media_id: null,
+        sender_id: user.id,
+        created_at: new Date().toISOString(),
+        edited_at: null,
+        deleted_at: null,
+        reply_to_message_id: replyId,
+        is_forwarded: false,
+        forwarded_from_message_id: null,
+        receipt_hidden: false,
+      };
+      setMessages((p) => [...p, optimistic]);
+      setText('');
+      setReplyTarget(null);
+      setSending(true);
 
-    if (error || !data) {
-      setMessages((p) => p.map((m) => (m.tempKey === tempKey ? { ...m, sendFailed: true } : m)));
-      Alert.alert('Could not send', error?.message ?? 'Could not send message');
-      return;
+      const insertPayload: Record<string, unknown> = {
+        conversation_id: conversationId,
+        sender_id: user.id,
+        text: body,
+        moderation_status: mod.status === 'flagged' ? 'flagged' : 'clean',
+      };
+      if (replyId) insertPayload.reply_to_message_id = replyId;
+
+      const { data, error } = await runMessageSelect((cols) =>
+        supabase
+          .from('messages')
+          .insert(insertPayload)
+          .select(cols)
+          .single()
+      );
+
+      if (error || !data) {
+        setMessages((p) => p.map((m) => (m.tempKey === tempKey ? { ...m, sendFailed: true } : m)));
+        Alert.alert('Could not send', error?.message ?? 'Could not send message');
+        return;
+      }
+
+      const sentRow = normalizeChatMessageRow(data as unknown as Record<string, unknown>);
+
+      void persistModerationAfterSend({
+        contentType: 'message',
+        contentId: sentRow.id,
+        textSample: body,
+      });
+
+      setMessages((p) => {
+        const without = p.filter((m) => m.tempKey !== tempKey);
+        const row = sentRow;
+        if (without.some((m) => m.id === row.id)) return without;
+        return [...without, row];
+      });
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
+    } catch (e) {
+      console.error('Group chat send failed:', e);
+      Alert.alert('Could not send', e instanceof Error ? e.message : 'Could not send message');
+    } finally {
+      setSending(false);
     }
-
-    const sentRow = normalizeChatMessageRow(data as unknown as Record<string, unknown>);
-
-    void persistModerationAfterSend({
-      contentType: 'message',
-      contentId: sentRow.id,
-      textSample: body,
-    });
-
-    setMessages((p) => {
-      const without = p.filter((m) => m.tempKey !== tempKey);
-      const row = sentRow;
-      if (without.some((m) => m.id === row.id)) return without;
-      return [...without, row];
-    });
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
   }, [
     user,
     conversationId,
@@ -624,6 +765,7 @@ export default function GroupChatThreadScreen() {
     dbUser?.account_status,
     assertOutgoingContactAllowed,
     replyTarget?.messageId,
+    mentionMembers,
   ]);
 
   const retryOptimistic = useCallback(
@@ -711,7 +853,7 @@ export default function GroupChatThreadScreen() {
 
   const saveEditedMessage = useCallback(async () => {
     if (!editModal || !user || !conversationId) return;
-    const body = editModal.draft.trim();
+    const body = encodeGroupMentions(editModal.draft.trim(), mentionMembers);
     if (!body) {
       Alert.alert('Empty message', 'Add some text or cancel.');
       return;
@@ -755,7 +897,7 @@ export default function GroupChatThreadScreen() {
       textSample: body,
     });
     setMessages((prev) => prev.map((m) => (m.id === result.row.id ? { ...m, ...result.row } : m)));
-  }, [editModal, user, conversationId, messages, assertOutgoingContactAllowed]);
+  }, [editModal, user, conversationId, messages, assertOutgoingContactAllowed, mentionMembers]);
 
   const openForwardSheet = useCallback(
     async (m: UiMessage) => {
@@ -834,8 +976,9 @@ export default function GroupChatThreadScreen() {
     (m: UiMessage) => {
       if (m.tempKey || !user) return;
       const { hasMedia, mediaKind } = messageActionMediaMeta(m, mediaById[m.id]);
-      const copyText = messageCopyText(m, { hasMedia, mediaKind });
-      const rawText = messageDisplayText(m)?.trim() ?? '';
+      const rawStored = messageDisplayText(m)?.trim() ?? '';
+      const rawText = formatGroupMentionsForDisplay(rawStored, mentionNameByUserId);
+      const copyText = rawText || (hasMedia ? (mediaKind === 'video' ? 'Video' : 'Photo') : '');
 
       const items = buildMessageActions({
         message: m,
@@ -883,6 +1026,7 @@ export default function GroupChatThreadScreen() {
       runDeleteForMe,
       runDeleteForEveryone,
       mediaById,
+      mentionNameByUserId,
     ]
   );
 
@@ -979,14 +1123,16 @@ export default function GroupChatThreadScreen() {
 
       const { data: medRow, error: medErr } = await supabase
         .from('media')
-        .insert({
-          parent_table: 'messages',
-          parent_id: msgId,
-          storage_bucket: 'chat-media',
-          storage_path: path,
-          mime_type: contentType,
-          created_by: user.id,
-        })
+        .insert(
+          buildMediaInsertPayload({
+            parent_table: 'messages',
+            parent_id: msgId,
+            storage_bucket: 'chat-media',
+            storage_path: path,
+            mime_type: contentType,
+            created_by: user.id,
+          })
+        )
         .select('id')
         .single();
 
@@ -1087,8 +1233,8 @@ export default function GroupChatThreadScreen() {
   }, []);
 
   const chatListFooter = useCallback(
-    () => <Animated.View style={chatListFooterStyle} />,
-    [chatListFooterStyle]
+    () => <Animated.View style={listFooterStyle} />,
+    [listFooterStyle]
   );
 
   const pinnedPreview = useMemo(() => {
@@ -1107,8 +1253,20 @@ export default function GroupChatThreadScreen() {
       user?.id ?? '',
       hasMedia
     );
-    return { messageId: pinId, senderLabel, preview: quote.preview };
-  }, [pinState.pinnedMessageId, messagesById, user?.id, senderDisplayName, hasMediaForMessage, hiddenForMeIds]);
+    return {
+      messageId: pinId,
+      senderLabel,
+      preview: formatGroupMentionsForDisplay(quote.preview, mentionNameByUserId),
+    };
+  }, [
+    pinState.pinnedMessageId,
+    messagesById,
+    user?.id,
+    senderDisplayName,
+    hasMediaForMessage,
+    hiddenForMeIds,
+    mentionNameByUserId,
+  ]);
 
   const bubblePropsFor = useCallback(
     (m: UiMessage): { body: string | null; media: ChatBubbleMedia | null; legacy: string | null } => {
@@ -1206,7 +1364,7 @@ export default function GroupChatThreadScreen() {
                     accessibilityLabel={`Open plan: ${groupMeta.planTitle ?? 'Plan'}`}
                   >
                     <LinearGradient
-                      colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.16)']}
+                      colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.16)']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={styles.headerMeetupPill}
@@ -1248,7 +1406,7 @@ export default function GroupChatThreadScreen() {
 
         {!verifiedUser ? (
           <LinearGradient
-            colors={['rgba(255, 193, 7, 0.2)', 'rgba(108, 99, 255, 0.12)']}
+            colors={['rgba(255, 193, 7, 0.2)', 'rgba(94, 82, 255, 0.12)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.trustBanner}
@@ -1260,10 +1418,9 @@ export default function GroupChatThreadScreen() {
           </LinearGradient>
         ) : null}
 
+        <View style={styles.threadBody}>
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
+          <ChatThreadSkeleton />
         ) : (
           <FlatList
             ref={listRef}
@@ -1272,9 +1429,13 @@ export default function GroupChatThreadScreen() {
             keyExtractor={(m) => m.tempKey ?? m.id}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets={false}
+            contentInsetAdjustmentBehavior="never"
             ListFooterComponent={chatListFooter}
-            contentContainerStyle={styles.list}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            contentContainerStyle={[styles.list, styles.listBottomAnchored]}
+            onContentSizeChange={() => pinListToBottom()}
+            onScroll={onListScroll}
+            scrollEventThrottle={16}
             onStartReachedThreshold={0.25}
             onStartReached={() => void loadOlder()}
             onScrollToIndexFailed={(info) => {
@@ -1331,7 +1492,7 @@ export default function GroupChatThreadScreen() {
               const quote = quotePreview
                 ? {
                     senderLabel: quotePreview.senderLabel,
-                    preview: quotePreview.preview,
+                    preview: formatGroupMentionsForDisplay(quotePreview.preview, mentionNameByUserId),
                     isDeleted: quotePreview.isDeleted,
                     onPress: () => scrollToMessage(quotePreview.messageId),
                   }
@@ -1368,6 +1529,7 @@ export default function GroupChatThreadScreen() {
                     onLongPress={onLongPress}
                     meta={meta}
                     theme={bubbleTheme}
+                    mentionNameByUserId={mentionNameByUserId}
                   />
                   {item.tempKey && item.sendFailed ? (
                     <ChatBubbleStatus failed onRetry={() => void retryOptimistic(item.tempKey!)} />
@@ -1378,30 +1540,33 @@ export default function GroupChatThreadScreen() {
           />
         )}
 
+        <KeyboardStickyView offset={{ closed: 0, opened: 0 }}>
         <Animated.View
           style={[
             styles.composerSheet,
             {
-              paddingBottom: insets.bottom,
+              paddingBottom: Math.max(insets.bottom, spacing.sm),
               backgroundColor: chatPreset.composerBg,
               borderTopColor: chatPreset.composerBorder,
             },
-            composerLiftStyle,
           ]}
         >
+          <SmartSuggestionsBar
+            suggestions={smartSuggestions}
+            backgroundColor={chatPreset.composerBg}
+            borderColor={chatPreset.composerBorder}
+            onSelect={setText}
+          />
           <ChatComposer
             preset={chatPreset}
             threadLook={messageInputLook}
             value={text}
-            onChangeText={(t) => {
-              setText(t);
-              if (conversationId && t.trim().length > 0) signalTyping(conversationId);
-            }}
+            onChangeText={handleComposerChange}
             onSend={() => void sendText()}
             onAttach={() => void pickAndSendMedia()}
             sending={sending}
             attachDisabled={!verifiedUser}
-            placeholder="Message…"
+            placeholder="Message… (@ to mention)"
             onPlan={() => router.push('/plan/create' as Href)}
             onOffer={onQuickSendOffer}
             onPlace={() => void suggestMeetingArea()}
@@ -1411,8 +1576,21 @@ export default function GroupChatThreadScreen() {
                 : null
             }
             onCancelReply={() => setReplyTarget(null)}
+            onComposerFocus={onComposerFocus}
+            selection={composerSelection}
+            onSelectionChange={handleComposerSelectionChange}
+            mentionPicker={
+              <GroupMentionPicker
+                visible={!!activeMention && !mentionPickerSuppressed}
+                members={mentionPickerMembers}
+                avatarByUserId={mentionAvatarByUserId}
+                onSelect={handleSelectMention}
+              />
+            }
           />
         </Animated.View>
+        </KeyboardStickyView>
+        </View>
 
         {copyAck ? (
           <View style={[styles.copyToast, { bottom: insets.bottom + 88 }]} pointerEvents="none">
@@ -1426,10 +1604,7 @@ export default function GroupChatThreadScreen() {
           animationType="fade"
           onRequestClose={() => setEditModal(null)}
         >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.editOverlay}
-          >
+          <ControllerKeyboardAvoidingView behavior="padding" style={styles.editOverlay}>
             <View style={styles.editModalRoot}>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditModal(null)} />
               <View
@@ -1458,7 +1633,7 @@ export default function GroupChatThreadScreen() {
                 </View>
               </View>
             </View>
-          </KeyboardAvoidingView>
+          </ControllerKeyboardAvoidingView>
         </Modal>
 
         <ChatAppearanceSheet
@@ -1549,7 +1724,7 @@ const styles = StyleSheet.create({
   typingBackdrop: { backgroundColor: colors.text },
   headerGradient: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108, 99, 255, 0.1)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.1)',
   },
   header: {
     flexDirection: 'row',
@@ -1571,8 +1746,9 @@ const styles = StyleSheet.create({
   },
   headerNameCol: { flexShrink: 1, maxWidth: '64%', minWidth: 0 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
-  headerName: { fontSize: 18, fontWeight: '800', color: colors.text, letterSpacing: -0.3 },
-  headerPresenceCap: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4 },
+  headerName: { fontSize: 18, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
+  headerPresenceCap: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 4, fontFamily: fonts.medium, },
   headerMeetupPillOuter: { alignSelf: 'flex-start', marginTop: 6, borderRadius: radius.button, overflow: 'hidden' },
   headerMeetupPill: {
     flexDirection: 'row',
@@ -1587,16 +1763,19 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.text,
   },
   senderName: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     marginBottom: 4,
     marginHorizontal: spacing.md + 4,
   },
-  adminLabel: { color: colors.primary, fontWeight: '700' },
+  adminLabel: { color: colors.primary, fontWeight: '700',
+    fontFamily: fonts.medium,},
   systemRow: { alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.lg },
   systemText: {
     fontSize: 12,
@@ -1615,9 +1794,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108, 99, 255, 0.1)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.1)',
   },
-  trustText: { flex: 1, fontSize: 12, color: colors.text, fontWeight: '700', lineHeight: 17 },
+  trustText: { flex: 1, fontSize: 12, color: colors.text, fontWeight: '700',
+    fontFamily: fonts.medium, lineHeight: 17 },
   composerSheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
@@ -1630,11 +1810,15 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   listFlex: { flex: 1 },
+  threadBody: { flex: 1, justifyContent: 'flex-end' },
   list: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingBottom: CHAT_LIST_BOTTOM_PAD,
+  },
+  listBottomAnchored: {
     flexGrow: 1,
+    justifyContent: 'flex-end',
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   editOverlay: { flex: 1 },
@@ -1656,7 +1840,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  editTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  editTitle: { fontSize: 17, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, marginBottom: spacing.sm },
   editInput: {
     minHeight: 88,
     maxHeight: 200,
@@ -1675,7 +1860,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   editBtn: { paddingVertical: 8, paddingHorizontal: 12 },
-  editBtnTextMuted: { fontSize: 16, color: colors.textMuted, fontWeight: '600' },
+  editBtnTextMuted: { fontSize: 16, color: colors.textMuted, fontWeight: '600',
+    fontFamily: fonts.medium,},
   editBtnPrimary: { color: colors.primary },
   copyToast: {
     position: 'absolute',
@@ -1685,5 +1871,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.button,
   },
-  copyToastText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  copyToastText: { color: '#fff', fontSize: 14, fontWeight: '700',
+    fontFamily: fonts.medium,},
 });

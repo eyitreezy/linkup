@@ -11,11 +11,12 @@ import { View } from 'react-native';
 
 export default function TabsLayout() {
   const { session, profile, loading } = useAuth();
-  if (loading) {
-    return null;
-  }
+
   if (!session) {
     return <Redirect href={'/(auth)/login' as Href} />;
+  }
+  if (loading) {
+    return null;
   }
   if (profile?.onboarding_status === 'pending') {
     return <Redirect href={'/onboarding' as Href} />;
@@ -58,6 +59,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="meetr"
+        options={{
+          headerShown: false,
+          tabBarLabel: 'Meetr',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="compass" color={color} size={size + 4} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="messages"
         options={{
           headerShown: false,
@@ -79,14 +90,6 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarLabel: 'Offers',
           tabBarIcon: ({ color, size }) => <Ionicons name="pricetag" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          headerShown: false,
-          tabBarLabel: 'Wallet',
-          tabBarIcon: ({ color, size }) => <Ionicons name="wallet" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

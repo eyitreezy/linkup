@@ -1,5 +1,5 @@
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { ForwardTarget } from '@/lib/messaging/fetchForwardTargets';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -150,10 +151,11 @@ const styles = StyleSheet.create({
   rowPressed: { backgroundColor: colors.background },
   nameCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name: { fontSize: 16, fontWeight: '700', color: colors.text, flexShrink: 1 },
+  name: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, flexShrink: 1 },
   center: { paddingVertical: spacing.xl, alignItems: 'center' },
   empty: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
-  emptyText: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
+  emptyText: { fontSize: 15, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
   cancelPill: {
     backgroundColor: colors.surface,
     borderRadius: radius.button,
@@ -163,5 +165,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   cancelPillPressed: { opacity: 0.88 },
-  cancelText: { fontSize: 16, fontWeight: '700', color: colors.textMuted },
+  cancelText: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted },
 });

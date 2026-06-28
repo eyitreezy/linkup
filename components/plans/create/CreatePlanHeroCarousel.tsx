@@ -2,7 +2,7 @@
  * Inspiration hero — full-width photo slides with fade transitions (no dot pager).
  * Assets: `assets/create-plan-hero/*.jpg` (see `lib/plans/createPlanHeroSlides.ts`).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { CREATE_PLAN_HERO_SLIDES } from '@/lib/plans/createPlanHeroSlides';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -98,6 +98,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -119,7 +120,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     justifyContent: 'flex-end',
   },
-  cardTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginTop: spacing.sm },
+  cardTitle: { fontSize: 22, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff', marginTop: spacing.sm },
   cardCap: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.92)',

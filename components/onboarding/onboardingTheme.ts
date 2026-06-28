@@ -4,9 +4,9 @@ import { colors, radius, spacing } from '@/constants/theme';
 export const onboarding = {
   accent: colors.primary,
   accentSecondary: colors.secondary,
-  accentSoft: 'rgba(108, 99, 255, 0.12)',
-  cardBg: 'rgba(255,255,255,0.96)',
-  glassBorder: 'rgba(108, 99, 255, 0.18)',
+  accentSoft: 'rgba(94, 82, 255, 0.12)',
+  cardBg: '#FFFFFF',
+  glassBorder: 'rgba(94, 82, 255, 0.18)',
   muted: colors.textMuted,
   text: colors.text,
   radiusXl: radius.xl,

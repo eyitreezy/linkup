@@ -1,6 +1,6 @@
 import { Button } from '@/components/Button';
 import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { ESCROW_DISPUTE_REASONS } from '@/lib/escrow/disputeReasons';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,7 +32,7 @@ export function OpenDisputeModal({ visible, loading, onClose, onSubmit }: Props)
           <View style={styles.handle} />
 
           <LinearGradient
-            colors={['rgba(108,99,255,0.12)', 'rgba(255,101,132,0.06)', 'transparent']}
+            colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.06)', 'transparent']}
             style={styles.topGlow}
           />
 
@@ -64,7 +64,7 @@ export function OpenDisputeModal({ visible, loading, onClose, onSubmit }: Props)
           <Text style={styles.label}>Tell us more (optional)</Text>
           <TextInput
             style={styles.input}
-            placeholder="Add context — helps us resolve faster."
+            placeholder="Add context. Helps us resolve faster."
             placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={4}
@@ -128,8 +128,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.2)',
   },
   headerText: { flex: 1, minWidth: 0 },
-  title: { fontSize: 22, fontWeight: '900', color: colors.text, letterSpacing: -0.3, marginBottom: 4 },
-  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 21, fontWeight: '600' },
+  title: { fontSize: 22, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3, marginBottom: 4 },
+  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 21, fontWeight: '600', fontFamily: fonts.medium, },
   label: {
     fontSize: 13,
     fontWeight: '800',
@@ -147,6 +148,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     backgroundColor: colors.authInputBg,
     marginBottom: spacing.lg,

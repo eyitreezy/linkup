@@ -58,7 +58,6 @@ export function boost24Label(meta: BoostQuotaMeta | undefined, allowed: boolean)
   const used = meta?.boosts_24hr_used ?? 0;
   if (monthly === -1) return 'Boost plan (24h)';
   if (monthly != null && used >= monthly) return `No boosts left · resets ${getMonthResetLabel()}`;
-  if (monthly != null) return `Boost plan (24h) · ${monthly - used} left`;
   return 'Boost plan (24h)';
 }
 
@@ -68,7 +67,6 @@ export function boost72Label(meta: BoostQuotaMeta | undefined, allowed: boolean)
   const used = meta?.boosts_72hr_used ?? 0;
   if (monthly === -1) return 'Boost plan (72h)';
   if (monthly != null && used >= monthly) return `No 72h boosts left · resets ${getMonthResetLabel()}`;
-  if (monthly != null && monthly > 0) return `Boost 72h · ${monthly - used} left`;
   return 'Boost plan (72h)';
 }
 

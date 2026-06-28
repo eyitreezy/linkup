@@ -6,6 +6,7 @@ import { View } from 'react-native';
 
 export type AuthSheetScrollAPI = {
   scrollFieldIntoView: (fieldRef: RefObject<View | null>) => void;
+  keyboardOpen: boolean;
 };
 
 export const AuthSheetScrollContext = createContext<AuthSheetScrollAPI | null>(null);

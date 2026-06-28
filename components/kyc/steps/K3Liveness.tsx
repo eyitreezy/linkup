@@ -4,7 +4,7 @@ import { KycLivenessVideoPreview } from '@/components/kyc/KycLivenessVideoPrevie
 import { KycSectionHead } from '@/components/kyc/KycSectionHead';
 import { KycStepFooter } from '@/components/kyc/KycStepFooter';
 import { kycColors, kycInboxStyles, kycStyles } from '@/components/kyc/kycTheme';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -168,7 +168,7 @@ export function K3Liveness({ videoUri, onVideoChange, onBack, onNext }: Props) {
         <KycSectionHead title="Live prompts" />
         <View style={kycInboxStyles.frostedCard}>
           <LinearGradient
-            colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)']}
+            colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.promptInner}
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: 'rgba(108,99,255,0.12)',
+    backgroundColor: 'rgba(94, 82, 255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -316,8 +316,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   promptTextCol: { flex: 1 },
-  promptTitle: { fontSize: 17, fontWeight: '900', color: kycColors.text },
-  promptHint: { fontSize: 14, color: kycColors.muted, marginTop: 4, fontWeight: '600', lineHeight: 20 },
+  promptTitle: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: kycColors.text },
+  promptHint: { fontSize: 14, color: kycColors.muted, marginTop: 4, fontWeight: '600', lineHeight: 20, fontFamily: fonts.medium, },
   videoCard: { padding: spacing.sm },
   videoBox: {
     height: 340,
@@ -338,7 +339,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.55)',
-    backgroundColor: 'rgba(108,99,255,0.06)',
+    backgroundColor: 'rgba(94, 82, 255,0.06)',
   },
   corner: {
     position: 'absolute',
@@ -356,6 +357,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.92)',
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
@@ -369,10 +371,12 @@ const styles = StyleSheet.create({
   countdownNum: {
     fontSize: 72,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#fff',
     lineHeight: 80,
   },
-  countdownLbl: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.9)', marginTop: spacing.sm },
+  countdownLbl: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: 'rgba(255,255,255,0.9)', marginTop: spacing.sm },
   recordingOverlay: {
     position: 'absolute',
     top: spacing.md,
@@ -396,7 +400,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#fff',
   },
-  recPillTxt: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  recPillTxt: { color: '#fff', fontWeight: '800',
+    fontFamily: fonts.bold, fontSize: 13 },
   progressTrack: {
     height: 4,
     borderRadius: 2,
@@ -415,7 +420,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
   },
-  camLoadingTxt: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  camLoadingTxt: { color: '#fff', fontWeight: '600',
+    fontFamily: fonts.medium, fontSize: 14 },
   perm: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg, minHeight: 280 },
   permIcon: {
     width: 72,
@@ -430,6 +436,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     lineHeight: 22,
     fontSize: 15,
   },
@@ -445,6 +452,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(245, 158, 11, 0.28)',
   },
-  tipsTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: kycColors.text, lineHeight: 19 },
+  tipsTxt: { flex: 1, fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: kycColors.text, lineHeight: 19 },
   actions: { marginBottom: spacing.sm, paddingHorizontal: spacing.md },
 });

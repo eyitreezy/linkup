@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { trialDaysRemaining } from '@/lib/subscription/effectiveTier';
 import type { DbUser } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,12 +56,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(108,99,255,0.08)',
+    backgroundColor: 'rgba(94, 82, 255,0.08)',
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.15)',
+    borderColor: 'rgba(94, 82, 255,0.15)',
   },
   main: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  text: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text },
-  cta: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  text: { flex: 1, fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  cta: { fontSize: 13, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
 });

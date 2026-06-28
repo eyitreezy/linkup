@@ -1,6 +1,6 @@
 import { Avatar } from '@/components/Avatar';
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
@@ -35,7 +35,7 @@ export function EscrowCounterpartyHeader({ title, counterparty, youLabel }: Prop
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.06)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.06)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.topGlow}
@@ -47,7 +47,7 @@ export function EscrowCounterpartyHeader({ title, counterparty, youLabel }: Prop
       </Text>
 
       <LinearGradient
-        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.rule}
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     overflow: 'hidden',
     ...cardShadow,
   },
@@ -119,6 +119,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -127,6 +128,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.md,
     lineHeight: 26,
@@ -159,6 +161,7 @@ const styles = StyleSheet.create({
   cpLabel: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -170,7 +173,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: 4,
   },
-  name: { fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.2 },
+  name: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   verifiedPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,7 +186,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.25)',
   },
-  verifiedPillTxt: { fontSize: 11, fontWeight: '800', color: '#047857' },
+  verifiedPillTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#047857' },
   youRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -190,7 +195,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.12)',
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
   },
-  you: { flex: 1, fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600' },
+  you: { flex: 1, fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600',
+    fontFamily: fonts.medium,},
 });

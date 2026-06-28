@@ -42,6 +42,65 @@ Reset messages use the same redirect (`linkup://auth/callback`) and the same SMT
 
 If a doc in this repo is named `MESSAGEBIRD_PHONE_SETUP.md`, that file is **SMS-only** (phone OTP), not mail API setup.
 
+## “Undelivered mail returned to sender” (bounce to admin@flowdecklabs.com)
+
+Signup confirmation is sent by **Supabase Auth**, not the LinkUp app. A bounce to **admin@flowdecklabs.com** means that address is your configured **SMTP sender / return-path** and the message **never reached the user’s inbox** (or was rejected by their provider).
+
+**This is not fixable in the mobile app** — fix it in Supabase + your mail provider.
+
+### 1. Read the bounce email
+
+Open the bounce in admin@flowdecklabs.com and note the SMTP status line, for example:
+
+| Code / message | Usual cause |
+|----------------|-------------|
+| `553` / sender address rejected | **From** address not allowed on your SMTP account |
+| `550` / relay access denied | Wrong SMTP host, port, username, or password |
+| `550` / domain not verified | Sending domain missing SPF/DKIM in DNS |
+| `550` / user unknown | Typo in the signup email (test with Gmail) |
+
+### 2. Fix Supabase Auth SMTP (production)
+
+1. [Supabase Dashboard](https://supabase.com/dashboard) → project **LinkUp** (`othikifibhjpfgyxpzcu`) → **Project Settings → Authentication → SMTP Settings**.
+2. Enable **custom SMTP** (default Supabase mail is dev-only and often bounces or rate-limits).
+3. Use a **transactional provider** (Resend is already used for in-app notification mail in this repo):
+
+   | Field | Resend example |
+   |-------|----------------|
+   | Host | `smtp.resend.com` |
+   | Port | `465` (SSL) or `587` (STARTTLS) |
+   | Username | `resend` |
+   | Password | Your Resend API key (`re_…`) |
+   | Sender email | `LinkUp <auth@flowdecklabs.com>` or `noreply@flowdecklabs.com` |
+
+4. **Do not use `admin@`** as the sender unless that mailbox is explicitly authorized on your SMTP provider. Prefer `auth@` or `noreply@` on a **verified domain**.
+
+### 3. Verify the domain in Resend (or your provider)
+
+1. [Resend → Domains](https://resend.com/domains) → add **flowdecklabs.com**.
+2. Add the **SPF**, **DKIM**, and (recommended) **DMARC** DNS records Resend shows.
+3. Wait until status is **Verified** before testing signup again.
+
+`RESEND_FROM` on the `notification-email` Edge Function is **separate** from Auth SMTP — both need a verified domain, but you must configure **Auth SMTP in the Supabase Dashboard** for signup confirm emails.
+
+### 4. Supabase Auth checklist
+
+- **Authentication → Providers → Email** — Email enabled; **Confirm email** on for production.
+- **Authentication → URL Configuration → Redirect URLs** — include `linkup://auth/callback`.
+- **Authentication → Email Templates → Confirm signup** — paste HTML from [`supabase/email-templates/confirmation.html`](../supabase/email-templates/confirmation.html).
+- **Authentication → Logs** — after a test signup, check for mail send errors.
+- Turn **link tracking off** on your SMTP provider for auth mail (see [PASSWORD_RESET_EMAIL_SETUP.md](./PASSWORD_RESET_EMAIL_SETUP.md)).
+
+### 5. Dev shortcut (while fixing SMTP)
+
+**Authentication → Providers → Email** → turn **Confirm email** **off** temporarily so sign-up works without sending mail. Turn it back on before production.
+
+### 6. Test
+
+1. Sign up with a **real Gmail** address you control.
+2. Confirm the user receives mail from your new sender (not `noreply@mail.app.supabase.io` unless you intentionally use default mail).
+3. Tap the link on the **same device** with the dev/production build installed.
+
 ## “Email rate limit exceeded”
 
 This comes from **Supabase Auth**, not the LinkUp app. The **default** mailer is meant for testing and enforces **very low** limits (on the order of a few auth emails per hour per project or address).

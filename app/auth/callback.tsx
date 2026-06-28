@@ -2,7 +2,8 @@
  * Email confirmation + OAuth (`linkup://auth/callback?...`).
  * Reads full URL from Linking — query/hash tokens are not in the route path alone.
  */
-import { colors, radius } from '@/constants/theme';
+import { AuthCallbackSkeleton } from '@/components/auth/AuthCallbackSkeleton';
+import { colors, radius, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { completePostAuthFromDeepLink } from '@/lib/auth/completePostAuth';
 import { isRecoveryAuthUrl } from '@/lib/auth/passwordReset';
@@ -12,7 +13,7 @@ import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 import { Href, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Phase = 'working' | 'failed';
 
@@ -99,12 +100,7 @@ export default function AuthCallbackScreen() {
     );
   }
 
-  return (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.hint}>{recoveryFlow ? 'Opening password reset…' : 'Confirming your email…'}</Text>
-    </View>
-  );
+  return <AuthCallbackSkeleton />;
 }
 
 const styles = StyleSheet.create({
@@ -116,8 +112,9 @@ const styles = StyleSheet.create({
     gap: 16,
     padding: 24,
   },
-  hint: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
-  err: { color: colors.text, textAlign: 'center', lineHeight: 22, fontSize: 15 },
+  hint: { color: colors.textMuted, fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium,},
+  err: { color: colors.text, textAlign: 'center', lineHeight: 22, fontSize: 15, fontFamily: fonts.regular, },
   btn: {
     marginTop: 8,
     paddingVertical: 12,
@@ -126,5 +123,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   btnPressed: { opacity: 0.85 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  btnText: { color: '#fff', fontWeight: '700',
+    fontFamily: fonts.medium, fontSize: 16 },
 });

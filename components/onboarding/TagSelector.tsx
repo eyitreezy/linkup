@@ -1,6 +1,6 @@
 import { authSoftLabelStyle } from '@/components/Input';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -80,6 +80,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipDisabled: { opacity: 0.4 },
-  chipText: { fontSize: 14, fontWeight: '600', color: onboarding.text },
-  chipTextOn: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2 },
+  chipText: { fontSize: 14, fontWeight: '600',
+    fontFamily: fonts.medium, color: onboarding.text },
+  chipTextOn: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.2, fontFamily: fonts.bold, },
 });

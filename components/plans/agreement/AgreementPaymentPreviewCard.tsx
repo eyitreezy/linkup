@@ -1,7 +1,7 @@
 /**
  * PL6a — explains what happens on the next screen (escrow / Flutterwave) before the user taps through.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
   formatEscrowMoney,
   patternLabel,
@@ -28,7 +28,7 @@ function bodyForVariant(preview: AgreementPaymentPreview, variant: Props['varian
     return `No charge on this screen. ${theirs} will be held in escrow on the next screen once your guest completes checkout. Total commitment: ${total}.`;
   }
   if (variant === 'split_you_pay') {
-    return `On the next screen you'll pay ${yours} (your share of ${total}). ${theirs} is paid separately by your guest — both legs must complete before the plan goes active.`;
+    return `On the next screen you'll pay ${yours} (your share of ${total}). ${theirs} is paid separately by your guest. Both legs must complete before the plan goes active.`;
   }
   if (variant === 'split_waiting') {
     return `You've confirmed your share. We're waiting for ${theirs} from your guest on the escrow screen. Total held when complete: ${total}.`;
@@ -36,7 +36,7 @@ function bodyForVariant(preview: AgreementPaymentPreview, variant: Props['varian
   if (pattern === 'C') {
     return `On the next screen you'll pay ${yours} via Flutterwave. Funds stay in escrow until the meetup is confirmed.`;
   }
-  return `On the next screen you'll pay ${yours} via Flutterwave. Funds stay in escrow until the meetup is confirmed — not sent directly to the other person.`;
+  return `On the next screen you'll pay ${yours} via Flutterwave. Funds stay in escrow until the meetup is confirmed and are not sent directly to the other person.`;
 }
 
 export function AgreementPaymentPreviewCard({ preview, variant }: Props) {
@@ -52,7 +52,7 @@ export function AgreementPaymentPreviewCard({ preview, variant }: Props) {
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.22)', 'rgba(255,101,132,0.12)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.22)', 'rgba(255, 74, 114,0.12)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.glow}
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -121,20 +121,23 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
-  title: { fontSize: 18, fontWeight: '900', color: colors.text, letterSpacing: -0.3 },
+  title: { fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3 },
   chipRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm },
   chip: {
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
   },
-  chipTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
-  chipMuted: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  body: { fontSize: 14, fontWeight: '600', color: colors.textMuted, lineHeight: 21 },
+  chipTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
+  chipMuted: { fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
+  body: { fontSize: 14, fontWeight: '600', color: colors.textMuted, lineHeight: 21, fontFamily: fonts.medium, },
 });

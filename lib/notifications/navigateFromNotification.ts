@@ -9,6 +9,10 @@ type Nav = { push: (href: Href) => void };
 export function hrefFromNotificationPayload(data: NotificationPayload | null | undefined): Href | null {
   if (!data || typeof data !== 'object') return null;
   if (typeof data.href === 'string' && data.href.startsWith('/')) {
+    const adminTab = typeof data.adminTab === 'string' ? data.adminTab : undefined;
+    if (data.href === '/admin' && adminTab) {
+      return `/admin?tab=${adminTab}` as Href;
+    }
     return data.href as Href;
   }
   if (typeof data.ticketId === 'string' && data.ticketId.length > 0) {
@@ -47,15 +51,25 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     return;
   }
   if (t === 'credit_issued' || t === 'credit_expiring') {
-    router.push('/(tabs)/wallet' as Href);
+    router.push('/wallet' as Href);
     return;
   }
   if (t === 'trial_started' || t === 'trial_expiring' || t === 'trial_expired') {
     router.push('/subscription' as Href);
     return;
   }
-  if (t === 'report_submitted' || t === 'moderation_flagged') {
-    router.push('/admin' as Href);
+  if (t === 'report_submitted' || t === 'moderation_flagged' || t === 'meet_type_submitted') {
+    const adminTab =
+      data && typeof data === 'object' && typeof (data as { adminTab?: string }).adminTab === 'string'
+        ? (data as { adminTab: string }).adminTab
+        : t === 'meet_type_submitted'
+          ? 'meet_types'
+          : undefined;
+    router.push((adminTab ? `/admin?tab=${adminTab}` : '/admin') as Href);
+    return;
+  }
+  if (t === 'meet_type_approved' || t === 'meet_type_rejected') {
+    router.push('/plan/create' as Href);
     return;
   }
   /** Only open the inbox when we know this tap maps to a notification row (has a type). Empty payloads must not navigate (avoids stray pushes during auth / OAuth). */

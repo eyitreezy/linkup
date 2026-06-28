@@ -1,7 +1,7 @@
 /**
  * Bottom-sheet style message actions (copy, edit, delete) — consistent on iOS and Android.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -144,6 +145,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
   },
   rowLabelDanger: {
@@ -164,6 +166,7 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
   },
 });

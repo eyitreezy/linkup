@@ -14,7 +14,7 @@ export function KycSectionHead({ title }: Props) {
         <Text style={kycInboxStyles.sectionTitle}>{title}</Text>
       </View>
       <LinearGradient
-        colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={kycInboxStyles.sectionRule}

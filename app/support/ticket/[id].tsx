@@ -4,7 +4,7 @@
 import { Button } from '@/components/Button';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { TicketReplyBubble } from '@/components/support/TicketReplyBubble';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbSupportTicket, DbTicketReply, TicketStatus } from '@/types/database';
@@ -44,7 +44,7 @@ function statusStyle(s: TicketStatus): { bg: string; fg: string } {
   if (s === 'in_progress') {
     return { bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' };
   }
-  return { bg: 'rgba(108, 99, 255, 0.12)', fg: colors.primary };
+  return { bg: 'rgba(94, 82, 255, 0.12)', fg: colors.primary };
 }
 
 export default function SupportTicketDetailScreen() {
@@ -157,7 +157,7 @@ export default function SupportTicketDetailScreen() {
       </View>
 
       <LinearGradient
-        colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+        colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.cardOuter}
@@ -224,11 +224,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
-  topTitle: { flex: 1, fontSize: 18, fontWeight: '900', color: colors.text },
+  topTitle: { flex: 1, fontSize: 18, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.button },
-  pillTxt: { fontSize: 12, fontWeight: '800' },
+  pillTxt: { fontSize: 12, fontWeight: '800', fontFamily: fonts.bold, },
   cardOuter: {
     borderRadius: radius.xl,
     padding: 2,
@@ -242,8 +243,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.92)',
   },
-  subject: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  meta: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  subject: { fontSize: 16, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  meta: { fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
   seedBubble: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
@@ -258,11 +260,13 @@ const styles = StyleSheet.create({
   seedLbl: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  seedBody: { fontSize: 15, fontWeight: '600', color: colors.text, lineHeight: 22 },
+  seedBody: { fontSize: 15, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 22 },
   composer: {
     marginHorizontal: spacing.md,
     marginTop: spacing.md,
@@ -271,10 +275,11 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 88,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.2)',
+    borderColor: 'rgba(94, 82, 255, 0.2)',
     borderRadius: radius.lg,
     padding: spacing.md,
     fontSize: 15,
+    fontFamily: fonts.regular,
     color: colors.text,
     backgroundColor: 'rgba(255,255,255,0.9)',
   },
@@ -283,6 +288,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 21,
     textAlign: 'center',
@@ -291,6 +297,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginVertical: spacing.lg,
   },

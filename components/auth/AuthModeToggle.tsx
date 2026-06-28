@@ -2,7 +2,7 @@
  * Login / Sign up segmented control — gradient fill on active segment (reliable touches).
  */
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { radius, spacing } from '@/constants/theme';
+import { radius, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -86,11 +86,13 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: 'rgba(255,255,255,0.55)',
     letterSpacing: -0.2,
   },
   labelOn: {
     color: '#FFFFFF',
     fontWeight: '800',
+    fontFamily: fonts.bold,
   },
 });

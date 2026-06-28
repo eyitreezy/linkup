@@ -1,5 +1,13 @@
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
+import {
+  discoverPriceFilterBounds,
+  hasDiscoverPriceFilter,
+  type DiscoverPriceFilter,
+} from '@/lib/discovery/discoverPriceFilter';
+import { distanceKm } from '@/lib/location';
 import { fetchConnectedCreatorIds } from '@/lib/plans/discoverConnections';
+import { RADIUS_VISIBILITY_KM } from '@/lib/plans/planVisibilityConfig';
+import { filterTierRelativePremiumVisibilityPlans } from '@/lib/plans/tierRelativePremiumVisibility';
 import { supabase } from '@/lib/supabase';
 import type { DbMeetType, DbPlan, DbProfile, SubscriptionTier } from '@/types/database';
 
@@ -27,19 +35,45 @@ type ProfileRow = Pick<
   | 'masked_activity_enabled'
 >;
 
-/** Defence-in-depth when RLS does not filter premium visibility rows. */
+/** Defence-in-depth for visibility='premium' — tier-relative audience vs viewer. */
 export function filterPremiumVisibilityPlans(
   rows: PlanFeedRow[],
-  viewerTier: SubscriptionTier
+  viewerTier: SubscriptionTier,
+  viewerUserId: string | null,
+  viewerLat: number | null,
+  viewerLng: number | null
 ): PlanFeedRow[] {
-  if (viewerTier === 'GOLD' || viewerTier === 'PLATINUM') return rows;
-  return rows.filter((row) => row.visibility !== 'premium');
+  return filterTierRelativePremiumVisibilityPlans(
+    rows,
+    viewerUserId,
+    viewerTier,
+    viewerLat,
+    viewerLng
+  );
+}
+
+/** Defence-in-depth for visibility='radius' — uses viewer search origin, not profile-only RLS. */
+export function filterRadiusVisibilityPlans(
+  rows: PlanFeedRow[],
+  viewerUserId: string | null,
+  viewerLat: number | null,
+  viewerLng: number | null
+): PlanFeedRow[] {
+  return rows.filter((plan) => {
+    if (plan.visibility !== 'radius') return true;
+    if (viewerUserId && plan.creator_id === viewerUserId) return true;
+    if (plan.latitude == null || plan.longitude == null) return true;
+    if (viewerLat == null || viewerLng == null) return false;
+    const distance = distanceKm(viewerLat, viewerLng, plan.latitude, plan.longitude);
+    return distance <= RADIUS_VISIBILITY_KM;
+  });
 }
 
 export async function fetchPlansPage(
   from: number,
   to: number,
-  viewerUserId: string | null
+  viewerUserId: string | null,
+  priceFilter?: DiscoverPriceFilter | null
 ): Promise<{ plans: PlanRowFromDb[]; error: string | null }> {
   const nowIso = new Date().toISOString();
   /** PostgREST prefers quoted timestamptz when the value contains `:` */
@@ -79,7 +113,12 @@ export async function fetchPlansPage(
     .or(activeWindowOr);
 
   if (viewerUserId) {
-    const visParts = ['visibility.eq.public', 'visibility.eq.radius', `creator_id.eq.${viewerUserId}`];
+    const visParts = [
+      'visibility.eq.public',
+      'visibility.eq.radius',
+      'visibility.eq.premium',
+      `creator_id.eq.${viewerUserId}`,
+    ];
     if (connectedCreatorIds.length > 0) {
       visParts.push(
         `and(visibility.eq.friends,creator_id.in.(${connectedCreatorIds.join(',')}))`
@@ -90,6 +129,16 @@ export async function fetchPlansPage(
     q = q.in('visibility', ['public', 'radius']);
   }
 
+  if (priceFilter && hasDiscoverPriceFilter(priceFilter)) {
+    const { minPriceCents, maxPriceCents } = discoverPriceFilterBounds(priceFilter);
+    if (minPriceCents != null) {
+      q = q.gte('starting_price_cents', minPriceCents);
+    }
+    if (maxPriceCents != null) {
+      q = q.lte('starting_price_cents', maxPriceCents);
+    }
+  }
+
   const { data, error } = await q
     .order('host_tier_rank', { ascending: false, nullsFirst: false })
     .order('boosted_until', { ascending: false, nullsFirst: false })
@@ -97,7 +146,15 @@ export async function fetchPlansPage(
     .range(from, to);
 
   if (error) return { plans: [], error: error.message };
-  return { plans: (data ?? []) as PlanRowFromDb[], error: null };
+  const rows = (data ?? []) as PlanRowFromDb[];
+  const filtered = rows.filter((plan) => {
+    if (!plan.is_group_plan) return true;
+    const accepted = plan.accepted_guest_count ?? 0;
+    const max = plan.max_guests;
+    if (max == null) return true;
+    return accepted < max;
+  });
+  return { plans: filtered, error: null };
 }
 
 export async function fetchProfilesForCreators(creatorIds: string[]): Promise<Map<string, ProfileRow>> {

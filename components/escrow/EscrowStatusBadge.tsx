@@ -1,14 +1,14 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { EscrowStatus } from '@/types/database';
 import { StyleSheet, Text, View } from 'react-native';
 
 const LABELS: Record<EscrowStatus, { label: string; bg: string; fg: string; dot: string; border: string }> = {
   pending_funding: {
     label: 'Pending funding',
-    bg: 'rgba(108, 99, 255, 0.1)',
+    bg: 'rgba(94, 82, 255, 0.1)',
     fg: colors.primary,
     dot: colors.primary,
-    border: 'rgba(108, 99, 255, 0.22)',
+    border: 'rgba(94, 82, 255, 0.22)',
   },
   funded: {
     label: 'Funded',
@@ -86,6 +86,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  txt: { fontSize: 13, fontWeight: '800' },
-  txtCompact: { fontSize: 11, fontWeight: '800' },
+  txt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold,},
+  txtCompact: { fontSize: 11, fontWeight: '800', fontFamily: fonts.bold, },
 });

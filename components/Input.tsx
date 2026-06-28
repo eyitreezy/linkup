@@ -2,8 +2,9 @@
  * Text input with label — forms (login, profile, plans).
  * `variant="auth"` = label-less, dating-app auth styling (placeholders only).
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { AuthSheetScrollContext } from '@/components/auth/AuthSheetScrollContext';
+import { KeyboardFormScrollContext } from '@/components/layout/KeyboardFormScrollContext';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
@@ -14,6 +15,7 @@ import {
   Text,
   TextInput,
   View,
+  type RefObject,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
@@ -37,6 +39,8 @@ type Props = TextInputProps & {
    */
   variant?: 'default' | 'soft' | 'auth' | 'onboarding' | 'onboardingFlat';
   passwordToggle?: boolean;
+  /** Auth screens — scroll this container (e.g. password + strength meter) above the keyboard. */
+  scrollAnchorRef?: RefObject<View | null>;
   containerStyle?: StyleProp<ViewStyle>;
 };
 
@@ -44,6 +48,7 @@ type Props = TextInputProps & {
 export const authSoftLabelStyle = {
   fontSize: 12 as const,
   fontWeight: '600' as const,
+  fontFamily: fonts.medium,
   color: colors.text,
   letterSpacing: 0.3,
   marginBottom: spacing.sm,
@@ -97,6 +102,7 @@ export function Input({
   variant = 'soft',
   multiline,
   passwordToggle,
+  scrollAnchorRef,
   secureTextEntry,
   onFocus,
   onBlur,
@@ -109,11 +115,17 @@ export function Input({
   const focusScale = useRef(new Animated.Value(1)).current;
   const authFieldGroupRef = useRef<View>(null);
   const authSheetScroll = useContext(AuthSheetScrollContext);
+  const formScroll = useContext(KeyboardFormScrollContext);
+  const fieldGroupRef = useRef<View>(null);
 
   const scrollAuthFieldIntoView = useCallback(() => {
-    if (!authSheetScroll || !authFieldGroupRef.current) return;
-    authSheetScroll.scrollFieldIntoView(authFieldGroupRef);
-  }, [authSheetScroll]);
+    if (!authSheetScroll) return;
+    authSheetScroll.scrollFieldIntoView(scrollAnchorRef ?? authFieldGroupRef);
+  }, [authSheetScroll, scrollAnchorRef]);
+
+  const scrollFormFieldIntoView = useCallback(() => {
+    formScroll?.scrollFieldIntoView();
+  }, [formScroll]);
 
   const labelStyle =
     variant === 'onboarding' || variant === 'onboardingFlat' || variant === 'soft'
@@ -136,9 +148,10 @@ export function Input({
   const handleFieldFocus = useCallback(
     (e: Parameters<NonNullable<React.ComponentProps<typeof TextInput>['onFocus']>>[0]) => {
       if (onboardingLike) setFieldFocused(true);
+      scrollFormFieldIntoView();
       onFocus?.(e);
     },
-    [onboardingLike, onFocus]
+    [onboardingLike, onFocus, scrollFormFieldIntoView]
   );
 
   const handleFieldBlur = useCallback(
@@ -285,6 +298,7 @@ export function Input({
   const FormWrap = onboardingLike ? Animated.View : View;
 
   return (
+    <View ref={fieldGroupRef} collapsable={false}>
     <FormWrap
       style={[styles.wrap, containerStyle, onboardingLike && { transform: [{ scale: focusScale }] }]}
     >
@@ -337,16 +351,18 @@ export function Input({
       )}
       {error ? <Text style={styles.err}>{error}</Text> : null}
     </FormWrap>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.md },
   wrapAuth: { marginBottom: 14 },
-  label: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.xs },
+  label: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.xs, fontFamily: fonts.regular, },
   labelSoft: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     letterSpacing: 0.3,
     marginBottom: spacing.sm,
@@ -371,6 +387,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
     minHeight: AUTH_MIN_HEIGHT,
     letterSpacing: -0.2,
@@ -381,6 +398,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     paddingVertical: 14,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
     minHeight: AUTH_MIN_HEIGHT,
     letterSpacing: -0.2,
@@ -396,6 +414,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 4,
     fontWeight: '500',
+    fontFamily: fonts.regular,
   },
   input: {
     borderWidth: 1,
@@ -404,6 +423,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
     backgroundColor: colors.surface,
   },
@@ -414,6 +434,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: spacing.md,
     fontSize: 16,
+    fontFamily: fonts.regular,
   },
   inputOnboarding: {
     backgroundColor: colors.surface,
@@ -423,6 +444,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: spacing.md,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
     minHeight: ONBOARDING_FIELD_MIN_HEIGHT,
   },
@@ -469,6 +491,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 14,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
   },
   passwordFieldSoft: {
@@ -481,5 +504,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   passwordTogglePressed: { opacity: 0.7 },
-  err: { color: colors.danger, fontSize: 12, marginTop: spacing.xs },
+  err: { color: colors.danger, fontSize: 12,
+    fontFamily: fonts.regular, marginTop: spacing.xs },
 });

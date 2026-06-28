@@ -8,9 +8,10 @@ import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { formatPlanDistanceLabel, planHasMeetupCoords } from '@/lib/plans/planDistanceLabel';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,11 +52,12 @@ function heroUri(row: PlanFeedRow): string | null {
 type Props = {
   row: PlanFeedRow;
   distanceKm: number | null;
+  viewerHasLocation?: boolean;
   presence?: PresenceUi | null;
   onPress: () => void;
 };
 
-function DiscoverySwipeCardInner({ row, distanceKm, presence, onPress }: Props) {
+function DiscoverySwipeCardInner({ row, distanceKm, viewerHasLocation = true, presence, onPress }: Props) {
   const name = row.creatorProfile?.display_name?.trim() || 'Member';
   const age = ageFromBirthDate(row.creatorProfile?.birth_date ?? null);
   const hero = heroUri(row);
@@ -73,14 +75,14 @@ function DiscoverySwipeCardInner({ row, distanceKm, presence, onPress }: Props) 
   const creatorSpotlighted = isCreatorSpotlightActive(row.creatorProfile?.spotlight_until);
 
   const distLine = useMemo(() => {
-    const dist =
-      distanceKm != null
-        ? distanceKm < 1
-          ? 'Near you'
-          : `${distanceKm.toFixed(1)} km away`
-        : 'Nearby';
+    const dist = formatPlanDistanceLabel({
+      distanceKm,
+      viewerHasLocation,
+      planHasLocation: planHasMeetupCoords(row),
+      style: 'line',
+    });
     return showTiming && when ? `${dist} · ${when}` : dist;
-  }, [distanceKm, showTiming, when]);
+  }, [distanceKm, viewerHasLocation, row, showTiming, when]);
 
   return (
     <Pressable
@@ -239,6 +241,7 @@ const styles = StyleSheet.create({
   boostBadgeTxt: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: 0.3,
   },
@@ -251,7 +254,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
   },
-  metaBadgeTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  metaBadgeTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   urgencyBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -261,7 +265,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,245,200,0.85)',
   },
-  urgencyTxt: { fontSize: 11, fontWeight: '900', color: '#fff' },
+  urgencyTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: '#fff' },
   moodBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -283,7 +288,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(200,210,255,0.55)',
   },
-  trustBadgeTxt: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  trustBadgeTxt: { fontSize: 11, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   bottom: {
     position: 'absolute',
     left: 0,
@@ -295,6 +301,7 @@ const styles = StyleSheet.create({
   planTitle: {
     fontSize: 22,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: -0.4,
     lineHeight: 28,
@@ -309,12 +316,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  name: { flex: 1, fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
-  age: { fontSize: 20, fontWeight: '700', color: 'rgba(255,255,255,0.88)' },
-  dist: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)', marginTop: 6 },
+  name: { flex: 1, fontSize: 24, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff', letterSpacing: -0.5 },
+  age: { fontSize: 20, fontWeight: '700', color: 'rgba(255,255,255,0.88)', fontFamily: fonts.medium, },
+  dist: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)', marginTop: 6, fontFamily: fonts.medium, },
   caption: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: 'rgba(255,255,255,0.9)',
     lineHeight: 20,
     marginTop: spacing.sm,

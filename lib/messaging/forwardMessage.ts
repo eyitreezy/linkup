@@ -7,6 +7,7 @@ import {
   type ChatMessageRow,
 } from '@/lib/messaging/chatQueries';
 import { supabase } from '@/lib/supabase';
+import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
 
 export type ForwardMessageInput = {
   source: ChatMessageRow;
@@ -100,14 +101,16 @@ async function copyMediaToMessage(
 
   const { data: medRow, error: medErr } = await supabase
     .from('media')
-    .insert({
-      parent_table: 'messages',
-      parent_id: messageId,
-      storage_bucket: bucket,
-      storage_path: toPath,
-      mime_type: sourceMedia.mime_type,
-      created_by: senderId,
-    })
+    .insert(
+      buildMediaInsertPayload({
+        parent_table: 'messages',
+        parent_id: messageId,
+        storage_bucket: bucket,
+        storage_path: toPath,
+        mime_type: sourceMedia.mime_type ?? 'application/octet-stream',
+        created_by: senderId,
+      })
+    )
     .select('id')
     .single();
 

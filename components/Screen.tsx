@@ -2,11 +2,12 @@
  * Safe area + scroll wrapper for screens.
  */
 import { KeyboardAwareContainer } from '@/components/KeyboardAwareContainer';
-import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
+import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
 import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
+import Animated from 'react-native-reanimated';
 import { colors, spacing } from '@/constants/theme';
 
 /** No top by default — native stack headers and many modals already inset; tab roots pass `top` explicitly. */
@@ -50,28 +51,42 @@ export function Screen({
   const keyboardVerticalOffset = (hasTopInset ? insets.top : 0) + keyboardExtraOffset;
 
   const body = scroll ? (
-    <KeyboardAwareScrollView
+    <KeyboardSafeScrollView
       contentContainerStyle={[styles.scroll, contentContainerStyle]}
       keyboardDismissMode="on-drag"
+      style={styles.fill}
     >
       {children}
-    </KeyboardAwareScrollView>
+    </KeyboardSafeScrollView>
   ) : (
     <View style={styles.fill}>{children}</View>
   );
 
+  const scrollShell = (
+    <View style={[styles.fill, style]} {...rest}>
+      {body}
+      {dimBackdrop ? (
+        <Animated.View pointerEvents="none" style={[styles.dimOverlay, typingBackdropStyle]} />
+      ) : null}
+    </View>
+  );
+
   return (
-    <SafeAreaView style={[styles.safe, safeAreaStyle]} edges={safeAreaEdges}>
-      <KeyboardAwareContainer
-        keyboardVerticalOffset={keyboardVerticalOffset}
-        backdropStyle={dimBackdrop ? typingBackdropStyle : undefined}
-        style={styles.fill}
-      >
-        <View style={[styles.fill, style]} {...rest}>
-          {body}
-        </View>
-      </KeyboardAwareContainer>
-    </SafeAreaView>
+    <View style={[styles.safe, safeAreaStyle]}>
+      <SafeAreaView style={styles.fill} edges={safeAreaEdges}>
+        {scroll ? (
+          scrollShell
+        ) : (
+          <KeyboardAwareContainer
+            keyboardVerticalOffset={keyboardVerticalOffset}
+            backdropStyle={dimBackdrop ? typingBackdropStyle : undefined}
+            style={styles.fill}
+          >
+            {scrollShell}
+          </KeyboardAwareContainer>
+        )}
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -79,4 +94,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   fill: { flex: 1 },
   scroll: { padding: spacing.md, paddingBottom: spacing.xl },
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.text,
+    zIndex: 4,
+  },
 });

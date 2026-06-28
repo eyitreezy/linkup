@@ -1,4 +1,4 @@
-import { colors } from '@/constants/theme';
+import { colors, fonts } from '@/constants/theme';
 import { memo, useEffect, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
@@ -35,6 +35,7 @@ function MoodPlanCountdownInner({ expiresAtIso, tone = 'brand' }: Props) {
 export const MoodPlanCountdown = memo(MoodPlanCountdownInner);
 
 const styles = StyleSheet.create({
-  txt: { fontSize: 12, fontWeight: '800', color: colors.secondary },
+  txt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.secondary },
   onDark: { color: 'rgba(255,255,255,0.96)' },
 });

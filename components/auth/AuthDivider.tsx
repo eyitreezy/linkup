@@ -1,7 +1,7 @@
 /**
  * Visual separator between email form and other sign-in methods.
  */
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { StyleSheet, Text, View } from 'react-native';
 
 export function AuthDivider({
@@ -37,6 +37,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     letterSpacing: 0.2,
     opacity: 0.92,
   },

@@ -4,7 +4,7 @@
 import { DatingAuthShell } from '@/components/auth/DatingAuthShell';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { formatAuthError } from '@/lib/auth/formatAuthError';
 import { requestPasswordResetEmail } from '@/lib/auth/passwordReset';
 import { useEmailSendCooldown } from '@/lib/auth/useEmailSendCooldown';
@@ -86,10 +86,11 @@ export default function ForgotPasswordScreen() {
 
 const styles = StyleSheet.create({
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.md },
-  backTxt: { fontSize: 15, fontWeight: '700', color: 'rgba(255,255,255,0.9)' },
+  backTxt: { fontSize: 15, fontWeight: '700',
+    fontFamily: fonts.medium, color: 'rgba(255,255,255,0.9)' },
   head: { marginBottom: spacing.lg, gap: spacing.sm },
-  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  sub: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.72)', fontWeight: '500' },
-  formErr: { color: '#FCA5A5', fontSize: 13, textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.sm },
+  title: { fontSize: 24, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5, fontFamily: fonts.bold, },
+  sub: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.72)', fontWeight: '500', fontFamily: fonts.regular, },
+  formErr: { color: '#FCA5A5', fontSize: 13, textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.sm, fontFamily: fonts.regular, },
   cta: { marginTop: spacing.md },
 });

@@ -7,6 +7,8 @@ import { isRecoveryAuthUrl } from '@/lib/auth/passwordReset';
 import { ONBOARDING_ROUTE, resolvePostAuthHref } from '@/lib/auth/postAuthNavigation';
 import { consumePendingAuthUrl, consumePendingRecoveryIntent } from '@/lib/auth/pendingAuthUrl';
 import { getSessionRecoveringStale } from '@/lib/auth/sessionRecovery';
+import { consumePendingSignupPrivacyConsent } from '@/lib/privacy/pendingSignupConsentStorage';
+import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
 import type { Session } from '@supabase/supabase-js';
 import type { Href, Router } from 'expo-router';
 
@@ -53,6 +55,10 @@ export async function completePostAuthFromDeepLink(opts: {
         const retry = await waitForSupabaseSession(40, 150);
         if (retry?.user) {
           await opts.refreshSession({ quiet: true });
+          const pendingSignupConsent = await consumePendingSignupPrivacyConsent();
+          if (pendingSignupConsent) {
+            await recordPrivacyConsent(retry.user.id, 'signup');
+          }
           const href = await resolvePostAuthHref(retry.user.id);
           opts.router.replace(href);
           void opts.refreshSession();
@@ -74,6 +80,11 @@ export async function completePostAuthFromDeepLink(opts: {
   if (recovery) {
     opts.router.replace('/(auth)/reset-password' as Href);
     return 'success';
+  }
+
+  const pendingSignupConsent = await consumePendingSignupPrivacyConsent();
+  if (pendingSignupConsent) {
+    await recordPrivacyConsent(confirmed.user.id, 'signup');
   }
 
   const href = await resolvePostAuthHref(confirmed.user.id);

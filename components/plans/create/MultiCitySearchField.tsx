@@ -3,7 +3,7 @@
  */
 import { onboardingInputShadow, planCreateTouchableFieldStyle } from '@/components/Input';
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
   cityLabelById,
   filterCitiesForPicker,
@@ -215,7 +215,7 @@ export function MultiCitySearchField({ selected, onChange, showHint = true }: Pr
           />
           <Text style={[styles.statusTxt, isValid && styles.statusTxtReady]}>
             {isValid
-              ? `${selected.length} cities selected — ready to continue`
+              ? `${selected.length} cities selected. Ready to continue`
               : atMax
                 ? `Maximum of ${MULTI_CITY_MAX} cities reached`
                 : remaining > 0
@@ -258,8 +258,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   panelHeaderText: { flex: 1, minWidth: 0 },
-  panelTitle: { fontSize: 15, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
-  panelSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
+  panelTitle: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
+  panelSub: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   countBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -272,7 +273,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderColor: colors.primary,
   },
-  countBadgeTxt: { fontSize: 12, fontWeight: '900', color: colors.textMuted },
+  countBadgeTxt: { fontSize: 12, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.textMuted },
   countBadgeTxtReady: { color: colors.primary },
   progressRow: {
     flexDirection: 'row',
@@ -304,7 +306,8 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     backgroundColor: colors.authInputBg,
   },
-  emptySelectedTxt: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  emptySelectedTxt: { fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted },
   pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pillOuter: { borderRadius: radius.button, overflow: 'hidden' },
   pill: {
@@ -317,7 +320,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
   },
   pillPressed: { opacity: 0.9 },
-  pillTxt: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  pillTxt: { fontSize: 13, fontWeight: '800',
+    fontFamily: fonts.bold, color: '#fff' },
   pillRemove: {
     width: 20,
     height: 20,
@@ -342,6 +346,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     paddingVertical: Platform.OS === 'android' ? 10 : 12,
   },
@@ -356,6 +361,7 @@ const styles = StyleSheet.create({
   dropdownKicker: {
     fontSize: 10,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -365,7 +371,8 @@ const styles = StyleSheet.create({
   },
   dropdownScroll: { maxHeight: 200 },
   noResults: { padding: spacing.md, alignItems: 'center' },
-  noResultsTxt: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  noResultsTxt: { fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -388,8 +395,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   optionText: { flex: 1, minWidth: 0 },
-  optionLabel: { fontSize: 15, fontWeight: '700', color: colors.text },
-  optionState: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 1 },
+  optionLabel: { fontSize: 15, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  optionState: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 1, fontFamily: fonts.medium, },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -402,8 +410,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 17,
   },
-  statusTxtReady: { color: colors.primary, fontWeight: '700' },
+  statusTxtReady: { color: colors.primary, fontWeight: '700',
+    fontFamily: fonts.medium,},
 });

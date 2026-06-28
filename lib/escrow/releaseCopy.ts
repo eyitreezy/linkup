@@ -27,7 +27,7 @@ export function getPaymentStatusLabel(
     case 'released':
       return getReleaseRecipientLabel(escrowPattern, hostDisplayName, guestDisplayName);
     case 'disputed':
-      return 'On hold — dispute';
+      return 'On hold for dispute';
     case 'refunded':
       return 'Refunded';
     case 'cancelled':

@@ -1,0 +1,97 @@
+<!--
+  Paste into Supabase Dashboard → Authentication → Email Templates → Confirm signup.
+  Subject suggestion: Confirm your LinkUp email
+
+  Required redirect (allow list): linkup://auth/callback
+  Disable SMTP link tracking on your provider or deep links may break.
+-->
+<div style="margin:0;padding:0;background-color:#F3F0FF;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#F3F0FF;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background-color:#FFFBFE;border-radius:24px;overflow:hidden;border:1px solid rgba(108,99,255,0.12);box-shadow:0 8px 24px rgba(42,31,85,0.08);">
+          <!-- Brand header -->
+          <tr>
+            <td style="padding:0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td height="6" style="background:linear-gradient(90deg,#6C63FF 0%,#8B7CE8 50%,#FF6584 100%);font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding:28px 28px 8px;">
+                    <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:28px;font-weight:800;line-height:1.1;letter-spacing:-0.5px;">
+                      <span style="color:#2D1B4E;">link</span><span style="color:#FF6584;">up</span>
+                    </p>
+                    <p style="margin:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;font-weight:600;line-height:18px;color:#6C63FF;letter-spacing:0.15px;">
+                      Meet With Confidence
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:8px 28px 0;">
+              <h2 style="margin:0 0 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:22px;font-weight:800;line-height:28px;color:#1A1D26;">
+                Confirm your signup
+              </h2>
+              <p style="margin:0 0 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:22px;color:#4B5563;">
+                Follow this link to confirm your user on the <strong>same phone</strong> where you installed LinkUp. We will open the app and finish setting up your account.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td align="center" style="padding:8px 28px 24px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#6C63FF" style="border-radius:999px;">
+                    <a
+                      href="{{ .ConfirmationURL }}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style="display:inline-block;padding:14px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;"
+                    >
+                      Confirm your mail
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Plain link fallback (retains Supabase variable + anchor) -->
+          <tr>
+            <td style="padding:0 28px 24px;">
+              <p style="margin:0 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:20px;color:#6B7280;">
+                If the button does not work, follow this link to confirm your user:
+              </p>
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;line-height:20px;word-break:break-all;">
+                <a href="{{ .ConfirmationURL }}" style="color:#6C63FF;font-weight:600;text-decoration:underline;">Confirm your mail</a>
+              </p>
+              <p style="margin:12px 0 0;font-family:Menlo,Consolas,monospace;font-size:11px;line-height:16px;word-break:break-all;color:#9CA3AF;">
+                <a href="{{ .ConfirmationURL }}" style="color:#9CA3AF;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 28px 28px;border-top:1px solid rgba(108,99,255,0.08);">
+              <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:12px;line-height:18px;color:#9CA3AF;">
+                If you did not create a LinkUp account, you can ignore this email.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <p style="margin:16px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:11px;line-height:16px;color:#9CA3AF;">
+          &copy; LinkUp &middot; Trusted plans &amp; real meetups
+        </p>
+      </td>
+    </tr>
+  </table>
+</div>

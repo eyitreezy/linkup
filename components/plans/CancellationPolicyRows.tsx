@@ -1,7 +1,7 @@
 /**
  * Shared cancellation policy rows — matches trust cards (dot + label + value).
  */
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import type { PolicyTableRow } from '@/lib/plans/cancellationPolicy';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
   groupTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
@@ -74,8 +75,9 @@ const styles = StyleSheet.create({
   rowDense: { gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
   rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
-  rowLabelDense: { fontSize: 13 },
-  rowValue: { fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 },
-  rowValueDense: { fontSize: 12, lineHeight: 17 },
+  rowLabel: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text },
+  rowLabelDense: { fontSize: 13, fontFamily: fonts.regular, },
+  rowValue: { fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18, fontFamily: fonts.regular, },
+  rowValueDense: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, },
 });

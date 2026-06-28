@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,7 +72,7 @@ export function EscrowSplitFundingCard({
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.14)', 'rgba(255,101,132,0.08)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.rule}
@@ -80,7 +80,7 @@ export function EscrowSplitFundingCard({
       <Text style={styles.kicker}>Pattern B · split escrow</Text>
       <Text style={styles.title}>Each person pays their share here</Text>
       <Text style={styles.sub}>
-        Payments happen on this screen only — not during negotiation. Both legs must complete before the plan goes
+        Payments happen on this screen only, not during negotiation. Both legs must complete before the plan goes
         active.
       </Text>
       <LegRow label="Host share" cents={hostShareCents} currency={currency} state={hostState} />
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
@@ -114,25 +114,28 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 4,
   },
-  title: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 6 },
-  sub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19, marginBottom: spacing.md },
+  title: { fontSize: 17, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 6 },
+  sub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, lineHeight: 19, marginBottom: spacing.md, fontFamily: fonts.medium, },
   leg: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(108, 99, 255, 0.12)',
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
   },
-  legYours: { backgroundColor: 'rgba(108, 99, 255, 0.06)', marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
+  legYours: { backgroundColor: 'rgba(94, 82, 255, 0.06)', marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg },
   legLeft: { flex: 1 },
-  legLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted, marginBottom: 2 },
-  legAmount: { fontSize: 18, fontWeight: '900', color: colors.text },
+  legLabel: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.textMuted, marginBottom: 2 },
+  legAmount: { fontSize: 18, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -143,9 +146,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   badgePaid: { backgroundColor: 'rgba(16, 185, 129, 0.12)' },
-  badgeYours: { backgroundColor: 'rgba(108, 99, 255, 0.12)' },
-  badgeTxt: { fontSize: 12, fontWeight: '800', color: colors.textMuted },
+  badgeYours: { backgroundColor: 'rgba(94, 82, 255, 0.12)' },
+  badgeTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.textMuted },
   badgeTxtPaid: { color: colors.success },
   badgeTxtYours: { color: colors.primary },
-  deadline: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: spacing.sm },
+  deadline: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: spacing.sm, fontFamily: fonts.medium, },
 });

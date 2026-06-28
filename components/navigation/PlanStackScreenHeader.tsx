@@ -2,7 +2,7 @@
  * In-screen title bar for plan/[id] flows — glass nav aligned with notification / membership screens.
  */
 import { PlanStackHeaderBack } from '@/components/navigation/PlanStackHeaderBack';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 22,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     letterSpacing: -0.55,
@@ -128,6 +129,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.9,
@@ -136,6 +138,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     letterSpacing: -0.35,
@@ -144,7 +147,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.button + 2,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.22,
         shadowRadius: 10,

@@ -14,6 +14,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -95,10 +96,10 @@ function useMountEntrance() {
   return { cardStyle, formStyle };
 }
 
-const SCROLL_TOP_PAD = 12;
-const FIELD_ABOVE_KEYBOARD_PAD = 12;
+const FIELD_ABOVE_KEYBOARD_PAD = 16;
 const ANDROID_IME_SHORT_LAYOUT_MARGIN_PX = 72;
 const ANDROID_IME_FULL_WINDOW_SLACK_PX = 32;
+const KEYBOARD_SCROLL_RETRY_MS = Platform.OS === 'ios' ? [80, 180, 320] : [50, 120, 220, 360];
 
 export function DatingAuthShell({
   children,
@@ -109,14 +110,15 @@ export function DatingAuthShell({
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const keyboardHeightRef = useRef(0);
+  const keyboardTopRef = useRef<number | null>(null);
+  const pendingFieldRef = useRef<RefObject<View | null> | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const scrollInnerRef = useRef<View>(null);
   const scrollOffsetRef = useRef(0);
   const fieldScrollRaf = useRef<number | null>(null);
   const fieldScrollTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const keyboardOpenRef = useRef(false);
-  keyboardOpenRef.current = keyboardOpen;
   const fullWindowBaselineRef = useRef(windowHeight);
   const sawShortLayoutDuringImeRef = useRef(false);
 
@@ -124,7 +126,10 @@ export function DatingAuthShell({
 
   const clearKeyboardUi = useCallback(() => {
     keyboardHeightRef.current = 0;
+    keyboardTopRef.current = null;
+    pendingFieldRef.current = null;
     sawShortLayoutDuringImeRef.current = false;
+    setKeyboardHeight(0);
     setKeyboardOpen(false);
   }, []);
 
@@ -153,12 +158,80 @@ export function DatingAuthShell({
   }, [windowHeight, keyboardOpen, clearKeyboardUi]);
 
   useEffect(() => {
+    return () => {
+      fieldScrollTimersRef.current.forEach(clearTimeout);
+      fieldScrollTimersRef.current = [];
+    };
+  }, []);
+
+  const scrollFieldIntoViewRef = useRef<(fieldRef: RefObject<View | null>) => void>(() => {});
+
+  const scrollFieldIntoView = useCallback(
+    (fieldRef: RefObject<View | null>) => {
+      pendingFieldRef.current = fieldRef;
+      const field = fieldRef.current;
+      const scrollView = scrollRef.current;
+      if (!field || !scrollView) return;
+
+      const resolveKeyboardTop = () => {
+        if (keyboardTopRef.current != null) return keyboardTopRef.current;
+        const kb = keyboardHeightRef.current;
+        return kb > 0 ? windowHeight - kb : windowHeight;
+      };
+
+      const run = () => {
+        const scrollMeasurable = scrollView as unknown as View;
+        scrollMeasurable.measureInWindow((_sx, sy, _sw, sh) => {
+          const keyboardTop = resolveKeyboardTop();
+          const visibleBottom = Math.min(sy + sh, keyboardTop) - FIELD_ABOVE_KEYBOARD_PAD;
+
+          field.measureInWindow((_fx, fy, _fw, fh) => {
+            const fieldBottom = fy + fh;
+            if (fieldBottom <= visibleBottom) return;
+
+            const overlap = fieldBottom - visibleBottom;
+            scrollView.scrollTo({
+              y: Math.max(0, scrollOffsetRef.current + overlap),
+              animated: true,
+            });
+          });
+        });
+      };
+
+      fieldScrollTimersRef.current.forEach(clearTimeout);
+      fieldScrollTimersRef.current = [];
+      if (fieldScrollRaf.current != null) cancelAnimationFrame(fieldScrollRaf.current);
+      fieldScrollRaf.current = requestAnimationFrame(run);
+      KEYBOARD_SCROLL_RETRY_MS.forEach((delay) => {
+        fieldScrollTimersRef.current.push(setTimeout(run, delay));
+      });
+    },
+    [windowHeight]
+  );
+
+  scrollFieldIntoViewRef.current = scrollFieldIntoView;
+
+  useEffect(() => {
     const show = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hide = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = (e: { endCoordinates?: { height?: number } }) => {
-      keyboardHeightRef.current = e.endCoordinates?.height ?? 0;
+    const onShow = (e: { endCoordinates?: { height?: number; screenY?: number } }) => {
+      const height = e.endCoordinates?.height ?? 0;
+      const screenY = e.endCoordinates?.screenY;
+      keyboardHeightRef.current = height;
+      keyboardTopRef.current =
+        typeof screenY === 'number' ? screenY : Math.max(0, windowHeight - height);
       if (Platform.OS === 'android') sawShortLayoutDuringImeRef.current = false;
+      setKeyboardHeight(height);
       setKeyboardOpen(true);
+
+      const pending = pendingFieldRef.current;
+      if (pending?.current) {
+        KEYBOARD_SCROLL_RETRY_MS.forEach((delay) => {
+          fieldScrollTimersRef.current.push(
+            setTimeout(() => scrollFieldIntoViewRef.current(pending), delay)
+          );
+        });
+      }
     };
     const subShow = Keyboard.addListener(show, onShow);
     const subHide = Keyboard.addListener(hide, clearKeyboardUi);
@@ -167,126 +240,76 @@ export function DatingAuthShell({
       subs.push(
         Keyboard.addListener('keyboardDidChangeFrame', (e) => {
           const h = e.endCoordinates?.height ?? 0;
-          if (h > 2) keyboardHeightRef.current = h;
+          const screenY = e.endCoordinates?.screenY;
+          if (h > 2) {
+            keyboardHeightRef.current = h;
+            keyboardTopRef.current =
+              typeof screenY === 'number' ? screenY : Math.max(0, windowHeight - h);
+            setKeyboardHeight(h);
+            setKeyboardOpen(true);
+            const pending = pendingFieldRef.current;
+            if (pending?.current) scrollFieldIntoViewRef.current(pending);
+          }
         })
       );
     }
     return () => subs.forEach((s) => s.remove());
-  }, [clearKeyboardUi]);
+  }, [clearKeyboardUi, windowHeight]);
 
   useEffect(() => {
-    return () => {
-      fieldScrollTimersRef.current.forEach(clearTimeout);
-      fieldScrollTimersRef.current = [];
-    };
-  }, []);
+    if (!keyboardOpen || keyboardHeight <= 0) return;
+    const pending = pendingFieldRef.current;
+    if (!pending?.current) return;
+    const frame = requestAnimationFrame(() => scrollFieldIntoViewRef.current(pending));
+    return () => cancelAnimationFrame(frame);
+  }, [keyboardOpen, keyboardHeight]);
 
-  const scrollFieldIntoView = useCallback(
-    (fieldRef: RefObject<View | null>) => {
-      const field = fieldRef.current;
-      const scrollView = scrollRef.current;
-      const inner = scrollInnerRef.current;
-      if (!field || !scrollView || !inner) return;
-      const scrollMeasurable = scrollView as unknown as View;
-
-      type MeasureLayoutHost = View & {
-        measureLayout?: (
-          relative: View,
-          onSuccess: (x: number, y: number, w: number, h: number) => void,
-          onFail?: () => void
-        ) => void;
-      };
-
-      const run = () => {
-        const scrollByWindowOverlap = () => {
-          field.measureInWindow((fx, fy, _fw, fh) => {
-            scrollMeasurable.measureInWindow((_sx, sy, _sw, sh) => {
-              const kb = keyboardOpenRef.current ? keyboardHeightRef.current : 0;
-              const keyboardTop = windowHeight - kb;
-              let visibleBottom = sy + sh;
-              if (kb > 0) visibleBottom = Math.min(visibleBottom, keyboardTop);
-              const fieldBottom = fy + fh;
-              const bottomPad = FIELD_ABOVE_KEYBOARD_PAD + (kb > 0 ? 0 : Math.max(insets.bottom, spacing.xs));
-              let delta = 0;
-              if (fieldBottom > visibleBottom - bottomPad) {
-                delta += fieldBottom - (visibleBottom - bottomPad);
-              }
-              const visibleTop = sy + SCROLL_TOP_PAD + insets.top;
-              if (fy < visibleTop) delta -= visibleTop - fy;
-              if (delta !== 0) {
-                scrollView.scrollTo({ y: Math.max(0, scrollOffsetRef.current + delta), animated: true });
-              }
-            });
-          });
-        };
-
-        const host = field as MeasureLayoutHost;
-        if (typeof host.measureLayout === 'function') {
-          host.measureLayout(
-            inner,
-            (_x, y, _w, h) => {
-              scrollMeasurable.measureInWindow((_sx, sy, _sw, sh) => {
-                const kb = keyboardOpenRef.current ? keyboardHeightRef.current : 0;
-                const keyboardTop = windowHeight - kb;
-                let visibleH = sh;
-                if (kb > 0) {
-                  visibleH = Math.max(160, sh - Math.max(0, sy + sh - keyboardTop));
-                }
-                const bottomPad = FIELD_ABOVE_KEYBOARD_PAD + (kb > 0 ? 0 : Math.max(insets.bottom, spacing.xs));
-                let targetY = y + h - visibleH + bottomPad;
-                targetY = Math.min(Math.max(0, targetY), Math.max(0, y - SCROLL_TOP_PAD));
-                scrollView.scrollTo({ y: targetY, animated: true });
-              });
-            },
-            scrollByWindowOverlap
-          );
-        } else {
-          scrollByWindowOverlap();
-        }
-      };
-
-      fieldScrollTimersRef.current.forEach(clearTimeout);
-      fieldScrollTimersRef.current = [];
-      if (fieldScrollRaf.current != null) cancelAnimationFrame(fieldScrollRaf.current);
-      fieldScrollRaf.current = requestAnimationFrame(run);
-      fieldScrollTimersRef.current.push(setTimeout(run, Platform.OS === 'ios' ? 100 : 140));
-    },
-    [windowHeight, insets.bottom, insets.top]
+  const sheetScrollApi = useMemo(
+    () => ({ scrollFieldIntoView, keyboardOpen }),
+    [scrollFieldIntoView, keyboardOpen]
   );
-
-  const sheetScrollApi = useMemo(() => ({ scrollFieldIntoView }), [scrollFieldIntoView]);
 
   const onScrollSheet = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
   }, []);
+
+  const scrollBottomPad =
+    Math.max(insets.bottom, spacing.md) +
+    (keyboardOpen ? keyboardHeight + FIELD_ABOVE_KEYBOARD_PAD : 0);
 
   return (
     <AuthSheetScrollContext.Provider value={sheetScrollApi}>
       <View style={styles.root}>
         <StatusBar style="light" />
         <AuthHeroBackground>
-          <ScrollView
-            ref={scrollRef}
-            onScroll={onScrollSheet}
-            scrollEventThrottle={16}
-            style={styles.scroll}
-            contentContainerStyle={[
-              styles.scrollContent,
-              {
-                paddingTop: insets.top + spacing.sm,
-                paddingBottom:
-                  Math.max(insets.bottom, spacing.md) + (keyboardOpen ? FIELD_ABOVE_KEYBOARD_PAD + 8 : 0),
-              },
-            ]}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-            bounces
+          <KeyboardAvoidingView
+            style={styles.flex}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
-            <View ref={scrollInnerRef} collapsable={false} style={styles.scrollInner}>
-              <View style={styles.topSpacer} />
-              {showHeroCopy ? <AuthHeroCopy /> : <View style={styles.copyPlaceholder} />}
-              {showHeroCopy && showPagination ? <AuthHeroDots /> : null}
+            <ScrollView
+              ref={scrollRef}
+              onScroll={onScrollSheet}
+              scrollEventThrottle={16}
+              style={styles.scroll}
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  paddingTop: insets.top + spacing.sm,
+                  paddingBottom: scrollBottomPad,
+                },
+                keyboardOpen && styles.scrollContentKeyboardOpen,
+              ]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+              automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+              bounces
+            >
+              <View ref={scrollInnerRef} collapsable={false} style={styles.scrollInner}>
+                <View style={[styles.topSpacer, keyboardOpen && styles.topSpacerKeyboard]} />
+                {showHeroCopy && !keyboardOpen ? <AuthHeroCopy /> : null}
+                {!showHeroCopy && !keyboardOpen ? <View style={styles.copyPlaceholder} /> : null}
+                {showHeroCopy && showPagination && !keyboardOpen ? <AuthHeroDots /> : null}
               <Animated.View style={cardStyle}>
                 <AuthGlassCard>
                   <Animated.View style={formStyle}>{children}</Animated.View>
@@ -296,7 +319,8 @@ export function DatingAuthShell({
                 <Animated.View style={[styles.below, formStyle]}>{belowCard}</Animated.View>
               ) : null}
             </View>
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </AuthHeroBackground>
       </View>
     </AuthSheetScrollContext.Provider>
@@ -305,10 +329,13 @@ export function DatingAuthShell({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0F0D18' },
+  flex: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: { flexGrow: 1 },
+  scrollContentKeyboardOpen: { justifyContent: 'flex-end' },
   scrollInner: { flexGrow: 1, justifyContent: 'flex-end' },
   topSpacer: { flexGrow: 1, minHeight: 24 },
+  topSpacerKeyboard: { flexGrow: 0, minHeight: 0, height: 8 },
   copyPlaceholder: { height: spacing.lg },
   below: {
     alignItems: 'center',

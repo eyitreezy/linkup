@@ -95,7 +95,7 @@ export function AuthHeroBackground({ children }: Props) {
               style={StyleSheet.absoluteFill}
             />
             <LinearGradient
-              colors={['rgba(26,20,45,0.45)', 'rgba(108,99,255,0.18)', 'rgba(255,101,132,0.22)']}
+              colors={['rgba(26,20,45,0.45)', 'rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.22)']}
               locations={[0, 0.5, 1]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0, y: 0 }}

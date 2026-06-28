@@ -2,7 +2,9 @@
  * Persisted chat thread look — presets, optional wallpaper, readable text sizing.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors } from '@/constants/theme';
+import { DISCOVERY_SHELL_GRADIENT } from '@/constants/gradients';
+import { colors, fonts } from '@/constants/theme';
+import { fontFamilyForWeight } from '@/constants/typography';
 
 const STORAGE_KEY = 'linkup.chatAppearance.v1';
 
@@ -53,11 +55,11 @@ export const CHAT_APPEARANCE_PRESETS: Record<ChatAppearancePresetId, ChatAppeara
   default: {
     id: 'default',
     label: 'Lavender',
-    threadGradient: ['#EDE8FF', '#FFF5F8', '#E8FAF4', colors.discoveryGradientBottom],
+    threadGradient: [...DISCOVERY_SHELL_GRADIENT] as [string, string, string, string],
     locations: [0, 0.3, 0.55, 1],
     mineBubble: [colors.primary, '#9D5CFF', colors.secondary],
-    themBubble: ['#FFFFFF', '#F4F0FF', '#FFF5F8'],
-    themBubbleBorder: 'rgba(108, 99, 255, 0.14)',
+    themBubble: ['#FFFFFF', '#F4F0FF', '#FFD1E3'],
+    themBubbleBorder: 'rgba(94, 82, 255, 0.14)',
     textMine: '#FFFFFF',
     textThem: colors.text,
     editedMine: 'rgba(255,255,255,0.75)',
@@ -67,12 +69,12 @@ export const CHAT_APPEARANCE_PRESETS: Record<ChatAppearancePresetId, ChatAppeara
     metaTick: 'rgba(255,255,255,0.85)',
     metaRead: 'rgba(200, 230, 255, 0.95)',
     composerBg: 'rgba(255,255,255,0.97)',
-    composerBorder: 'rgba(108, 99, 255, 0.28)',
+    composerBorder: 'rgba(94, 82, 255, 0.28)',
     sendActive: [colors.primary, colors.secondary],
-    headerHairline: 'rgba(108, 99, 255, 0.1)',
+    headerHairline: 'rgba(94, 82, 255, 0.1)',
     composerInputBg: 'rgba(255,255,255,0.98)',
     composerInputText: colors.text,
-    composerInputBorder: 'rgba(108, 99, 255, 0.18)',
+    composerInputBorder: 'rgba(94, 82, 255, 0.18)',
     composerAttachIcon: colors.primary,
     composerInputPlaceholder: 'rgba(15,23,42,0.38)',
   },
@@ -271,9 +273,11 @@ export type ResolvedChatBubbleTheme = {
   metaRead: string;
   fontSize: number;
   fontWeight: '400' | '700';
+  fontFamily: string;
 };
 
 export function resolveBubbleTheme(preset: ChatAppearancePreset, state: ChatAppearanceState): ResolvedChatBubbleTheme {
+  const fontWeight = fontWeightFromEmphasis(state.fontEmphasis);
   return {
     mineBubble: preset.mineBubble,
     themBubble: preset.themBubble,
@@ -287,6 +291,7 @@ export function resolveBubbleTheme(preset: ChatAppearancePreset, state: ChatAppe
     metaTick: preset.metaTick,
     metaRead: preset.metaRead,
     fontSize: fontSizeFromScale(state.fontScale),
-    fontWeight: fontWeightFromEmphasis(state.fontEmphasis),
+    fontWeight,
+    fontFamily: fontFamilyForWeight(fontWeight),
   };
 }

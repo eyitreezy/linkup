@@ -3,13 +3,18 @@
  */
 import { Button } from '@/components/Button';
 import { Input, planCreateTouchableFieldStyle } from '@/components/Input';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { getOrCreateConversation } from '@/lib/conversations';
+import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
+import { openPlanMeetupChat, PlanMeetupChatError } from '@/lib/messaging/openPlanMeetupChat';
+import { checkOfferBeforeChatOnPlan } from '@/lib/messaging/offerBeforeChatGate';
+import { subscribePlanOffersRealtime } from '@/lib/plans/subscribePlanOffersRealtime';
 import { acceptPlanOffer } from '@/lib/plans/acceptPlanOffer';
 import {
   countOffersTowardLimit,
+  countOffersTowardLimitForBidder,
+  bidderHasActiveGroupSlotOffer,
   isOfferExpired,
   MAX_OFFERS_PER_PLAN,
   nextOfferRound,
@@ -97,6 +102,7 @@ export function NegotiationChat({ plan }: Props) {
   const [showTime, setShowTime] = useState(false);
   const [sending, setSending] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  const [dmGateOpen, setDmGateOpen] = useState(false);
   const [feedback, setFeedback] = useState<{
     variant: AppFeedbackVariant;
     title: string;
@@ -125,6 +131,16 @@ export function NegotiationChat({ plan }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!planId || !isSupabaseConfigured) return;
+    return subscribePlanOffersRealtime({
+      planId,
+      onRefresh: () => {
+        void load();
+      },
+    });
+  }, [planId, load]);
 
   const sorted = [...offers].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
@@ -158,18 +174,30 @@ export function NegotiationChat({ plan }: Props) {
 
   async function openDm() {
     if (!user) return;
-    const lastBidder = [...sorted].reverse().find((o) => o.bidder_id !== plan.creator_id)?.bidder_id;
-    const other = isCreator ? lastBidder ?? null : plan.creator_id;
-    if (!other) {
-      showFeedback(
-        'warning',
-        'Chat',
-        isCreator ? 'No one’s raised their hand yet — check back soon.' : 'Could not open chat.'
-      );
+    if (!plan.is_group_plan) {
+      const lastBidder = [...sorted].reverse().find((o) => o.bidder_id !== plan.creator_id)?.bidder_id;
+      const other = isCreator ? lastBidder ?? null : plan.creator_id;
+      if (!other) {
+        showFeedback(
+          'warning',
+          'Chat',
+          isCreator ? 'No one’s raised their hand yet. Check back soon.' : 'Could not open chat.'
+        );
+        return;
+      }
+    }
+    const gate = await checkOfferBeforeChatOnPlan(user.id, planId, isCreator);
+    if (!gate.allowed) {
+      setDmGateOpen(true);
       return;
     }
-    const conv = await getOrCreateConversation(supabase, user.id, other);
-    router.push(`/chat/${conv}` as Href);
+    try {
+      await openPlanMeetupChat({ plan, userId: user.id, isCreator, offers: sorted });
+    } catch (e) {
+      const message =
+        e instanceof PlanMeetupChatError || e instanceof Error ? e.message : 'Could not open chat.';
+      showFeedback('warning', 'Chat', message);
+    }
   }
 
   async function sendOffer() {
@@ -178,7 +206,25 @@ export function NegotiationChat({ plan }: Props) {
       setGateOpen(true);
       return;
     }
-    if (countOffersTowardLimit(offers) >= MAX_OFFERS_PER_PLAN) {
+    if (plan.is_group_plan) {
+      const active = bidderHasActiveGroupSlotOffer(offers, user.id);
+      if (active?.status === 'accepted') {
+        showFeedback('warning', 'Already in the group', 'You already have an accepted slot on this plan.');
+        return;
+      }
+      if (active) {
+        showFeedback('warning', 'Offer pending', 'You already have an active slot request on this plan.');
+        return;
+      }
+      if (countOffersTowardLimitForBidder(offers, user.id) >= MAX_OFFERS_PER_PLAN) {
+        showFeedback(
+          'warning',
+          'Let’s pause here',
+          `You’ve reached the friendly back-and-forth limit for your slot (${MAX_OFFERS_PER_PLAN} rounds). Chat in messages to align, then try again if you open a new idea.`
+        );
+        return;
+      }
+    } else if (countOffersTowardLimit(offers) >= MAX_OFFERS_PER_PLAN) {
       showFeedback(
         'warning',
         'Let’s pause here',
@@ -191,7 +237,7 @@ export function NegotiationChat({ plan }: Props) {
       showFeedback(
         'warning',
         'Hmm',
-        'Enter a valid amount or leave it blank — totally fine to figure out money later.'
+        'Enter a valid amount or leave it blank. Totally fine to figure out money later.'
       );
       return;
     }
@@ -231,7 +277,7 @@ export function NegotiationChat({ plan }: Props) {
       return;
     }
     if (isOfferExpired(offer)) {
-      showFeedback('warning', 'Expired', 'This suggestion timed out — send a fresh one when you’re ready.');
+      showFeedback('warning', 'Expired', 'This suggestion timed out. Send a fresh one when you’re ready.');
       return;
     }
     const res = await acceptPlanOffer(supabase, {
@@ -241,7 +287,12 @@ export function NegotiationChat({ plan }: Props) {
       currentUserId: user.id,
     });
     if (res.error) showFeedback('error', 'Error', res.error);
-    else router.replace(`/plan/${planId}/agreement` as Href);
+    else {
+      const href = plan.is_group_plan
+        ? (`/plan/${planId}/agreement?offerId=${offer.id}` as Href)
+        : (`/plan/${planId}/agreement` as Href);
+      router.replace(href);
+    }
   }
 
   /** Offset for stacked chrome above this screen (plan title bar + safe area). */
@@ -298,7 +349,7 @@ export function NegotiationChat({ plan }: Props) {
           }}
         >
             <Text style={styles.composerSubtitle}>
-              Time, vibe, where — the good stuff. Money’s optional; chemistry isn’t. Keep it light, you’ll polish it
+              Time, vibe, where: the good stuff. Money’s optional; chemistry isn’t. Keep it light, you’ll polish it
               together.
             </Text>
             <Text style={styles.chipsSectionLabel}>Quick sparks</Text>
@@ -334,7 +385,7 @@ export function NegotiationChat({ plan }: Props) {
                 <Text style={styles.chipTxt}>Your pick</Text>
               </Pressable>
               <Pressable
-                onPress={() => setNote((n) => appendNoteLine(n, 'Keep it casual — open to ideas.'))}
+                onPress={() => setNote((n) => appendNoteLine(n, 'Keep it casual. Open to ideas.'))}
                 style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
               >
                 <Text style={styles.chipTxt}>Low-key</Text>
@@ -352,7 +403,7 @@ export function NegotiationChat({ plan }: Props) {
             <Pressable onPress={openMeetTimePicker} style={planCreateTouchableFieldStyle(styles.timeBtnRow)}>
               <View style={styles.timeRowLeft}>
                 <LinearGradient
-                  colors={['rgba(108, 99, 255, 0.18)', 'rgba(255, 101, 132, 0.14)']}
+                  colors={['rgba(94, 82, 255, 0.18)', 'rgba(255, 74, 114, 0.14)']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.timeIconBubble}
@@ -406,6 +457,21 @@ export function NegotiationChat({ plan }: Props) {
         onClose={() => setGateOpen(false)}
         verificationStatus={dbUser?.verification_status}
       />
+      <AppConfirmModal
+        visible={dmGateOpen}
+        onClose={() => setDmGateOpen(false)}
+        kicker="Messaging"
+        title="Make an offer first"
+        message={
+          isCreator
+            ? 'Wait for someone to send an offer on this meetup before opening chat. Offers keep plans intentional.'
+            : 'Share an offer on this meetup before opening chat. Use the form below to suggest a time, note, or amount.'
+        }
+        primaryLabel={isCreator ? 'Got it' : 'Make an offer'}
+        onPrimary={() => setDmGateOpen(false)}
+        secondaryLabel="Not now"
+        iconVariant="warning"
+      />
       <AppFeedbackModal
         visible={feedback != null}
         onClose={() => setFeedback(null)}
@@ -418,7 +484,7 @@ export function NegotiationChat({ plan }: Props) {
           <View style={styles.expiredStrip}>
             <Ionicons name="moon-outline" size={18} color="#64748b" />
             <Text style={styles.expiredStripTxt}>
-              This mood window closed — you can read what was shared, but new offers stay paused.
+              This mood window closed. You can read what was shared, but new offers stay paused.
             </Text>
           </View>
         ) : null}
@@ -438,8 +504,8 @@ export function NegotiationChat({ plan }: Props) {
             </View>
           </View>
           <Text style={styles.hint}>
-            Ideas expire in 24 hours — up to {MAX_OFFERS_PER_PLAN} gentle rounds here. Say hi in chat anytime; this spot is
-            for dates, times, and the practical stuff.
+            Ideas expire in 24 hours, with up to {MAX_OFFERS_PER_PLAN} gentle rounds here. Send an offer first, then chat
+            opens for the practical stuff.
           </Text>
           <Pressable
             onPress={() => void openDm()}
@@ -470,7 +536,7 @@ export function NegotiationChat({ plan }: Props) {
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <LinearGradient
-              colors={['rgba(108, 99, 255, 0.2)', 'rgba(255, 101, 132, 0.18)']}
+              colors={['rgba(94, 82, 255, 0.2)', 'rgba(255, 74, 114, 0.18)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.emptyIconRing}
@@ -482,8 +548,8 @@ export function NegotiationChat({ plan }: Props) {
             <Text style={styles.emptyTitle}>{isCreator ? 'Still quiet here' : 'Start a spark'}</Text>
             <Text style={styles.empty}>
               {isCreator
-                ? 'When someone sends a time or a vibe, it lands here. Until then, keep the chat warm — chemistry over logistics.'
-                : 'Lead with something easy — a time, a place, a feeling. You can always fine-tune what happens next.'}
+                ? 'When someone sends a time or a vibe, it lands here. Until then, keep the chat warm. Chemistry over logistics.'
+                : 'Lead with something easy: a time, a place, a feeling. You can always fine-tune what happens next.'}
             </Text>
           </View>
         }
@@ -502,7 +568,7 @@ export function NegotiationChat({ plan }: Props) {
               {isCreator && item.status === 'pending' && !isOfferExpired(item) && !moodClosed ? (
                 <View style={styles.actions}>
                   <Button
-                    title="Sounds good"
+                    title={plan.is_group_plan ? 'Accept slot' : 'Sounds good'}
                     onPress={() => void acceptOfferRow(item)}
                     style={Object.assign({}, styles.actionBtn, styles.actionBtnAccept)}
                   />
@@ -538,13 +604,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.35)',
   },
-  expiredStripTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.text, lineHeight: 18 },
+  expiredStripTxt: { flex: 1, fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.text, lineHeight: 18 },
   hintCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     ...Platform.select({
       ios: {
         shadowColor: '#4C1D95',
@@ -567,12 +634,14 @@ const styles = StyleSheet.create({
   hintKicker: {
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginTop: 2,
   },
-  hintTitle: { fontSize: 19, fontWeight: '800', color: colors.text, letterSpacing: -0.5, lineHeight: 24 },
+  hintTitle: { fontSize: 19, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.5, lineHeight: 24 },
   hint: {
     fontSize: 14,
     color: colors.textMuted,
@@ -589,11 +658,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.button,
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.35)',
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    borderColor: 'rgba(94, 82, 255, 0.35)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
   openChatPillPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
-  openChatTxt: { fontSize: 15, fontWeight: '700', color: colors.primary, letterSpacing: -0.2 },
+  openChatTxt: { fontSize: 15, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.primary, letterSpacing: -0.2 },
   listFlex: { flex: 1 },
   listFill: { flex: 1 },
   list: {
@@ -621,6 +691,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 22,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.sm,
     letterSpacing: -0.6,
@@ -630,6 +701,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.textMuted,
     fontSize: 15,
+    fontFamily: fonts.regular,
     lineHeight: 23,
     maxWidth: 300,
     letterSpacing: -0.2,
@@ -649,6 +721,7 @@ const styles = StyleSheet.create({
   },
   composerSubtitle: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     lineHeight: 21,
     marginBottom: spacing.sm,
@@ -657,6 +730,7 @@ const styles = StyleSheet.create({
   chipsSectionLabel: {
     fontSize: 10,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
@@ -667,12 +741,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
   chipPressed: { opacity: 0.88, transform: [{ scale: 0.97 }] },
-  chipTxt: { fontSize: 13, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
+  chipTxt: { fontSize: 13, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, letterSpacing: -0.2 },
   fieldLabel: {
     fontSize: 11,
     fontWeight: '800',
@@ -700,6 +775,7 @@ const styles = StyleSheet.create({
   timeBtnTxt: {
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: fonts.medium,
     color: colors.text,
     flex: 1,
     letterSpacing: -0.2,
@@ -709,7 +785,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     ...Platform.select({
       ios: {
-        shadowColor: '#6C63FF',
+        shadowColor: '#5E52FF',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.35,
         shadowRadius: 16,

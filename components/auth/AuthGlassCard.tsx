@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.22)',
+    borderColor: 'rgba(94, 82, 255,0.22)',
   },
   inner: {
     paddingVertical: spacing.lg,

@@ -1,3 +1,4 @@
+import { readGpsCoords } from '@/lib/location/readGpsCoords';
 import { formatGeocodedAddress } from '@/lib/location/locationGeocode';
 import type { ProfileLocationPatch } from '@/lib/profile/profileLocation';
 import * as Location from 'expo-location';
@@ -15,24 +16,26 @@ export async function readCurrentProfileLocation(): Promise<ProfileLocationPatch
   }
   if (status !== 'granted') return null;
 
-  const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  const coords = await readGpsCoords();
+  if (!coords) return null;
+
   let label = '';
   try {
     const places = await Location.reverseGeocodeAsync({
-      latitude: pos.coords.latitude,
-      longitude: pos.coords.longitude,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
     });
     label = formatGeocodedAddress(places[0]) || '';
   } catch {
     label = '';
   }
   if (!label.trim()) {
-    label = formatCoords(pos.coords.latitude, pos.coords.longitude);
+    label = formatCoords(coords.latitude, coords.longitude);
   }
 
   return {
     locationLabel: label,
-    locationLatitude: pos.coords.latitude,
-    locationLongitude: pos.coords.longitude,
+    locationLatitude: coords.latitude,
+    locationLongitude: coords.longitude,
   };
 }

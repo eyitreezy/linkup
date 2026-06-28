@@ -1,4 +1,9 @@
 import { resolveEscrowParties } from '@/lib/plans/escrowParties';
+import {
+  groupPlanParticipantCount,
+  groupPlanPerPersonCents,
+  isGroupEqualSplitPlan,
+} from '@/lib/plans/groupEscrowSplit';
 import type { DbPlan, EscrowPattern } from '@/types/database';
 
 export function formatEscrowMoney(cents: number, currency: string): string {
@@ -35,12 +40,28 @@ export type AgreementPaymentPreview = {
 };
 
 export function getAgreementPaymentPreview(
-  plan: Pick<DbPlan, 'creator_id' | 'escrow_pattern' | 'host_contribution_bps' | 'currency'>,
+  plan: Pick<
+    DbPlan,
+    'creator_id' | 'escrow_pattern' | 'host_contribution_bps' | 'currency' | 'is_group_plan' | 'max_guests' | 'accepted_guest_count'
+  >,
   guestUserId: string,
   totalCents: number,
   currentUserId: string
 ): AgreementPaymentPreview {
   const pattern = (plan.escrow_pattern ?? 'A') as EscrowPattern;
+
+  if (isGroupEqualSplitPlan(plan)) {
+    const perPerson = groupPlanPerPersonCents(totalCents, groupPlanParticipantCount(plan));
+    return {
+      pattern,
+      totalCents,
+      userPaysCents: perPerson,
+      counterpartyPaysCents: Math.max(0, totalCents - perPerson),
+      userIsPayer: true,
+      currency: plan.currency ?? 'NGN',
+    };
+  }
+
   const { payerId, hostShareCents, guestShareCents } = resolveEscrowParties(plan, guestUserId, totalCents);
   const userIsHost = currentUserId === plan.creator_id;
   const userPaysCents =

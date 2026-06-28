@@ -1,11 +1,8 @@
-import { Button } from '@/components/Button';
-import { kycColors, kycShadow, kycStyles } from '@/components/kyc/kycTheme';
-import { spacing } from '@/constants/theme';
+import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
 import type { UserVerification } from '@/types/database';
 import { Href, router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   visible: boolean;
@@ -21,7 +18,7 @@ type Props = {
 const DEFAULT_TITLE = 'Verification required to continue';
 
 const WHY_COMPULSORY =
-  'Why this matters: LinkUp only allows creating plans, sending offers, and using escrow after we confirm who you are. That protects everyone at real-world meetups and when money changes hands.';
+  'Why this matters: LinkUp only allows creating plans, sending offers, and using escrow after we confirm who you are. That protects everyone at real world meetups and when money changes hands.';
 
 const DEFAULT_INTRO =
   'To keep meetups and payments safe for everyone, LinkUp needs to confirm your identity before you create plans, negotiate offers, or use secure escrow.';
@@ -68,18 +65,18 @@ export function VerificationHardGateModal({
       return {
         modalTitle: 'Your verification is in review',
         body:
-          "Good news — we've received your documents and our team is reviewing them. Most decisions come back within a few hours; sometimes it takes a bit longer.\n\n" +
-          "You'll still need an approved verification before you can create plans, negotiate, or use escrow — we can't unlock those steps until your review is complete.\n\n" +
+          "Good news. We've received your documents and our team is reviewing them. Most decisions come back within a few hours; sometimes it takes a bit longer.\n\n" +
+          "You'll still need an approved verification before you can create plans, negotiate, or use escrow. We can't unlock those steps until your review is complete.\n\n" +
           WHY_COMPULSORY +
           '\n\nTap below to open the verification hub, check your place in the flow, or add anything we request.',
-        primaryLabel: 'Resume / view status',
+        primaryLabel: 'View status',
       };
     }
     if (effectiveStatus === 'rejected') {
       return {
         modalTitle: 'Verification needs another look',
         body:
-          "We weren't able to approve your last submission — often due to glare or unreadable photos. You can try again with clearer images.\n\n" +
+          "We weren't able to approve your last submission, often due to glare or unreadable photos. You can try again with clearer images.\n\n" +
           WHY_COMPULSORY,
         primaryLabel: 'Resume verification',
       };
@@ -98,58 +95,18 @@ export function VerificationHardGateModal({
   }
 
   return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={[kycStyles.card, styles.card]} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>{modalTitle}</Text>
-          <ScrollView
-            style={styles.bodyScroll}
-            contentContainerStyle={styles.bodyScrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.body}>{body}</Text>
-          </ScrollView>
-          <View style={styles.actions}>
-            <Button title={primaryLabel} onPress={goToKyc} pill />
-            <Button title="Not now" variant="ghost" onPress={onClose} style={{ marginTop: spacing.sm }} />
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <AppConfirmModal
+      visible={visible}
+      onClose={onClose}
+      kicker="Verification"
+      title={modalTitle}
+      message={body}
+      primaryLabel={primaryLabel}
+      onPrimary={goToKyc}
+      secondaryLabel="Not now"
+      iconVariant="verification"
+      actionsLayout="stack"
+      stackPrimaryFirst
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(26,29,38,0.45)',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  card: {
-    ...kycShadow,
-    maxHeight: '88%',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: kycColors.text,
-    marginBottom: spacing.md,
-  },
-  bodyScroll: {
-    maxHeight: 320,
-    marginBottom: spacing.lg,
-  },
-  bodyScrollContent: {
-    flexGrow: 1,
-  },
-  body: {
-    fontSize: 15,
-    color: kycColors.muted,
-    lineHeight: 22,
-  },
-  actions: {
-    marginTop: 'auto',
-  },
-});

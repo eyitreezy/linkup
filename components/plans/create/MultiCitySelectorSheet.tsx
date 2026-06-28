@@ -3,7 +3,7 @@
  */
 import { MultiCitySearchField } from '@/components/plans/create/MultiCitySearchField';
 import { MULTI_CITY_MIN } from '@/lib/plans/nigerianCities';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -65,8 +65,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: spacing.xs,
   },
-  title: { fontSize: 20, fontWeight: '900', color: colors.text },
-  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600' },
+  title: { fontSize: 20, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  sub: { fontSize: 14, color: colors.textMuted, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
   doneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -78,5 +79,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   doneDisabled: { opacity: 0.45 },
-  doneTxt: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  doneTxt: { color: '#fff', fontWeight: '800',
+    fontFamily: fonts.bold, fontSize: 16 },
 });

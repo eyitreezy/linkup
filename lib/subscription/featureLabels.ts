@@ -12,6 +12,7 @@ const FEATURE_LABELS: Record<string, string> = {
   'boost.24hr': '24-hour boost',
   'boost.72hr': '72-hour boost',
   'spotlight.profile': 'Profile spotlight',
+  'visibility.tier_audience': 'Tier-targeted visibility',
   'escrow.high_value': 'High-value escrow',
   'escrow.pattern_b': 'Split escrow',
   'escrow.pattern_c': 'Guest-funded escrow',

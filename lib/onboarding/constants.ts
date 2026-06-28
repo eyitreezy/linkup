@@ -14,7 +14,7 @@ export const ONBOARDING_STEP_LABELS = [
 ] as const;
 
 export const ONBOARDING_STEP_SUBTITLES = [
-  'A name, a birthday, and one photo — quick.',
+  'A name, a birthday, three photos, and one intro video.',
   'Short bio, tags, and a prompt or two.',
   'Where you are and who you’d like to meet.',
   'A few quick tips — stay in control.',

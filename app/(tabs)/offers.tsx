@@ -7,7 +7,7 @@ import { OfferListCard } from '@/components/offers/OfferListCard';
 import { OffersSegmentedControl, type OffersSegment } from '@/components/offers/OffersSegmentedControl';
 import { EngagementCarousel } from '@/components/plans/EngagementCarousel';
 import { Screen } from '@/components/Screen';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { acceptPlanOffer } from '@/lib/plans/acceptPlanOffer';
 import {
@@ -24,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
+import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -49,6 +50,7 @@ function OffersSkeleton() {
 
 export default function OffersScreen() {
   const tabBarScroll = useTabBarScrollProps();
+  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user, dbUser } = useAuth();
   const [segment, setSegment] = useState<OffersSegment>('sent');
   const [sent, setSent] = useState<OfferDashboardRow[]>([]);
@@ -134,6 +136,7 @@ export default function OffersScreen() {
   }, [loadEngagement]);
 
   const list = segment === 'sent' ? sent : received;
+  const isEmpty = !loading && list.length === 0;
 
   async function handleAccept(row: OfferDashboardRow) {
     if (!user) return;
@@ -194,10 +197,11 @@ export default function OffersScreen() {
       />
       <View style={styles.root}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF5F8', '#E8FAF4', colors.discoveryGradientBottom]}
+          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
+          style={bleedBgStyle}
+          pointerEvents="none"
         />
 
         <View style={styles.heroHeader}>
@@ -213,7 +217,9 @@ export default function OffersScreen() {
             <View style={styles.heroText}>
               <Text style={styles.heroKicker}>Negotiations</Text>
               <Text style={styles.heroTitle}>Offers</Text>
-              <Text style={styles.heroSub}>Everything you’ve proposed — and what hosts send your way — in one place.</Text>
+              <Text style={styles.heroSub}>
+                Your outgoing offers and what hosts send back to you, all in one place.
+              </Text>
             </View>
           </View>
           {summaryLabel ? (
@@ -237,7 +243,7 @@ export default function OffersScreen() {
           keyExtractor={(r) => r.offer.id}
           extraData={busyOfferId}
           style={styles.listFlex}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, isEmpty && styles.listEmpty]}
           {...tabBarScroll}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -247,7 +253,7 @@ export default function OffersScreen() {
               <OffersSkeleton />
             ) : segment === 'sent' ? (
               <View style={styles.empty}>
-                <LinearGradient colors={['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.18)']} style={styles.emptyRing}>
+                <LinearGradient colors={['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.18)']} style={styles.emptyRing}>
                   <LinearGradient colors={['#fff', '#FFF8FC']} style={styles.emptyRingInner}>
                     <Ionicons name="paper-plane-outline" size={38} color={colors.secondary} />
                   </LinearGradient>
@@ -256,7 +262,7 @@ export default function OffersScreen() {
                   No offers <Text style={styles.emptyTitleAccent}>sent</Text> yet
                 </Text>
                 <Text style={styles.emptySub}>
-                  When you negotiate on a plan, your numbers and notes show up here for easy follow-up.
+                  Make an offer on a plan you like and it’ll show up here so you can follow up anytime.
                 </Text>
                 <LinearGradient
                   colors={[colors.primary, '#8B7CFF', colors.secondary]}
@@ -276,7 +282,7 @@ export default function OffersScreen() {
               </View>
             ) : (
               <View style={styles.empty}>
-                <LinearGradient colors={['rgba(255,101,132,0.22)', 'rgba(108,99,255,0.18)']} style={styles.emptyRing}>
+                <LinearGradient colors={['rgba(255, 74, 114,0.22)', 'rgba(94, 82, 255,0.18)']} style={styles.emptyRing}>
                   <LinearGradient colors={['#fff', '#F5F0FF']} style={styles.emptyRingInner}>
                     <Ionicons name="mail-unread-outline" size={38} color={colors.primary} />
                   </LinearGradient>
@@ -285,7 +291,7 @@ export default function OffersScreen() {
                   Inbox <Text style={styles.emptyTitleAccent}>quiet</Text>
                 </Text>
                 <Text style={styles.emptySub}>
-                  When someone wants in on your plan, their offer appears here — accept, counter, or pass with context.
+                  When someone’s interested in your plan, their offer will appear here. You can accept, counter, or pass.
                 </Text>
                 <LinearGradient
                   colors={[colors.primary, '#8B7CFF', colors.secondary]}
@@ -352,12 +358,14 @@ const styles = StyleSheet.create({
   heroKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 4,
   },
-  heroTitle: { fontSize: 30, fontWeight: '900', color: colors.text, letterSpacing: -0.7 },
+  heroTitle: { fontSize: 30, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.7 },
   heroSub: {
     fontSize: 15,
     fontWeight: '600',
@@ -371,13 +379,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 101, 132, 0.25)',
+    borderColor: 'rgba(255, 74, 114, 0.25)',
     marginTop: 8,
   },
-  countPillTxt: { fontSize: 11, fontWeight: '900', color: colors.secondary },
+  countPillTxt: { fontSize: 11, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.secondary },
   listFlex: { flex: 1 },
   list: { paddingBottom: 120, flexGrow: 1 },
-  empty: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, alignItems: 'center' },
+  listEmpty: { justifyContent: 'center' },
+  empty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    width: '100%',
+  },
   emptyRing: {
     width: 96,
     height: 96,
@@ -396,7 +412,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.88)',
   },
-  emptyTitle: { fontSize: 22, fontWeight: '900', color: colors.text, textAlign: 'center', letterSpacing: -0.3 },
+  emptyTitle: { fontSize: 22, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, textAlign: 'center', letterSpacing: -0.3 },
   emptyTitleAccent: { color: colors.secondary },
   emptySub: {
     fontSize: 16,
@@ -410,11 +427,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     borderRadius: radius.button,
     padding: 2,
-    alignSelf: 'stretch',
+    alignSelf: 'center',
+    width: '100%',
     maxWidth: 320,
   },
   emptyCtaInner: { backgroundColor: '#fff', width: '100%', margin: 0 },
-  emptyCtaTxt: { color: colors.primary, fontWeight: '900' },
+  emptyCtaTxt: { color: colors.primary, fontWeight: '900',
+    fontFamily: fonts.bold,},
   skelWrap: { paddingTop: spacing.xs },
   skelCard: {
     marginHorizontal: spacing.md,
@@ -423,19 +442,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
   },
   skelBadge: {
     width: 72,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(255, 101, 132, 0.15)',
+    backgroundColor: 'rgba(255, 74, 114, 0.15)',
     marginBottom: spacing.sm,
   },
   skelLineLg: {
     height: 18,
     borderRadius: 6,
-    backgroundColor: 'rgba(108, 99, 255, 0.12)',
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
     width: '88%',
     marginBottom: spacing.md,
   },
@@ -444,9 +463,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
   },
   skelCol: { flex: 1, gap: 8, justifyContent: 'center' },
   skelLineMd: { height: 14, borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', width: '70%' },
-  skelLineSm: { height: 12, borderRadius: 6, backgroundColor: 'rgba(255, 101, 132, 0.1)', width: '45%' },
+  skelLineSm: { height: 12, borderRadius: 6, backgroundColor: 'rgba(255, 74, 114, 0.1)', width: '45%' },
 });

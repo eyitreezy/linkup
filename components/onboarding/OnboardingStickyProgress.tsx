@@ -5,7 +5,7 @@ import {
   ONBOARDING_STEP_LABELS,
   ONBOARDING_TOTAL_STEPS,
 } from '@/lib/onboarding/constants';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MotiView } from 'moti';
 import { StyleSheet, Text, View } from 'react-native';
@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     backgroundColor: 'rgba(255,255,255,0.72)',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(108, 99, 255, 0.12)',
+    borderBottomColor: 'rgba(94, 82, 255, 0.12)',
     zIndex: 2,
   },
   row: {
@@ -69,12 +69,13 @@ const styles = StyleSheet.create({
   barGrad: { flex: 1, height: 5, borderRadius: 3 },
   bar: { height: 5, borderRadius: 3 },
   barDone: { backgroundColor: colors.primary },
-  barMuted: { backgroundColor: 'rgba(108, 99, 255, 0.15)' },
+  barMuted: { backgroundColor: 'rgba(94, 82, 255, 0.15)' },
   caption: {
     marginTop: 10,
     paddingHorizontal: spacing.md,
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.2,
   },

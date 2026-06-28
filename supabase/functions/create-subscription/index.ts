@@ -138,8 +138,15 @@ Deno.serve(async (req) => {
     return jsonError(flwJson.message ?? 'Payment initialization failed', 502);
   }
 
+  const paymentLink = String(flwJson.data.link).trim();
+
+  if (!/^https?:\/\//i.test(paymentLink)) {
+    console.error('Flutterwave returned invalid payment link', paymentLink);
+    return jsonError('Payment provider returned an invalid checkout link', 502);
+  }
+
   return jsonResponse({
-    payment_link: flwJson.data.link,
+    payment_link: paymentLink,
     tx_ref: txRef,
   });
 });

@@ -1,7 +1,8 @@
 /**
  * Rounded bubbles — sent: purple→pink gradient; received: soft surface.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { MentionFormattedText } from '@/components/messages/MentionFormattedText';
 import type { ResolvedChatBubbleTheme } from '@/lib/messaging/chatAppearance';
 import { useEventListener } from 'expo';
 import { Image } from 'expo-image';
@@ -79,6 +80,8 @@ export type ChatBubbleProps = {
   meta?: ChatBubbleMeta | null;
   /** Chat look (optional — defaults to app lavender theme). */
   theme?: ResolvedChatBubbleTheme | null;
+  /** When set, `<@userId>` tokens render as highlighted @mentions. */
+  mentionNameByUserId?: Map<string, string>;
 };
 
 export function ChatBubble({
@@ -94,6 +97,7 @@ export function ChatBubble({
   onLongPress,
   meta,
   theme,
+  mentionNameByUserId,
 }: ChatBubbleProps) {
   const [videoErr, setVideoErr] = useState(false);
   const text = (body ?? '').trim();
@@ -193,15 +197,32 @@ export function ChatBubble({
         </View>
       ) : null}
       {showText ? (
-        <Text
-          style={[
-            styles.text,
-            { fontSize: th?.fontSize ?? 16, fontWeight: th?.fontWeight ?? '400' },
-            isMine ? (th ? { color: th.textMine } : styles.textMine) : th ? { color: th.textThem } : styles.textThem,
-          ]}
-        >
-          {body}
-        </Text>
+        mentionNameByUserId && body ? (
+          <MentionFormattedText
+            body={body}
+            nameByUserId={mentionNameByUserId}
+            isMine={isMine}
+            baseStyle={[
+              styles.text,
+              {
+                fontSize: th?.fontSize ?? 16,
+                fontWeight: th?.fontWeight ?? '400',
+                fontFamily: th?.fontFamily ?? fonts.regular,
+              },
+              isMine ? (th ? { color: th.textMine } : styles.textMine) : th ? { color: th.textThem } : styles.textThem,
+            ]}
+          />
+        ) : (
+          <Text
+            style={[
+              styles.text,
+              { fontSize: th?.fontSize ?? 16, fontWeight: th?.fontWeight ?? '400', fontFamily: th?.fontFamily ?? fonts.regular },
+              isMine ? (th ? { color: th.textMine } : styles.textMine) : th ? { color: th.textThem } : styles.textThem,
+            ]}
+          >
+            {body}
+          </Text>
+        )
       ) : null}
       {showEdited && showText ? (
         <Text
@@ -267,7 +288,7 @@ export function ChatBubble({
         </LinearGradient>
       ) : (
         <LinearGradient
-          colors={th?.themBubble ?? ['#FFFFFF', '#F4F0FF', '#FFF5F8']}
+          colors={th?.themBubble ?? ['#FFFFFF', '#F4F0FF', '#FFD1E3']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[
@@ -300,7 +321,7 @@ const styles = StyleSheet.create({
   wrapMine: { alignSelf: 'flex-end' },
   wrapThem: { alignSelf: 'flex-start' },
   wrapHighlighted: {
-    backgroundColor: 'rgba(108, 99, 255, 0.14)',
+    backgroundColor: 'rgba(94, 82, 255, 0.14)',
     borderRadius: radius.lg,
     paddingHorizontal: 4,
     paddingVertical: 2,
@@ -314,21 +335,22 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   quoteWrapMine: { backgroundColor: 'rgba(0,0,0,0.12)' },
-  quoteWrapThem: { backgroundColor: 'rgba(108, 99, 255, 0.08)' },
+  quoteWrapThem: { backgroundColor: 'rgba(94, 82, 255, 0.08)' },
   quotePressed: { opacity: 0.88 },
   quoteBar: { width: 3, borderRadius: 2, alignSelf: 'stretch' },
   quoteBarMine: { backgroundColor: 'rgba(255,255,255,0.85)' },
   quoteBarThem: { backgroundColor: colors.primary },
   quoteTextCol: { flex: 1, minWidth: 0 },
-  quoteSender: { fontSize: 12, fontWeight: '800', marginBottom: 2 },
+  quoteSender: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, marginBottom: 2 },
   quoteSenderMine: { color: 'rgba(255,255,255,0.92)' },
   quoteSenderThem: { color: colors.primary },
-  quotePreview: { fontSize: 13, lineHeight: 17, fontWeight: '600' },
+  quotePreview: { fontSize: 13, lineHeight: 17, fontWeight: '600', fontFamily: fonts.medium, },
   quotePreviewMine: { color: 'rgba(255,255,255,0.82)' },
   quotePreviewThem: { color: colors.textMuted },
   forwardedRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 4 },
   forwardedIcon: { marginTop: 1 },
-  forwardedText: { fontSize: 11, fontWeight: '800', fontStyle: 'italic', letterSpacing: 0.2 },
+  forwardedText: { fontSize: 11, fontWeight: '800', fontStyle: 'italic', letterSpacing: 0.2, fontFamily: fonts.bold, },
   forwardedTextMine: { color: 'rgba(255,255,255,0.82)' },
   forwardedTextThem: { color: colors.textMuted },
   bubble: {
@@ -341,7 +363,7 @@ const styles = StyleSheet.create({
   bubbleThem: {},
   bubbleThemSurface: {
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.14)',
     shadowColor: colors.secondary,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
@@ -355,13 +377,14 @@ const styles = StyleSheet.create({
   },
   bubbleDeletedMine: { backgroundColor: 'rgba(0,0,0,0.08)' },
   bubbleDeletedThem: { backgroundColor: colors.surface },
-  deletedText: { fontSize: 14, lineHeight: 20, fontStyle: 'italic' },
+  deletedText: { fontSize: 14,
+    fontFamily: fonts.regular, lineHeight: 20, fontStyle: 'italic' },
   deletedTextMine: { color: colors.textMuted },
   deletedTextThem: { color: colors.textMuted },
-  editedHint: { fontSize: 11, marginTop: 4, fontStyle: 'italic' },
+  editedHint: { fontSize: 11, marginTop: 4, fontStyle: 'italic', fontFamily: fonts.regular, },
   editedHintMine: { color: 'rgba(255,255,255,0.75)' },
   editedHintThem: { color: colors.textMuted },
-  text: { fontSize: 16, lineHeight: 22 },
+  text: { fontSize: 16, lineHeight: 22, fontFamily: fonts.regular, },
   textMine: { color: '#fff' },
   textThem: { color: colors.text },
   metaRow: {
@@ -372,15 +395,16 @@ const styles = StyleSheet.create({
   },
   metaRowMine: { justifyContent: 'flex-end' },
   metaRowThem: { justifyContent: 'flex-start' },
-  metaTime: { fontSize: 11, fontWeight: '600' },
+  metaTime: { fontSize: 11, fontWeight: '600',
+    fontFamily: fonts.medium,},
   metaTimeMine: { color: 'rgba(255,255,255,0.72)' },
   metaTimeThem: { color: colors.textMuted },
-  metaTick: { fontSize: 12, color: 'rgba(255,255,255,0.85)', fontWeight: '700' },
-  metaRead: { fontSize: 12, color: 'rgba(200, 230, 255, 0.95)', fontWeight: '800', letterSpacing: -1 },
+  metaTick: { fontSize: 12, color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontFamily: fonts.medium, },
+  metaRead: { fontSize: 12, color: 'rgba(200, 230, 255, 0.95)', fontWeight: '800', letterSpacing: -1, fontFamily: fonts.bold, },
   mediaBlock: { marginBottom: 6, borderRadius: radius.md, overflow: 'hidden' },
   image: { width: 220, height: 220, borderRadius: radius.md, backgroundColor: colors.border },
   video: { width: 240, height: 180, backgroundColor: '#000' },
-  videoFallback: { color: colors.textMuted, fontSize: 13, padding: 8 },
+  videoFallback: { color: colors.textMuted, fontSize: 13, padding: 8, fontFamily: fonts.regular, },
   failBanner: { alignSelf: 'flex-end', marginBottom: 4, marginRight: 4 },
-  failText: { fontSize: 12, color: '#c62828', fontWeight: '600' },
+  failText: { fontSize: 12, color: '#c62828', fontWeight: '600', fontFamily: fonts.medium, },
 });

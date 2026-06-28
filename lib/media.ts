@@ -2,6 +2,7 @@
  * Upload media to Supabase Storage and insert polymorphic `media` row.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
 
 export async function uploadChatImage(
   supabase: SupabaseClient,
@@ -19,14 +20,16 @@ export async function uploadChatImage(
 
   const { data: row, error } = await supabase
     .from('media')
-    .insert({
-      parent_table: 'messages',
-      parent_id: conversationId,
-      storage_bucket: 'chat-media',
-      storage_path: name,
-      mime_type: 'image/jpeg',
-      created_by: userId,
-    })
+    .insert(
+      buildMediaInsertPayload({
+        parent_table: 'messages',
+        parent_id: conversationId,
+        storage_bucket: 'chat-media',
+        storage_path: name,
+        mime_type: 'image/jpeg',
+        created_by: userId,
+      })
+    )
     .select('id')
     .single();
   if (error) throw error;

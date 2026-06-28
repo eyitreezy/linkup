@@ -2,7 +2,12 @@
  * Settings / support screens — fixed top back row (membership-style), scrollable body below.
  */
 import { Screen } from '@/components/Screen';
+import {
+  DISCOVERY_SHELL_GRADIENT,
+  DISCOVERY_SHELL_GRADIENT_LOCATIONS,
+} from '@/constants/gradients';
 import { colors, radius, spacing } from '@/constants/theme';
+import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -54,15 +59,16 @@ export function SettingsStickyShell({
   safeAreaEdges = ['top', 'left', 'right'],
   refreshControl,
 }: Props) {
+  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   return (
     <Screen safeAreaEdges={safeAreaEdges} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <LinearGradient
-          colors={['#EDE8FF', '#FFF0F5', '#E8FAF4', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
+          colors={[...DISCOVERY_SHELL_GRADIENT]}
+          locations={[...DISCOVERY_SHELL_GRADIENT_LOCATIONS]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
+          style={bleedBgStyle}
           pointerEvents="none"
         />
 
@@ -102,7 +108,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',

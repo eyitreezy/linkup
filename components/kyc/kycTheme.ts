@@ -1,9 +1,9 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Platform, StyleSheet } from 'react-native';
 
 export const kycColors = {
-  primary: '#6C63FF',
-  secondary: '#FF6584',
+  primary: '#5E52FF',
+  secondary: '#FF4A72',
   background: '#F5F6FA',
   surface: '#FFFFFF',
   text: '#1A1D26',
@@ -20,7 +20,7 @@ export const kycShadow = {
 
 export const kycCtaShadow = Platform.select({
   ios: {
-    shadowColor: '#6C63FF',
+    shadowColor: '#5E52FF',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.26,
     shadowRadius: 18,
@@ -51,7 +51,7 @@ export const kycInboxStyles = StyleSheet.create({
     borderRadius: radius.button,
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -65,6 +65,7 @@ export const kycInboxStyles = StyleSheet.create({
   topNavBadgeText: {
     fontSize: 13,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: 0.2,
   },
@@ -76,7 +77,7 @@ export const kycInboxStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
     ...Platform.select({
       ios: {
         shadowColor: '#1A1D26',
@@ -105,6 +106,7 @@ export const kycInboxStyles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -113,6 +115,7 @@ export const kycInboxStyles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.45,
     marginBottom: 6,
@@ -123,6 +126,7 @@ export const kycInboxStyles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   sectionHead: {
     marginBottom: spacing.sm,
@@ -143,6 +147,7 @@ export const kycInboxStyles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -159,7 +164,7 @@ export const kycInboxStyles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     ...Platform.select({
       ios: {
         shadowColor: '#2a1f55',
@@ -185,17 +190,19 @@ export const kycStyles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     ...kycShadow,
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
+    fontFamily: fonts.bold,
     color: kycColors.text,
     marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: kycColors.muted,
     lineHeight: 24,
     marginBottom: spacing.lg,
@@ -205,8 +212,9 @@ export const kycStyles = StyleSheet.create({
     gap: spacing.sm,
   },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
-  bullet: { color: kycColors.primary, fontSize: 16, marginRight: spacing.sm, fontWeight: '700' },
-  bulletText: { flex: 1, fontSize: 15, color: kycColors.text, lineHeight: 22 },
+  bullet: { color: kycColors.primary, fontSize: 16, marginRight: spacing.sm, fontWeight: '700',
+    fontFamily: fonts.medium,},
+  bulletText: { flex: 1, fontSize: 15, color: kycColors.text, lineHeight: 22, fontFamily: fonts.regular, },
   /** Match onboarding `OnboardingProgress` spacing + track; keep KYC purple fill. */
   progressWrap: {
     marginBottom: spacing.lg,
@@ -228,6 +236,7 @@ export const kycStyles = StyleSheet.create({
   progressLabel: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: fonts.medium,
     color: kycColors.muted,
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,

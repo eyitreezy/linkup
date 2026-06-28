@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     shadowColor: '#2a1f55',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
@@ -77,6 +77,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -84,9 +85,10 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.md },
   rowText: { flex: 1 },
-  rowLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: 2 },
-  rowValue: { fontSize: 16, fontWeight: '600', color: colors.text, lineHeight: 22 },
-  rowValueEm: { fontSize: 18, fontWeight: '800', color: colors.primary },
+  rowLabel: { fontSize: 12, fontWeight: '600',
+    fontFamily: fonts.medium, color: colors.textMuted, marginBottom: 2 },
+  rowValue: { fontSize: 16, fontWeight: '600', color: colors.text, lineHeight: 22, fontFamily: fonts.medium, },
+  rowValueEm: { fontSize: 18, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
   trust: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -96,5 +98,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginTop: spacing.xs,
   },
-  trustTxt: { flex: 1, fontSize: 14, color: '#065F46', lineHeight: 20, fontWeight: '600' },
+  trustTxt: { flex: 1, fontSize: 14, color: '#065F46', lineHeight: 20, fontWeight: '600',
+    fontFamily: fonts.medium,},
 });

@@ -1,10 +1,10 @@
 /**
  * Composer — frosted row + gradient send control.
  */
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View, type TextInputSelectionChangeEventData, type NativeSyntheticEvent } from 'react-native';
 
 export type MessageInputThreadLook = {
   sendActive: [string, string];
@@ -31,6 +31,9 @@ export type MessageInputProps = {
   threadLook?: MessageInputThreadLook | null;
   /** Parent provides + toggle (ChatComposer); omit default attach button. */
   hideLeadingAttach?: boolean;
+  onComposerFocus?: () => void;
+  selection?: { start: number; end: number };
+  onSelectionChange?: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
 };
 
 export function MessageInput({
@@ -44,6 +47,9 @@ export function MessageInput({
   embeddedInSheet,
   threadLook,
   hideLeadingAttach,
+  onComposerFocus,
+  selection,
+  onSelectionChange,
 }: MessageInputProps) {
   const canSend = value.trim().length > 0 && !sending;
   const tl = threadLook;
@@ -85,6 +91,9 @@ export function MessageInput({
         multiline
         maxLength={4000}
         editable={!sending}
+        onFocus={onComposerFocus}
+        selection={selection}
+        onSelectionChange={onSelectionChange}
         returnKeyType="send"
         returnKeyLabel="Send"
         blurOnSubmit={false}
@@ -143,10 +152,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
     fontSize: 16,
+    fontFamily: fonts.regular,
     color: colors.text,
     backgroundColor: 'rgba(255,255,255,0.98)',
     borderWidth: 1.5,
-    borderColor: 'rgba(108, 99, 255, 0.18)',
+    borderColor: 'rgba(94, 82, 255, 0.18)',
   },
   sendWrap: {
     borderRadius: 22,

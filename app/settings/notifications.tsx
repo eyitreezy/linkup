@@ -1,7 +1,7 @@
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { TierBadge } from '@/components/TierBadge';
 import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
 import { syncExpoPushTokenForUser } from '@/lib/notifications/registerPushNotifications';
@@ -133,7 +133,7 @@ export default function NotificationsSettingsScreen() {
               <Text style={styles.sectionTitle}>Notifications</Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -141,7 +141,7 @@ export default function NotificationsSettingsScreen() {
           </View>
 
           <LinearGradient
-            colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+            colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardOuter}
@@ -190,7 +190,7 @@ export default function NotificationsSettingsScreen() {
               <Text style={styles.sectionTitle}>Visibility</Text>
             </View>
             <LinearGradient
-              colors={['rgba(108,99,255,0.35)', 'rgba(255,101,132,0.2)', 'transparent']}
+              colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.sectionRule}
@@ -201,7 +201,7 @@ export default function NotificationsSettingsScreen() {
           </Text>
 
           <LinearGradient
-            colors={['rgba(108,99,255,0.18)', 'rgba(255,101,132,0.1)']}
+            colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.cardOuter}
@@ -312,6 +312,7 @@ const styles = StyleSheet.create({
   leadKicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -320,6 +321,7 @@ const styles = StyleSheet.create({
   leadTitle: {
     fontSize: 26,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.45,
     marginBottom: 6,
@@ -329,6 +331,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 22,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   sectionHead: {
     marginBottom: spacing.sm,
@@ -352,6 +355,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -368,6 +372,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     lineHeight: 20,
     fontWeight: '600',
+    fontFamily: fonts.medium,
   },
   cardOuter: {
     borderRadius: radius.xl,
@@ -403,6 +408,7 @@ const styles = StyleSheet.create({
   },
   rowLast: { borderBottomWidth: 0 },
   rowText: { flex: 1, minWidth: 0 },
-  label: { fontSize: 16, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
-  hint: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18, fontWeight: '600' },
+  label: { fontSize: 16, fontWeight: '700',
+    fontFamily: fonts.medium, color: colors.text, letterSpacing: -0.2 },
+  hint: { fontSize: 13, color: colors.textMuted, marginTop: 4, lineHeight: 18, fontWeight: '600', fontFamily: fonts.medium, },
 });

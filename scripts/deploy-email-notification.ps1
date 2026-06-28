@@ -51,4 +51,6 @@ npx supabase functions deploy notification-email --no-verify-jwt
 
 Write-Host "`nDone. Next: Supabase Dashboard -> Database -> Webhooks -> notifications INSERT"
 Write-Host "URL: https://othikifibhjpfgyxpzcu.supabase.co/functions/v1/notification-email"
-Write-Host "Header: x-linkup-webhook-secret = $webhookSecret"
+Write-Host "`nAuth signup / password reset mail uses SEPARATE Supabase Auth SMTP."
+Write-Host "Run: .\\scripts\\configure-auth-smtp.ps1"
+Write-Host "See: docs/EMAIL_VERIFICATION_SETUP.md"

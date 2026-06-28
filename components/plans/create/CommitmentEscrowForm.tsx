@@ -5,7 +5,7 @@ import { Input, onboardingInputShadow } from '@/components/Input';
 import { EscrowTrustExplainerCard } from '@/components/plans/create/EscrowTrustExplainerCard';
 import { FundingPatternCard } from '@/components/plans/create/FundingPatternCard';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { budgetTierFromNgn } from '@/lib/plans/budgetTierFromPrice';
@@ -35,11 +35,11 @@ const PATTERNS: {
 
 function priceHint(ngn: number): string {
   if (!Number.isFinite(ngn) || ngn <= 0) {
-    return 'Add an amount — we will size hints from your number.';
+    return 'Add an amount and we will size hints from your number.';
   }
   if (ngn < 8000) return 'Coffee & chill plans often land ₦5k–₦12k.';
   if (ngn < 25000) return 'Dinner meetups usually range ₦8k–₦25k.';
-  return 'Premium social plans often start ₦10k+ — make sure the story matches the ask.';
+  return 'Premium social plans often start ₦10k+. Make sure the story matches the ask.';
 }
 
 export function CommitmentEscrowForm() {
@@ -130,7 +130,7 @@ export function CommitmentEscrowForm() {
       />
 
       <Text style={styles.lead}>Commitment & plan security</Text>
-      <Text style={styles.sublead}>Secure commitment reduces flakes and builds trust — you stay in control of free vs paid.</Text>
+      <Text style={styles.sublead}>Secure commitment reduces flakes and builds trust. You stay in control of free vs paid.</Text>
 
       <EscrowTrustExplainerCard />
 
@@ -183,7 +183,7 @@ export function CommitmentEscrowForm() {
                 <Text style={styles.splitTitle}>Split ratio</Text>
               </View>
               <Text style={styles.splitValue}>Your share: {(draft.hostContributionBps / 100).toFixed(0)}%</Text>
-              <Text style={styles.splitHint}>Guest pays the remainder — both must fund on the escrow screen.</Text>
+              <Text style={styles.splitHint}>Guest pays the remainder. Both must fund on the escrow screen.</Text>
               <Slider
                 style={styles.slider}
                 minimumValue={1000}
@@ -219,8 +219,9 @@ const FIELD_BORDER = '#D8DCE6';
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.lg },
-  lead: { fontSize: 22, fontWeight: '900', color: colors.text, letterSpacing: -0.3, marginBottom: 6 },
-  sublead: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: spacing.md, fontWeight: '600' },
+  lead: { fontSize: 22, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.3, marginBottom: 6 },
+  sublead: { fontSize: 14, color: colors.textMuted, lineHeight: 21, marginBottom: spacing.md, fontWeight: '600', fontFamily: fonts.medium, },
   paidToggleCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,10 +235,11 @@ const styles = StyleSheet.create({
     ...onboardingInputShadow,
   },
   paidToggleText: { flex: 1, paddingRight: spacing.sm },
-  sectionLabel: { fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 4 },
-  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600' },
+  sectionLabel: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
+  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, fontWeight: '600', fontFamily: fonts.medium, },
   fundingSection: { marginBottom: spacing.sm },
-  fundingHint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: spacing.sm, fontWeight: '600' },
+  fundingHint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: spacing.sm, fontWeight: '600', fontFamily: fonts.medium, },
   patternList: { gap: spacing.sm },
   splitBlock: {
     marginBottom: spacing.md,
@@ -249,9 +251,10 @@ const styles = StyleSheet.create({
     ...onboardingInputShadow,
   },
   splitHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  splitTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
-  splitValue: { fontSize: 15, fontWeight: '900', color: colors.primary, marginBottom: 4 },
-  splitHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, lineHeight: 17, marginBottom: spacing.sm },
+  splitTitle: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  splitValue: { fontSize: 15, fontWeight: '900', color: colors.primary, marginBottom: 4, fontFamily: fonts.bold, },
+  splitHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, lineHeight: 17, marginBottom: spacing.sm, fontFamily: fonts.medium, },
   patternCAlert: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -263,16 +266,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.35)',
   },
-  patternCAlertTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400E', lineHeight: 18 },
+  patternCAlertTxt: { flex: 1, fontSize: 13, fontWeight: '600',
+    fontFamily: fonts.medium, color: '#92400E', lineHeight: 18 },
   slider: { width: '100%', height: 40 },
   hintCard: {
     backgroundColor: '#F8F7FF',
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(108,99,255,0.18)',
+    borderColor: 'rgba(94, 82, 255,0.18)',
     marginTop: spacing.sm,
   },
-  hintStrong: { fontSize: 12, fontWeight: '800', color: colors.primary, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  hintCardTxt: { fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600' },
+  hintStrong: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  hintCardTxt: { fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
 });

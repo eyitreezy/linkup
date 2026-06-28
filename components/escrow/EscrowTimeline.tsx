@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { EscrowTimelineItem } from '@/lib/escrow/buildEscrowTimeline';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,7 +23,7 @@ export function EscrowTimeline({ items }: Props) {
   return (
     <View style={styles.card}>
       <LinearGradient
-        colors={['rgba(108,99,255,0.1)', 'transparent']}
+        colors={['rgba(94, 82, 255,0.1)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.topRule}
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.12)',
+    borderColor: 'rgba(94, 82, 255, 0.12)',
     overflow: 'hidden',
     ...Platform.select({
       ios: {
@@ -88,12 +88,14 @@ const styles = StyleSheet.create({
   kicker: {
     fontSize: 11,
     fontWeight: '900',
+    fontFamily: fonts.bold,
     color: colors.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
-  title: { fontSize: 17, fontWeight: '900', color: colors.text, marginBottom: spacing.md, letterSpacing: -0.3 },
+  title: { fontSize: 17, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.md, letterSpacing: -0.3 },
   row: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm },
   rail: { alignItems: 'center', width: 28 },
   bullet: {
@@ -125,8 +127,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   body: { flex: 1, paddingBottom: spacing.sm },
-  itemTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+  itemTitle: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   itemTitleCurrent: { color: colors.primary },
-  sub: { fontSize: 14, color: colors.textMuted, marginTop: 4, lineHeight: 20, fontWeight: '600' },
-  time: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
+  sub: { fontSize: 14, color: colors.textMuted, marginTop: 4, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
+  time: { fontSize: 12, color: colors.textMuted, marginTop: 6, fontWeight: '600', fontFamily: fonts.medium, },
 });

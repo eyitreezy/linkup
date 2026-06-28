@@ -3,7 +3,7 @@
  */
 import { Avatar } from '@/components/Avatar';
 import { TierBadge } from '@/components/TierBadge';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import type { DbPlan, DbPlanOffer, EscrowStatus } from '@/types/database';
 import { Href, router } from 'expo-router';
@@ -140,12 +140,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  title: { fontSize: 16, fontWeight: '900', color: colors.text },
-  capHint: { fontSize: 13, color: colors.textMuted, marginTop: 4, marginBottom: spacing.sm },
-  empty: { fontSize: 14, color: colors.textMuted },
+  title: { fontSize: 16, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.text },
+  capHint: { fontSize: 13, color: colors.textMuted, marginTop: 4, marginBottom: spacing.sm, fontFamily: fonts.regular, },
+  empty: { fontSize: 14, color: colors.textMuted, fontFamily: fonts.regular, },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 10 },
   rowBody: { flex: 1, gap: 4 },
-  name: { fontSize: 15, fontWeight: '700', color: colors.text },
-  escrowStatus: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  viewOffers: { marginTop: spacing.sm, fontSize: 14, fontWeight: '800', color: colors.primary },
+  name: { fontSize: 15, fontWeight: '700', color: colors.text, fontFamily: fonts.medium, },
+  escrowStatus: { fontSize: 12, fontWeight: '700', color: colors.textMuted, fontFamily: fonts.medium, },
+  viewOffers: { marginTop: spacing.sm, fontSize: 14, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold, },
 });

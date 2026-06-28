@@ -2,6 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { MIN_ESCROW_CENTS, MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
 import { resolveEscrowParties } from '@/lib/plans/escrowParties';
+import {
+  isGroupEqualSplitPlan,
+  resolveGroupSplitEscrowParties,
+} from '@/lib/plans/groupEscrowSplit';
 import { checkPermission } from '@/lib/subscription/checkPermission';
 
 export type AgreementActionResult = { error: string | null; escrowId?: string };
@@ -31,12 +35,16 @@ export async function proceedToSecurePayment(
   offer: DbPlanOffer
 ): Promise<AgreementActionResult> {
   if (!plan.is_paid) {
-    return { error: 'This plan is free — no escrow step.' };
+    return { error: 'This plan is free. No escrow step.' };
   }
 
-  const amount = plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? 0;
-  if (amount <= 0) return { error: 'No payment amount for this plan.' };
-  if (amount < MIN_ESCROW_CENTS) {
+  const amountCents = Math.round(
+    Number(plan.agreed_price_cents ?? offer.amount_cents ?? plan.starting_price_cents ?? 0)
+  );
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return { error: 'No payment amount for this plan.' };
+  }
+  if (amountCents < MIN_ESCROW_CENTS) {
     return { error: `Minimum escrow is ₦${MIN_ESCROW_CENTS / 100} per policy.` };
   }
 
@@ -47,7 +55,7 @@ export async function proceedToSecurePayment(
   const actorId = authData.user?.id;
   if (!actorId) return { error: 'Not signed in.' };
 
-  if (amount > MAX_ESCROW_TIER1_CENTS) {
+  if (amountCents > MAX_ESCROW_TIER1_CENTS) {
     const perm = await checkPermission(actorId, 'escrow.high_value');
     if (!perm.allowed) {
       return { error: 'high_value_requires_platinum' };
@@ -78,11 +86,21 @@ export async function proceedToSecurePayment(
     }
   }
 
-  const { payerId, payeeId, hostShareCents, guestShareCents } = resolveEscrowParties(
-    plan,
-    offer.bidder_id,
-    amount
-  );
+  let hostShareAlreadyFunded = false;
+  if (isGroupEqualSplitPlan(plan)) {
+    const { data: hostFundedRow } = await client
+      .from('escrow_transactions')
+      .select('host_funded_at')
+      .eq('plan_id', plan.id)
+      .not('host_funded_at', 'is', null)
+      .limit(1)
+      .maybeSingle();
+    hostShareAlreadyFunded = !!hostFundedRow?.host_funded_at;
+  }
+
+  const { payerId, payeeId, hostShareCents, guestShareCents } = isGroupEqualSplitPlan(plan)
+    ? resolveGroupSplitEscrowParties(plan, offer.bidder_id, amountCents, hostShareAlreadyFunded)
+    : resolveEscrowParties(plan, offer.bidder_id, amountCents);
 
   const hostId = plan.creator_id;
   const guestId = offer.bidder_id;
@@ -93,13 +111,18 @@ export async function proceedToSecurePayment(
       ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
       : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: existing } = await client
-    .from('escrow_transactions')
-    .select('id')
-    .eq('plan_id', plan.id)
-    .eq('guest_id', guestId)
-    .maybeSingle();
+  const existingQuery = client.from('escrow_transactions').select('id').eq('plan_id', plan.id);
+  const { data: existing, error: existingErr } = plan.is_group_plan
+    ? await existingQuery.eq('guest_id', guestId).maybeSingle()
+    : await existingQuery.maybeSingle();
+  if (existingErr) {
+    console.error('[proceedToSecurePayment] existing escrow lookup failed:', existingErr.message);
+    return { error: existingErr.message };
+  }
   if (existing?.id) {
+    if (plan.is_group_plan) {
+      return { error: null, escrowId: existing.id as string };
+    }
     const { error: e1 } = await client.from('plans').update({ status: 'awaiting_payment' }).eq('id', plan.id);
     if (e1) return { error: e1.message };
     return { error: null, escrowId: existing.id as string };
@@ -125,19 +148,27 @@ export async function proceedToSecurePayment(
       offer_id: offer.id,
       group_plan_index: groupPlanIndex,
       escrow_pattern: pattern,
-      amount_cents: amount,
+      amount_cents: amountCents,
       host_share_cents: hostShareCents,
       guest_share_cents: guestShareCents,
       funding_deadline: fundingDeadline,
-      currency: plan.currency,
+      currency: plan.currency ?? 'NGN',
       status: 'pending_funding',
       metadata: pattern === 'B' ? { legs: 'split', phase: 'awaiting_payment' } : {},
     })
     .select('id')
     .single();
-  if (e2) return { error: e2.message };
+  if (e2) {
+    console.error('[proceedToSecurePayment] escrow insert failed:', e2.message);
+    return { error: e2.message };
+  }
 
-  const { error: e3 } = await client.from('plans').update({ status: 'awaiting_payment' }).eq('id', plan.id);
+  const { error: e3 } = await client
+    .from('plans')
+    .update({
+      status: plan.is_group_plan ? 'negotiating' : 'awaiting_payment',
+    })
+    .eq('id', plan.id);
   if (e3) return { error: e3.message };
 
   return { error: null, escrowId: esc.id as string };

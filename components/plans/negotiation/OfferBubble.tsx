@@ -1,7 +1,7 @@
 /**
  * Chat-styled offer row — distinct from plain text messages.
  */
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { isOfferExpired } from '@/lib/plans/offerRules';
 import type { DbPlanOffer } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -87,27 +87,29 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   bubbleMine: {
-    backgroundColor: 'rgba(108, 99, 255, 0.14)',
-    borderColor: 'rgba(108, 99, 255, 0.38)',
+    backgroundColor: 'rgba(94, 82, 255, 0.14)',
+    borderColor: 'rgba(94, 82, 255, 0.38)',
   },
   bubbleTheirs: {},
   bubbleDim: { opacity: 0.72 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' },
-  badgeTxt: { fontSize: 12, fontWeight: '800', color: colors.primary },
+  badgeTxt: { fontSize: 12, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.primary },
   hostTag: {
     fontSize: 10,
     fontWeight: '800',
     color: colors.secondary,
     textTransform: 'uppercase',
   },
-  amount: { fontSize: 20, fontWeight: '800', color: colors.text },
+  amount: { fontSize: 20, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
   row: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  meta: { fontSize: 13, color: colors.textMuted },
-  note: { fontSize: 14, color: colors.text, marginTop: 8, lineHeight: 20 },
-  status: { fontSize: 12, fontWeight: '700', marginTop: 8, textTransform: 'capitalize' },
-  expires: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
+  meta: { fontSize: 13, color: colors.textMuted, fontFamily: fonts.regular, },
+  note: { fontSize: 14, color: colors.text, marginTop: 8, lineHeight: 20, fontFamily: fonts.regular, },
+  status: { fontSize: 12, fontWeight: '700', marginTop: 8, textTransform: 'capitalize', fontFamily: fonts.medium, },
+  expires: { fontSize: 11, color: colors.textMuted, marginTop: 4, fontFamily: fonts.regular, },
 });

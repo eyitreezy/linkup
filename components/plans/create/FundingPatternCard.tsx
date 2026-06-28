@@ -3,7 +3,7 @@
  */
 import { onboardingInputShadow } from '@/components/Input';
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,8 +42,8 @@ export function FundingPatternCard({
       <LinearGradient
         colors={
           selected
-            ? ['rgba(108,99,255,0.2)', 'rgba(255,101,132,0.12)']
-            : ['rgba(108,99,255,0.06)', 'rgba(255,101,132,0.03)']
+            ? ['rgba(94, 82, 255,0.2)', 'rgba(255, 74, 114,0.12)']
+            : ['rgba(94, 82, 255,0.06)', 'rgba(255, 74, 114,0.03)']
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -123,7 +123,8 @@ const styles = StyleSheet.create({
   },
   textCol: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  title: { fontSize: 15, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
+  title: { fontSize: 15, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text, letterSpacing: -0.2 },
   titleOn: { color: colors.primary },
   tierBadge: {
     paddingHorizontal: 7,
@@ -134,11 +135,12 @@ const styles = StyleSheet.create({
     borderColor: FIELD_BORDER,
   },
   tierBadgeOn: {
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
-    borderColor: 'rgba(108, 99, 255, 0.22)',
+    backgroundColor: 'rgba(94, 82, 255, 0.1)',
+    borderColor: 'rgba(94, 82, 255, 0.22)',
   },
-  tierBadgeTxt: { fontSize: 9, fontWeight: '900', color: colors.primary, letterSpacing: 0.4 },
-  description: { fontSize: 13, color: colors.textMuted, marginTop: 3, lineHeight: 18, fontWeight: '600' },
+  tierBadgeTxt: { fontSize: 9, fontWeight: '900',
+    fontFamily: fonts.bold, color: colors.primary, letterSpacing: 0.4 },
+  description: { fontSize: 13, color: colors.textMuted, marginTop: 3, lineHeight: 18, fontWeight: '600', fontFamily: fonts.medium, },
   radio: {
     width: 24,
     height: 24,

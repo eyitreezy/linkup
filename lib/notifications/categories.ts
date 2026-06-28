@@ -9,6 +9,8 @@ const ACTIVITY: NotificationEventType[] = [
   'plan_reminder',
   'payment_reminder',
   'message',
+  'meet_type_approved',
+  'meet_type_rejected',
 ];
 
 const PAYMENTS: NotificationEventType[] = [
@@ -33,6 +35,7 @@ const SYSTEM: NotificationEventType[] = [
   'trial_started',
   'trial_expiring',
   'trial_expired',
+  'meet_type_submitted',
 ];
 
 export function notificationTab(type: string): NotificationFilterTab {
@@ -52,6 +55,7 @@ export function priorityForType(type: string): 'high' | 'medium' | 'low' {
     type === 'account_restriction' ||
     type === 'moderation_flagged' ||
     type === 'verification_updated' ||
+    type === 'meet_type_submitted' ||
     type.startsWith('escrow_')
   ) {
     return 'high';
