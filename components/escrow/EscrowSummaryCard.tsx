@@ -18,37 +18,37 @@ function Row({ icon, label, value, emphasize }: { icon: Ion; label: string; valu
 }
 
 type Props = {
-  amountLabel: string;
-  currency: string;
+  totalHeldLabel: string;
   paymentStatusLabel: string;
   whenLabel: string;
   locationLabel: string;
   trustNote: string;
-  /** e.g. "Your share" when split escrow — shown above total. */
-  yourShareLabel?: string | null;
+  /** Allocated or paid amount for the relevant leg on this escrow row. */
+  legAmountLabel?: string | null;
+  /** When leg amount differs from the row total (e.g. split escrow). */
+  showTotalHeld?: boolean;
 };
 
 export function EscrowSummaryCard({
-  amountLabel,
-  currency,
+  totalHeldLabel,
   paymentStatusLabel,
   whenLabel,
   locationLabel,
   trustNote,
-  yourShareLabel,
+  legAmountLabel,
+  showTotalHeld = false,
 }: Props) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Escrow summary</Text>
-      {yourShareLabel ? (
-        <Row icon="wallet-outline" label="Your payment" value={yourShareLabel} emphasize />
+      {legAmountLabel ? (
+        <Row icon="wallet-outline" label="Amount" value={legAmountLabel} emphasize />
+      ) : (
+        <Row icon="cash-outline" label="Amount" value={totalHeldLabel} emphasize />
+      )}
+      {showTotalHeld && legAmountLabel ? (
+        <Row icon="cash-outline" label="Total held" value={totalHeldLabel} />
       ) : null}
-      <Row
-        icon="cash-outline"
-        label={yourShareLabel ? 'Total held' : 'Amount'}
-        value={`${amountLabel} ${currency}`}
-        emphasize={!yourShareLabel}
-      />
       <Row icon="card-outline" label="Payment status" value={paymentStatusLabel} />
       <Row icon="time-outline" label="When" value={whenLabel} />
       <Row icon="location-outline" label="Where" value={locationLabel} />

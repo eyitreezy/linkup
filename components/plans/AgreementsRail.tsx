@@ -39,8 +39,14 @@ export function AgreementsRail({ items, loading }: Props) {
             ))
           : items.map((item) => (
               <Pressable
-                key={item.planId}
-                onPress={() => router.push(`/plan/${item.planId}/agreement` as Href)}
+                key={`${item.planId}-${item.offerId ?? 'main'}`}
+                onPress={() =>
+                  router.push(
+                    (item.offerId
+                      ? `/plan/${item.planId}/agreement?offerId=${item.offerId}`
+                      : `/plan/${item.planId}/agreement`) as Href
+                  )
+                }
                 style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                 accessibilityRole="button"
                 accessibilityLabel={`Open agreement with ${item.counterpartName} for ${item.planTitle}`}

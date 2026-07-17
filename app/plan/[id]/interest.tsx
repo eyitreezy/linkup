@@ -10,9 +10,10 @@ import { usePermission } from '@/hooks/usePermission';
 import { fetchHiddenEngagementUserIds } from '@/lib/plans/incognitoEngagement';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
-import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   FlatList,
@@ -33,20 +34,13 @@ type Row = {
   avatar_url: string | null;
 };
 
-const GRADIENT_COLORS = ['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom] as const;
 const HEADER_BAR = { backgroundColor: 'transparent', borderBottomWidth: 0 } as const;
 
 function InterestShell({ children }: { children: ReactNode }) {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot} style={styles.screenRoot}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={[...GRADIENT_COLORS]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
+        <AppShellBackground />
         {children}
       </View>
     </Screen>

@@ -29,12 +29,12 @@ export default function TabsLayout() {
         screenOptions={{
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
-          headerStyle: { backgroundColor: colors.background },
+          headerStyle: { backgroundColor: colors.splashBackground },
           headerTintColor: colors.text,
           headerTitle: () => null,
           tabBarShowLabel: false,
           tabBarBackground: () => <View style={{ backgroundColor: 'transparent' }} />,
-          sceneContainerStyle: { backgroundColor: colors.background },
+          sceneContainerStyle: { backgroundColor: colors.splashBackground },
           tabBarStyle: {
             position: 'absolute',
             left: 0,

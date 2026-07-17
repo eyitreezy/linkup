@@ -17,11 +17,11 @@ import { computeMoodExpiresAt } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow } from '@/lib/plans/moodPlanStart';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
-import { PLAN_WIZARD_GRADIENT } from '@/constants/gradients';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const DURATIONS = [
@@ -111,13 +111,7 @@ export default function CreatePlanStepMeetScreen() {
   return (
     <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
         <View style={styles.flex}>
-          <LinearGradient
-            colors={[...PLAN_WIZARD_GRADIENT]}
-            locations={[0, 0.25, 0.55, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0.85, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
+          <AppShellBackground />
           <VerificationHardGateModal
             visible={gateOpen}
             onClose={() => setGateOpen(false)}

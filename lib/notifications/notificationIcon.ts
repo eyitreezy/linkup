@@ -8,8 +8,15 @@ export function notificationIcon(type: string): IonName {
   const t = type as NotificationEventType;
   switch (t) {
     case 'offer_new':
-    case 'offer_counter':
+    case 'offer_received':
       return 'pricetag-outline';
+    case 'offer_counter':
+    case 'offer_countered':
+      return 'swap-horizontal-outline';
+    case 'offer_accepted':
+      return 'checkmark-circle-outline';
+    case 'offer_declined':
+      return 'close-circle-outline';
     case 'mutual_agreement':
       return 'hand-left-outline';
     case 'premium_activated':
@@ -49,6 +56,24 @@ export function notificationIcon(type: string): IonName {
       return 'checkmark-circle-outline';
     case 'meet_type_rejected':
       return 'close-circle-outline';
+    case 'slot_accepted_fund_now':
+      return 'wallet-outline';
+    case 'group_closed':
+      return 'lock-closed-outline';
+    case 'join_request_received':
+      return 'person-add-outline';
+    case 'join_request_approved':
+      return 'checkmark-circle-outline';
+    case 'join_request_declined':
+      return 'close-circle-outline';
+    case 'plan_invitation_received':
+      return 'mail-outline';
+    case 'plan_invitation_accepted':
+      return 'checkmark-circle-outline';
+    case 'plan_invitation_declined':
+      return 'close-circle-outline';
+    case 'plan_invitation_expired':
+      return 'time-outline';
     default:
       return 'notifications-outline';
   }

@@ -105,28 +105,40 @@ export async function proceedToSecurePayment(
   const hostId = plan.creator_id;
   const guestId = offer.bidder_id;
 
+  const { data: existingEscrow } = await client
+    .from('escrow_transactions')
+    .select('id')
+    .eq('plan_id', plan.id)
+    .eq('guest_id', guestId)
+    .maybeSingle();
+  if (existingEscrow?.id) {
+    if (plan.status === 'agreed') {
+      const { error: statusErr } = await client
+        .from('plans')
+        .update({ status: 'awaiting_payment' })
+        .eq('id', plan.id)
+        .eq('status', 'agreed');
+      if (statusErr) return { error: statusErr.message };
+    }
+    return { error: null, escrowId: existingEscrow.id as string };
+  }
+
+  if (!plan.is_group_plan) {
+    const { data: existingByPlan } = await client
+      .from('escrow_transactions')
+      .select('id')
+      .eq('plan_id', plan.id)
+      .maybeSingle();
+    if (existingByPlan?.id) {
+      return { error: null, escrowId: existingByPlan.id as string };
+    }
+  }
+
   /** Mood plans: both parties must fund within 1 hour of agreement (escrow creation). */
   const fundingDeadline =
     plan.is_mood_plan
       ? new Date(Date.now() + 60 * 60 * 1000).toISOString()
       : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-  const existingQuery = client.from('escrow_transactions').select('id').eq('plan_id', plan.id);
-  const { data: existing, error: existingErr } = plan.is_group_plan
-    ? await existingQuery.eq('guest_id', guestId).maybeSingle()
-    : await existingQuery.maybeSingle();
-  if (existingErr) {
-    console.error('[proceedToSecurePayment] existing escrow lookup failed:', existingErr.message);
-    return { error: existingErr.message };
-  }
-  if (existing?.id) {
-    if (plan.is_group_plan) {
-      return { error: null, escrowId: existing.id as string };
-    }
-    const { error: e1 } = await client.from('plans').update({ status: 'awaiting_payment' }).eq('id', plan.id);
-    if (e1) return { error: e1.message };
-    return { error: null, escrowId: existing.id as string };
-  }
 
   let groupPlanIndex: number | null = null;
   if (plan.is_group_plan) {
@@ -137,41 +149,41 @@ export async function proceedToSecurePayment(
     groupPlanIndex = (count ?? 0) + 1;
   }
 
-  const { data: esc, error: e2 } = await client
-    .from('escrow_transactions')
-    .insert({
-      plan_id: plan.id,
-      payer_id: payerId,
-      payee_id: payeeId,
-      host_id: hostId,
-      guest_id: guestId,
-      offer_id: offer.id,
-      group_plan_index: groupPlanIndex,
-      escrow_pattern: pattern,
-      amount_cents: amountCents,
-      host_share_cents: hostShareCents,
-      guest_share_cents: guestShareCents,
-      funding_deadline: fundingDeadline,
-      currency: plan.currency ?? 'NGN',
-      status: 'pending_funding',
-      metadata: pattern === 'B' ? { legs: 'split', phase: 'awaiting_payment' } : {},
-    })
-    .select('id')
-    .single();
-  if (e2) {
-    console.error('[proceedToSecurePayment] escrow insert failed:', e2.message);
-    return { error: e2.message };
+  const metadata = pattern === 'B' ? { legs: 'split', phase: 'awaiting_payment' } : {};
+
+  const { data: escrowId, error: rpcErr } = await client.rpc('create_plan_escrow_transaction', {
+    p_plan_id: plan.id,
+    p_offer_id: offer.id,
+    p_payer_id: payerId,
+    p_payee_id: payeeId,
+    p_host_id: hostId,
+    p_guest_id: guestId,
+    p_amount_cents: amountCents,
+    p_host_share_cents: hostShareCents,
+    p_guest_share_cents: guestShareCents,
+    p_escrow_pattern: pattern,
+    p_currency: plan.currency ?? 'NGN',
+    p_funding_deadline: fundingDeadline,
+    p_group_plan_index: groupPlanIndex,
+    p_metadata: metadata,
+  });
+
+  if (rpcErr) {
+    console.error('[proceedToSecurePayment] escrow RPC failed:', rpcErr.message);
+    if (rpcErr.message.includes('both_parties_must_confirm')) {
+      return { error: 'Both parties must confirm the agreement before payment.' };
+    }
+    if (rpcErr.message.includes('verification_required')) {
+      return { error: 'Identity verification is required before secure payment.' };
+    }
+    return { error: rpcErr.message };
   }
 
-  const { error: e3 } = await client
-    .from('plans')
-    .update({
-      status: plan.is_group_plan ? 'negotiating' : 'awaiting_payment',
-    })
-    .eq('id', plan.id);
-  if (e3) return { error: e3.message };
+  if (!escrowId) {
+    return { error: 'Could not create escrow for this plan.' };
+  }
 
-  return { error: null, escrowId: esc.id as string };
+  return { error: null, escrowId: escrowId as string };
 }
 
 /**

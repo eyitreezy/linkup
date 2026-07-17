@@ -2,6 +2,7 @@
  * Home feed engagement carousel: agreements, pending sent offers, pending received offers.
  */
 import { fetchAgreementsRail, type AgreementRailItem } from '@/lib/plans/fetchAgreementsRail';
+import { LIVE_NEGOTIATION_OFFER_STATUSES } from '@/lib/plans/negotiationState';
 import { supabase } from '@/lib/supabase';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { isOfferExpired } from '@/lib/plans/offerRules';
@@ -13,6 +14,7 @@ export type EngagementStripKind = 'chat' | 'negotiation' | 'pending';
 export type EngagementCarouselItem = {
   key: string;
   planId: string;
+  offerId?: string;
   planTitle: string;
   otherUserId: string;
   otherAvatarUrl: string | null;
@@ -57,8 +59,9 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
   const agrTime = Date.now();
   for (const a of agreements) {
     out.push({
-      key: `agr-${a.planId}`,
+      key: `agr-${a.planId}-${a.offerId ?? 'main'}`,
       planId: a.planId,
+      offerId: a.offerId,
       planTitle: a.planTitle,
       otherUserId: a.counterpartUserId,
       otherAvatarUrl: a.counterpartAvatarUrl,
@@ -75,7 +78,7 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
     .from('plan_offers')
     .select('*')
     .eq('bidder_id', userId)
-    .in('status', ['pending', 'countered'])
+    .in('status', [...LIVE_NEGOTIATION_OFFER_STATUSES])
     .order('created_at', { ascending: false });
   if (!sErr && sentRows?.length) {
     const offers = sentRows as DbPlanOffer[];
@@ -124,7 +127,7 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
       .from('plan_offers')
       .select('*')
       .in('plan_id', negIds)
-      .in('status', ['pending', 'countered'])
+      .in('status', [...LIVE_NEGOTIATION_OFFER_STATUSES])
       .neq('bidder_id', userId)
       .order('created_at', { ascending: false });
     const recv = (recvRows ?? []) as DbPlanOffer[];

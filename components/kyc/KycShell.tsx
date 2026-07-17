@@ -4,6 +4,7 @@
 import { KycProgressBar } from '@/components/kyc/KycProgressBar';
 import { kycInboxStyles } from '@/components/kyc/kycTheme';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,14 +30,7 @@ export function KycShell({
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={kycInboxStyles.screenRoot}>
       <View style={kycInboxStyles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <View style={kycInboxStyles.topNav}>
           <Pressable

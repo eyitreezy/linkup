@@ -8,6 +8,10 @@ import { distanceKm } from '@/lib/location';
 import { fetchConnectedCreatorIds } from '@/lib/plans/discoverConnections';
 import { RADIUS_VISIBILITY_KM } from '@/lib/plans/planVisibilityConfig';
 import { filterTierRelativePremiumVisibilityPlans } from '@/lib/plans/tierRelativePremiumVisibility';
+import {
+  fetchProfileVideosForUsers,
+  type ProfileVideoRecord,
+} from '@/lib/profile/media/profileVideo';
 import { supabase } from '@/lib/supabase';
 import type { DbMeetType, DbPlan, DbProfile, SubscriptionTier } from '@/types/database';
 
@@ -107,7 +111,7 @@ export async function fetchPlansPage(
     .select('*, meet_types(*)')
     .eq('is_suppressed', false)
     .is('archived_at', null)
-    .in('status', ['negotiating', 'active'])
+    .in('status', ['negotiating', 'awaiting_payment'])
     .or(moodOr)
     .or(notExpiredOr)
     .or(activeWindowOr);
@@ -148,6 +152,9 @@ export async function fetchPlansPage(
   if (error) return { plans: [], error: error.message };
   const rows = (data ?? []) as PlanRowFromDb[];
   const filtered = rows.filter((plan) => {
+    if (plan.status === 'awaiting_payment' && !plan.is_group_plan) {
+      return false;
+    }
     if (!plan.is_group_plan) return true;
     const accepted = plan.accepted_guest_count ?? 0;
     const max = plan.max_guests;
@@ -170,7 +177,11 @@ export async function fetchProfilesForCreators(creatorIds: string[]): Promise<Ma
   return map;
 }
 
-export function mergePlansWithProfiles(plans: PlanRowFromDb[], profiles: Map<string, ProfileRow>): PlanFeedRow[] {
+export function mergePlansWithProfiles(
+  plans: PlanRowFromDb[],
+  profiles: Map<string, ProfileRow>,
+  introVideos: Map<string, ProfileVideoRecord> = new Map()
+): PlanFeedRow[] {
   return plans.map((p) => {
     const { meet_types: mt, ...rest } = p;
     return {
@@ -178,6 +189,13 @@ export function mergePlansWithProfiles(plans: PlanRowFromDb[], profiles: Map<str
       meetType: mt ?? null,
       creatorProfile: profiles.get(p.creator_id) ?? null,
       creatorVerification: null,
+      creatorIntroVideo: introVideos.get(p.creator_id) ?? null,
     };
   });
+}
+
+export async function fetchIntroVideosForCreators(
+  creatorIds: string[]
+): Promise<Map<string, ProfileVideoRecord>> {
+  return fetchProfileVideosForUsers(creatorIds);
 }

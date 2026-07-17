@@ -103,6 +103,7 @@ import { File as ExpoFile } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { goBackOrFallback } from '@/lib/navigation/goBackOrFallback';
 import { useLocalSearchParams, router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Animated from 'react-native-reanimated';
@@ -330,7 +331,7 @@ export default function GroupChatThreadScreen() {
         .maybeSingle();
       if (error || !conv?.is_group_chat) {
         Alert.alert('Group chat', 'This group chat is unavailable.');
-        router.back();
+        goBackOrFallback();
         return;
       }
       const { data: membership } = await supabase
@@ -342,7 +343,7 @@ export default function GroupChatThreadScreen() {
         .maybeSingle();
       if (!membership) {
         Alert.alert('Group chat', 'You are not a member of this group.');
-        router.back();
+        goBackOrFallback();
         return;
       }
       let planTitle: string | null = null;
@@ -1319,7 +1320,7 @@ export default function GroupChatThreadScreen() {
           style={[styles.headerGradient, { borderBottomColor: chatPreset.headerHairline }]}
         >
           <View style={[styles.header, { paddingTop: spacing.sm }]}>
-            <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
+            <Pressable onPress={() => goBackOrFallback()} style={styles.back} hitSlop={12}>
               <Ionicons name="chevron-back" size={26} color={colors.text} />
             </Pressable>
             <Pressable

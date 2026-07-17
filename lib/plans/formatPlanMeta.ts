@@ -1,4 +1,5 @@
 import type { DbPlan } from '@/types/database';
+import { platformFeeCentsForAmount } from './planFinancialConfig';
 
 export function formatPlanWhen(plan: DbPlan): string {
   const d = plan.scheduled_at ? new Date(plan.scheduled_at) : new Date(plan.created_at);
@@ -23,6 +24,13 @@ export function formatPlanWhen(plan: DbPlan): string {
 export function formatPlanPrice(plan: DbPlan): string | null {
   if (plan.starting_price_cents == null) return null;
   const v = (plan.starting_price_cents / 100).toFixed(0);
+  return `${v} ${plan.currency}`;
+}
+
+export function formatPlanAppFee(plan: DbPlan): string | null {
+  if (plan.starting_price_cents == null || plan.starting_price_cents <= 0) return null;
+  const feeCents = platformFeeCentsForAmount(plan.starting_price_cents);
+  const v = (feeCents / 100).toFixed(0);
   return `${v} ${plan.currency}`;
 }
 

@@ -4,6 +4,7 @@
 import { NotificationListSkeleton } from '@/components/notifications/NotificationListSkeleton';
 import { NotificationSwipeRow } from '@/components/notifications/NotificationSwipeRow';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { useNotificationInbox } from '@/contexts/NotificationInboxContext';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { FILTER_LABELS, type NotificationFilterTab, notificationTab } from '@/lib/notifications/categories';
@@ -69,13 +70,7 @@ export default function NotificationsScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
+        <AppShellBackground />
 
         <View style={styles.topNav}>
           <Pressable

@@ -1,3 +1,4 @@
+import type { ProfileVideoRecord } from '@/lib/profile/media/profileVideo';
 import type { DbMeetType, DbPlan, DbProfile, UserVerification } from '@/types/database';
 
 /** One row in the Nearby Plans feed with creator profile + verification. */
@@ -23,4 +24,6 @@ export type PlanFeedRow = DbPlan & {
   > | null;
   /** Always null in client feed — `users.verification_status` is not readable for other users under RLS. Use `verified_badge` on profile. */
   creatorVerification: UserVerification | null;
+  /** Host intro clip from `media` (profile gallery sequence). */
+  creatorIntroVideo: ProfileVideoRecord | null;
 };

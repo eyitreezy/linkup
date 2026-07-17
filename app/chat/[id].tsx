@@ -79,6 +79,7 @@ import { subscribeConversationRealtime } from '@/lib/messaging/subscribeConversa
 import { toggleMessageReceipt } from '@/lib/messaging/toggleMessageReceipt';
 import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { fetchActiveMeetupWithPeer, type LinkedMeetup } from '@/lib/messaging/fetchActiveMeetupWithPeer';
+import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import {
   buildChatSuggestionContext,
   planSuggestionSourceFromMeetup,
@@ -1292,6 +1293,7 @@ export default function ChatThreadScreen() {
 
   const onQuickSendOffer = useCallback(() => {
     if (linkedMeetup) {
+      warmPlanDetailNavigation(linkedMeetup.id);
       router.push(`/plan/${linkedMeetup.id}` as Href);
       return;
     }
@@ -1449,7 +1451,10 @@ export default function ChatThreadScreen() {
                 </View>
                 {linkedMeetup ? (
                   <Pressable
-                    onPress={() => router.push(`/plan/${linkedMeetup.id}` as Href)}
+                    onPress={() => {
+                      warmPlanDetailNavigation(linkedMeetup.id);
+                      router.push(`/plan/${linkedMeetup.id}` as Href);
+                    }}
                     style={styles.headerMeetupPillOuter}
                     accessibilityRole="button"
                     accessibilityLabel={`Open meetup: ${linkedMeetup.title}`}

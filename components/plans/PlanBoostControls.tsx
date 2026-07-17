@@ -16,9 +16,6 @@ import {
   isBoost72Exhausted,
   MONTHLY_24H_BOOSTS,
 } from '@/lib/subscription/boostQuota';
-import {
-  DEFAULT_BOOST_RADIUS_KM,
-} from '@/lib/plans/tierRelativePremiumVisibility';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { supabase } from '@/lib/supabase';
 import type { DbPlan, DbUser } from '@/types/database';
@@ -99,9 +96,6 @@ export function PlanBoostControls({
   const canUse24 = canBoost24 || legacyCredit;
   const boost24Exhausted = isBoost24Exhausted(boost24Meta);
   const boost72Exhausted = isBoost72Exhausted(boost72Meta);
-  const showGoldPremiumBoostNote =
-    effectiveTier === 'GOLD' && planVisibility === 'premium' && !boosted;
-  const boostRadiusLabel = boostRadiusKm ?? DEFAULT_BOOST_RADIUS_KM;
 
   const disabled24 =
     moodClosed || busy || boosted || !canUse24 || (canBoost24 && boost24Exhausted);
@@ -203,15 +197,6 @@ export function PlanBoostControls({
         </View>
       ) : null}
 
-      {showGoldPremiumBoostNote ? (
-        <View style={fullWidthCellStyle ?? { width: '100%' }}>
-          <Text style={styles.boostExpansionNote}>
-            While boosted, Platinum members within {boostRadiusLabel}km will also be able to discover
-            this plan.
-          </Text>
-        </View>
-      ) : null}
-
       {canUse24 ? (
         <View style={cellStyle}>
           <Pressable
@@ -243,12 +228,12 @@ export function PlanBoostControls({
               {busy ? (
                 <ActivityIndicator color={colors.primary} size="small" />
               ) : (
-                <>
+                <View style={styles.secondaryBtnRow}>
                   <Ionicons name="rocket-outline" size={18} color={colors.primary} />
-                  <Text style={styles.secondaryTxt} numberOfLines={2}>
+                  <Text style={styles.secondaryTxt} numberOfLines={1}>
                     {boost24Label(boost24Meta, canBoost24)}
                   </Text>
-                </>
+                </View>
               )}
             </LinearGradient>
           </Pressable>
@@ -269,9 +254,13 @@ export function PlanBoostControls({
               end={{ x: 1, y: 1 }}
               style={styles.secondaryBtnInner}
             >
-              <Ionicons name="lock-closed" size={16} color={colors.primary} />
-              <Text style={styles.secondaryTxt}>Boost plan</Text>
-              <TierBadge tier="SILVER" compact />
+              <View style={styles.secondaryBtnRow}>
+                <Ionicons name="lock-closed" size={18} color={colors.primary} />
+                <Text style={styles.secondaryTxt} numberOfLines={1}>
+                  Boost plan
+                </Text>
+                <TierBadge tier="SILVER" compact align="center" />
+              </View>
             </LinearGradient>
           </Pressable>
         </View>
@@ -308,7 +297,7 @@ export function PlanBoostControls({
               {busy ? (
                 <ActivityIndicator color={colors.primary} size="small" />
               ) : (
-                <Text style={[styles.secondaryTxt, styles.secondaryTxtSm]} numberOfLines={2}>
+                <Text style={styles.secondaryTxt} numberOfLines={1}>
                   {boost72Label(boost72Meta, canBoost72)}
                 </Text>
               )}
@@ -331,9 +320,13 @@ export function PlanBoostControls({
               end={{ x: 1, y: 1 }}
               style={styles.secondaryBtnInner}
             >
-              <Ionicons name="lock-closed" size={14} color={colors.primary} />
-              <Text style={[styles.secondaryTxt, styles.secondaryTxtSm]}>Boost 72h</Text>
-              <TierBadge tier="GOLD" compact />
+              <View style={styles.secondaryBtnRow}>
+                <Ionicons name="lock-closed" size={18} color={colors.primary} />
+                <Text style={styles.secondaryTxt} numberOfLines={1}>
+                  Boost 72h
+                </Text>
+                <TierBadge tier="GOLD" compact align="center" />
+              </View>
             </LinearGradient>
           </Pressable>
         </View>
@@ -407,15 +400,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(94, 82, 255, 0.14)',
   },
-  boostExpansionNote: {
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: fonts.medium,
-    color: colors.textMuted,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
   secondaryBtnOuter: {
     width: '100%',
     borderRadius: radius.button,
@@ -425,13 +409,18 @@ const styles = StyleSheet.create({
   },
   secondaryBtnInner: {
     width: '100%',
-    minHeight: 50,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+  },
+  secondaryBtnRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 12,
+    maxWidth: '100%',
   },
   secondaryLocked: { opacity: 0.62 },
   secondaryDisabled: { opacity: 0.5 },
@@ -442,6 +431,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: colors.primary,
     textAlign: 'center',
+    letterSpacing: -0.15,
   },
-  secondaryTxtSm: { fontSize: 13, fontFamily: fonts.bold },
 });

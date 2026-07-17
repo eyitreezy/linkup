@@ -4,9 +4,11 @@
 import { Button } from '@/components/Button';
 import { SavedPlanCard } from '@/components/plans/SavedPlanCard';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchSavedPlansList } from '@/lib/plans/fetchSavedPlans';
+import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import { setPlanSaved } from '@/lib/plans/planEngagement';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Href, router, useFocusEffect } from 'expo-router';
@@ -14,7 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -37,7 +38,6 @@ function SavedSkeleton() {
 
 export default function SavedPlansScreen() {
   const tabBarScroll = useTabBarScrollProps();
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user } = useAuth();
   const [items, setItems] = useState<Awaited<ReturnType<typeof fetchSavedPlansList>>>([]);
   const [loading, setLoading] = useState(true);
@@ -127,14 +127,7 @@ export default function SavedPlansScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <View style={styles.root}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.28, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={bleedBgStyle}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <View style={styles.heroHeader}>
           <View style={styles.heroLeft}>
@@ -210,7 +203,10 @@ export default function SavedPlansScreen() {
           renderItem={({ item }) => (
             <SavedPlanCard
               item={item}
-              onPressCard={() => router.push(`/plan/${item.plan.id}` as Href)}
+              onPressCard={() => {
+                warmPlanDetailNavigation(item.plan.id, { plan: item.plan });
+                router.push(`/plan/${item.plan.id}` as Href);
+              }}
               onUnsave={() => confirmUnsave(item.plan.id, item.plan.title)}
             />
           )}

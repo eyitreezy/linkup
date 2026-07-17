@@ -5,6 +5,7 @@ import { MeetTypeExploreCard, MeetTypeExploreCardSkeleton } from '@/components/m
 import { MeetTypeReviewPendingModal } from '@/components/plans/create/MeetTypeReviewPendingModal';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { setPendingMeetTypeFilter } from '@/lib/discovery/pendingMeetTypeFilter';
@@ -20,7 +21,6 @@ import { Href, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import {
   RefreshControl,
   StyleSheet,
@@ -39,7 +39,6 @@ function columnCount(width: number): number {
 export default function MeetrScreen() {
   const { user } = useAuth();
   const tabBarScroll = useTabBarScrollProps();
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { width } = useWindowDimensions();
   const cols = columnCount(width);
   const gap = spacing.sm + 2;
@@ -103,14 +102,7 @@ export default function MeetrScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <View style={styles.root}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.28, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={bleedBgStyle}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <View style={styles.heroHeader}>
           <View style={styles.heroLeft}>

@@ -1,27 +1,27 @@
 /**
  * Injected into Flutterwave hosted checkout WebView so OTP/card steps fit narrow phones (≥320px).
+ * Apply once per page load — do not observe DOM mutations (breaks Flutterwave OTP step).
  */
 export const FLUTTERWAVE_CHECKOUT_VIEWPORT_JS = `
 (function () {
-  function apply() {
-    var meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.setAttribute('name', 'viewport');
-      document.head.appendChild(meta);
-    }
-    meta.setAttribute(
-      'content',
-      'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover'
-    );
+  if (window.__linkupFlwViewportApplied) return;
+  window.__linkupFlwViewportApplied = true;
 
-    var styleId = 'linkup-flw-checkout-fit';
-    var style = document.getElementById(styleId);
-    if (!style) {
-      style = document.createElement('style');
-      style.id = styleId;
-      document.head.appendChild(style);
-    }
+  var meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.setAttribute('name', 'viewport');
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute(
+    'content',
+    'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover'
+  );
+
+  var styleId = 'linkup-flw-checkout-fit';
+  if (!document.getElementById(styleId)) {
+    var style = document.createElement('style');
+    style.id = styleId;
     style.textContent = [
       'html, body {',
       '  width: 100% !important;',
@@ -45,19 +45,8 @@ export const FLUTTERWAVE_CHECKOUT_VIEWPORT_JS = `
       '  body { padding-left: 0 !important; padding-right: 0 !important; }',
       '}',
     ].join('\\n');
+    document.head.appendChild(style);
   }
-
-  apply();
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', apply);
-  }
-  window.addEventListener('resize', apply);
-  try {
-    new MutationObserver(apply).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-  } catch (e) {}
 })();
 true;
 `;

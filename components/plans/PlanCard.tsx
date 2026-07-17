@@ -7,6 +7,12 @@ import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { isUserVerified } from '@/lib/verification/access';
 import { formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
+import {
+  calculateGroupSuggestedShareCents,
+  formatGroupSplitCents,
+  isGroupSplitPlan,
+} from '@/lib/plans/groupSplitDynamic';
 import { formatPlanDistanceLabel, planHasMeetupCoords } from '@/lib/plans/planDistanceLabel';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
@@ -144,6 +150,18 @@ function PlanCardInner({
   const showProfileComplete = isProfileComplete(row);
   const isOwn = currentUserId != null && row.creator_id === currentUserId;
   const price = formatPlanPrice(row);
+  const priceGrossLabel =
+    row.is_paid && row.starting_price_cents != null && row.starting_price_cents > 0
+      ? formatGroupSplitCents(grossAmountCents(row.starting_price_cents), row.currency)
+      : price;
+  const suggestedShareCents = isGroupSplitPlan(row)
+    ? row.current_suggested_share_cents ?? calculateGroupSuggestedShareCents(row)
+    : null;
+  const showSuggestedShare = suggestedShareCents != null && suggestedShareCents > 0;
+  const suggestedShareGrossCents = showSuggestedShare ? grossAmountCents(suggestedShareCents) : null;
+  const suggestedShareLabel = showSuggestedShare
+    ? `${formatGroupSplitCents(suggestedShareGrossCents!, row.currency)} / person`
+    : null;
   const when = formatPlanWhen(row);
   const desc = row.description?.trim() ?? '';
   const boosted = isPlanBoostActive(row.boosted_until);
@@ -282,10 +300,19 @@ function PlanCardInner({
             </View>
           </View>
 
-          {price ? (
-            <Text style={styles.datingPrice} numberOfLines={1}>
-              {price}
-            </Text>
+          {priceGrossLabel || suggestedShareLabel ? (
+            <View style={styles.datingPriceRow}>
+              {suggestedShareLabel ? (
+                <Text style={styles.datingSuggestedShare} numberOfLines={1}>
+                  {suggestedShareLabel}
+                </Text>
+              ) : null}
+              {priceGrossLabel ? (
+                <Text style={styles.datingPrice} numberOfLines={1}>
+                  {priceGrossLabel}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
           <Text style={styles.datingTitle} numberOfLines={2}>
             {row.title}
@@ -485,16 +512,28 @@ function PlanCardInner({
             <Ionicons name="heart-outline" size={16} color={colors.textMuted} />
             <Text style={[styles.footerTxt, { fontStyle: 'italic' }]}>Open to ideas. Details when you connect.</Text>
           </View>
-        ) : price ? (
+        ) : priceGrossLabel || suggestedShareLabel ? (
           <View style={styles.footerItem}>
             <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-            <Text style={styles.footerTxt}>{price}</Text>
+            <View style={styles.footerPriceRow}>
+              {suggestedShareLabel ? (
+                <Text style={styles.footerSuggestedShare} numberOfLines={1}>
+                  {suggestedShareLabel}
+                </Text>
+              ) : null}
+              {priceGrossLabel ? (
+                <Text style={styles.footerTxt} numberOfLines={1}>
+                  {priceGrossLabel}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        ) : (
+        ) : null}
+        {!warmTone && !priceGrossLabel && !suggestedShareLabel ? (
           <View style={styles.footerItem}>
             <Text style={[styles.footerTxt, { fontStyle: 'italic' }]}>Open to offers</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {!isOwn ? (
@@ -550,7 +589,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     padding: spacing.md,
     borderRadius: 20,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.cardSurface,
     borderWidth: 1,
     borderColor: 'rgba(15, 23, 42, 0.06)',
     shadowColor: '#0F172A',
@@ -649,7 +688,22 @@ const styles = StyleSheet.create({
   },
   footer: { gap: 8 },
   footerItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  footerTxt: { fontSize: 13, color: colors.text, flex: 1, fontWeight: '600',
+  footerPriceRow: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: 6,
+    minWidth: 0,
+  },
+  footerSuggestedShare: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    flexShrink: 1,
+  },
+  footerTxt: { fontSize: 13, color: colors.text, flexShrink: 0, fontWeight: '600',
     fontFamily: fonts.medium,},
   offerBlock: { marginTop: spacing.md, gap: 6 },
   offerStatusHint: {
@@ -684,7 +738,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     borderRadius: 26,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.cardSurface,
     borderWidth: 1,
     borderColor: 'rgba(94, 82, 255, 0.14)',
     shadowColor: '#2a1f55',
@@ -803,13 +857,29 @@ const styles = StyleSheet.create({
   datingMoodTypeChipTxt: { fontSize: 10, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.secondary },
   datingMoodTtlChip: { backgroundColor: 'rgba(255, 74, 114, 0.1)' },
+  datingPriceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 6,
+    minWidth: 0,
+  },
+  datingSuggestedShare: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    letterSpacing: -0.1,
+    flexShrink: 1,
+  },
   datingPrice: {
     fontSize: 15,
     fontWeight: '800',
     fontFamily: fonts.bold,
     color: colors.primary,
     letterSpacing: -0.2,
-    marginBottom: 6,
+    flexShrink: 0,
   },
   datingTitle: {
     fontSize: 22,

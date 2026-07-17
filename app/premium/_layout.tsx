@@ -6,10 +6,10 @@ export default function PremiumLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
+        headerStyle: { backgroundColor: colors.splashBackground },
         headerTintColor: colors.text,
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: colors.splashBackground },
         headerTitleStyle: { fontWeight: '800',
     fontFamily: fonts.bold,},
         ...(Platform.OS === 'android'

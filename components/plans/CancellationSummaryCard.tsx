@@ -24,7 +24,7 @@ export function CancellationSummaryCard({ outcome }: Props) {
     <View style={styles.card}>
       <Text style={styles.title}>Cancellation policy</Text>
       <Text style={styles.lead}>
-        LinkUp applies role- and timing-based rules on the server so outcomes stay fair and predictable.
+        LinkUp applies role and timing based rules on the server so outcomes stay fair and predictable.
       </Text>
       <CancellationPolicyRows rows={CANCELLATION_POLICY_TABLE_ROWS} />
       {outcome ? (

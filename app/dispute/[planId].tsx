@@ -2,6 +2,7 @@
  * Plan dispute flow D1–D6 — structured steps, trust copy, video evidence (Expo Camera).
  */
 import { Button } from '@/components/Button';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { Input } from '@/components/Input';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
@@ -217,7 +218,8 @@ export default function PlanDisputeScreen() {
 
   if (!user?.id) {
     return (
-      <Screen safeAreaEdges={['top', 'left', 'right']}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <AppShellBackground />
         <Text style={styles.muted}>Sign in to file a plan issue.</Text>
       </Screen>
     );
@@ -225,7 +227,8 @@ export default function PlanDisputeScreen() {
 
   if (loadingPlan) {
     return (
-      <Screen safeAreaEdges={['top', 'left', 'right']}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <AppShellBackground />
         <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
@@ -233,7 +236,8 @@ export default function PlanDisputeScreen() {
 
   if (!plan || !reportedUserId) {
     return (
-      <Screen safeAreaEdges={['top', 'left', 'right']}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <AppShellBackground />
         <Text style={styles.title}>Plan unavailable</Text>
         <Text style={styles.muted}>We couldn’t match you to this plan with an accepted offer.</Text>
         <Button title="Back" variant="ghost" onPress={() => router.back()} style={{ marginTop: spacing.md }} />
@@ -242,7 +246,8 @@ export default function PlanDisputeScreen() {
   }
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']} scroll={step !== 3}>
+    <Screen safeAreaEdges={['top', 'left', 'right']} scroll={step !== 3} safeAreaStyle={styles.screenRoot}>
+      <AppShellBackground />
       <View style={styles.top}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -384,6 +389,7 @@ export default function PlanDisputeScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
   top: {
     flexDirection: 'row',
     alignItems: 'center',

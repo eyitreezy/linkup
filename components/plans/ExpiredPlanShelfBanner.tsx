@@ -34,7 +34,7 @@ export function ExpiredPlanShelfBanner({ title, subtitle, expiredAtIso }: Props)
           <Text style={styles.title}>{title ?? 'This mood moment ended'}</Text>
           <Text style={styles.sub}>
             {subtitle ??
-              'It stays on your shelf for reflection — editing, negotiation, escrow, and boosts are paused for this thread.'}
+              'It stays on your shelf for reflection. Editing, negotiation, escrow, and boosts are paused for this thread.'}
           </Text>
         </View>
       </View>

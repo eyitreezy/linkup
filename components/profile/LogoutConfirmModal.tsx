@@ -10,7 +10,7 @@ type Props = {
 };
 
 const BODY =
-  "You'll need to sign in again to open your inbox, plans, and profile. Your account stays right where you left it — we never delete anything just because you signed out.";
+  'Sign in again to access your inbox and plans. Your account stays saved.';
 
 export function LogoutConfirmModal({ visible, onClose, onConfirm }: Props) {
   return (

@@ -10,7 +10,7 @@ export default function PlanIdLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: colors.splashBackground },
       }}
     >
       <Stack.Screen name="index" />

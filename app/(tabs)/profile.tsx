@@ -9,6 +9,7 @@ import { ProfileSettingsRow } from '@/components/profile/ProfileSettingsRow';
 import { ProfileSpotlightCard } from '@/components/profile/ProfileSpotlightCard';
 import { ProfileVerificationCard } from '@/components/profile/ProfileVerificationCard';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationInbox } from '@/contexts/NotificationInboxContext';
@@ -19,7 +20,6 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Href, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { useCallback, useEffect, useState } from 'react';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
 import { Platform, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -44,7 +44,6 @@ function SettingsSectionHeader({ title }: { title: string }) {
 
 export default function ProfileScreen() {
   const tabBarScroll = useTabBarScrollProps();
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user, profile, dbUser, signOut, isAdmin, refreshProfile } = useAuth();
   const { unreadCount } = useNotificationInbox();
   const [plansCreated, setPlansCreated] = useState<number | null>(null);
@@ -85,14 +84,7 @@ export default function ProfileScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={bleedBgStyle}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <View style={styles.heroHeader}>
           <View style={styles.heroLeft}>

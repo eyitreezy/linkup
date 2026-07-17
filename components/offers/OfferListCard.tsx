@@ -1,11 +1,12 @@
 /**
- * Single offer row for Offers tab — status-forward, actionable.
+ * Single offer row for Offers tab — matches linkup-web layout; navigate via title or chevron.
  */
 import { Avatar } from '@/components/Avatar';
-import { Button } from '@/components/Button';
+import { APP_CTA_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { OfferDashboardRow, OfferDisplayStatus } from '@/lib/plans/fetchOffersDashboard';
 import { getOfferDisplayStatus } from '@/lib/plans/fetchOffersDashboard';
+import { deriveNegotiationContext, isOfferLive } from '@/lib/plans/negotiationState';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,11 +14,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 type Props = {
   row: OfferDashboardRow;
   mode: 'sent' | 'received';
+  currentUserId?: string;
   busy?: boolean;
-  onPressOpen: () => void;
+  onOpenNegotiate?: () => void;
   onAccept?: () => void;
   onReject?: () => void;
-  onNegotiate?: () => void;
+  onCounter?: () => void;
 };
 
 function statusColors(s: OfferDisplayStatus): { bg: string; fg: string; border: string } {
@@ -27,7 +29,7 @@ function statusColors(s: OfferDisplayStatus): { bg: string; fg: string; border: 
     case 'rejected':
       return { bg: 'rgba(239, 68, 68, 0.1)', fg: colors.danger, border: 'rgba(239, 68, 68, 0.3)' };
     case 'expired':
-      return { bg: 'rgba(107, 114, 128, 0.1)', fg: colors.textMuted, border: colors.border };
+      return { bg: 'rgba(243, 244, 246, 1)', fg: colors.textMuted, border: colors.border };
     case 'pending':
       return { bg: 'rgba(94, 82, 255, 0.12)', fg: colors.primary, border: 'rgba(94, 82, 255, 0.3)' };
     default:
@@ -48,19 +50,21 @@ function statusLabel(s: OfferDisplayStatus): string {
   }
 }
 
-function formatAmount(cents: number | null, currency: string): string {
+function formatAmount(cents: number | null | undefined, currency: string): string {
   if (cents == null) return 'Open amount';
+  if (currency === 'NGN') return `₦${(cents / 100).toLocaleString()}`;
   return `${(cents / 100).toFixed(0)} ${currency}`;
 }
 
 export function OfferListCard({
   row,
   mode,
+  currentUserId,
   busy,
-  onPressOpen,
+  onOpenNegotiate,
   onAccept,
   onReject,
-  onNegotiate,
+  onCounter,
 }: Props) {
   const { offer, plan, otherName, otherAvatarUrl, otherVerified } = row;
   const display = getOfferDisplayStatus(offer);
@@ -71,10 +75,16 @@ export function OfferListCard({
     hour: 'numeric',
     minute: '2-digit',
   });
-  const amount = formatAmount(offer.amount_cents, plan.currency);
-  const canActHost = mode === 'received' && display === 'pending' && !!onAccept && !!onReject;
-
-  const btnCompact = { minHeight: 44, paddingVertical: 10 } as const;
+  const amountCents = offer.current_amount_cents ?? offer.amount_cents;
+  const amount = formatAmount(amountCents, plan.currency);
+  const ctx = currentUserId ? deriveNegotiationContext(offer, plan, currentUserId) : null;
+  const showActions =
+    display === 'pending' &&
+    isOfferLive(offer) &&
+    ctx?.isMyTurn &&
+    !!onAccept &&
+    !!onReject &&
+    ((mode === 'received' && ctx.isHost) || (mode === 'sent' && ctx.isGuest));
 
   return (
     <View style={styles.card}>
@@ -84,61 +94,97 @@ export function OfferListCard({
         end={{ x: 1, y: 0 }}
         style={styles.topGlow}
       />
-      <Pressable
-        onPress={onPressOpen}
-        style={({ pressed }) => [styles.tapMain, pressed && styles.tapPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`Open negotiation for ${plan.title}`}
-      >
+      <View style={styles.body}>
         <View style={styles.top}>
           <View style={[styles.badge, { backgroundColor: sc.bg, borderColor: sc.border }]}>
             <Text style={[styles.badgeText, { color: sc.fg }]}>{statusLabel(display)}</Text>
           </View>
           <Text style={styles.time}>{ts}</Text>
         </View>
-        <Text style={styles.planTitle} numberOfLines={2}>
-          {plan.title}
-        </Text>
-        <View style={styles.person}>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={!onOpenNegotiate}
+          onPress={onOpenNegotiate}
+          style={({ pressed }) => [pressed && onOpenNegotiate && styles.pressed]}
+        >
+          <Text style={styles.planTitle} numberOfLines={2}>
+            {plan.title}
+          </Text>
+          <Text style={styles.amount}>{amount}</Text>
+          {offer.message ? (
+            <Text style={styles.message} numberOfLines={2}>
+              {offer.message}
+            </Text>
+          ) : null}
+        </Pressable>
+
+        <View style={styles.personRow}>
           <Avatar uri={otherAvatarUrl} name={otherName} size={44} />
           <View style={styles.personText}>
             <View style={styles.nameRow}>
               <Text style={styles.name} numberOfLines={1}>
-                {otherName}
+                {mode === 'sent' ? 'Host' : 'Guest'}: {otherName}
               </Text>
               {otherVerified ? (
-                <Ionicons name="checkmark-circle" size={15} color={colors.primary} />
+                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
               ) : null}
             </View>
-            <Text style={styles.roleHint}>{mode === 'sent' ? 'Host' : 'Guest offer'}</Text>
+            <Text style={styles.location} numberOfLines={1}>
+              {plan.location_label ?? 'Location TBC'}
+            </Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open manage offers"
+            disabled={!onOpenNegotiate}
+            onPress={onOpenNegotiate}
+            style={({ pressed }) => [styles.chevronBtn, pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+          </Pressable>
         </View>
-        <Text style={styles.amount}>{amount}</Text>
-      </Pressable>
-      {canActHost ? (
-        <View style={styles.actions}>
-          <View style={styles.actionRow}>
-            <Button
-              title="Accept"
-              onPress={() => onAccept?.()}
-              disabled={busy}
-              style={{ ...btnCompact, flex: 1 }}
-            />
-            <Button
-              title="Decline"
-              variant="secondary"
-              onPress={() => onReject?.()}
-              disabled={busy}
-              style={{ ...btnCompact, flex: 1 }}
-            />
+
+        {showActions ? (
+          <View style={styles.actions}>
+            <View style={styles.actionsRow}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => onAccept?.()}
+                style={({ pressed }) => [styles.acceptOuter, styles.actionFlex, pressed && styles.pressed]}
+              >
+                <LinearGradient
+                  colors={[...APP_CTA_GRADIENT]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.actionBtn}
+                >
+                  <Text style={styles.acceptLabel}>Accept</Text>
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => onReject?.()}
+                style={({ pressed }) => [styles.declineBtn, styles.actionFlex, pressed && styles.pressed]}
+              >
+                <Text style={styles.declineLabel}>Decline</Text>
+              </Pressable>
+            </View>
+            {onCounter ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={onCounter}
+                style={({ pressed }) => [styles.counterBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.counterLabel}>Counter / negotiate</Text>
+              </Pressable>
+            ) : null}
           </View>
-          {onNegotiate ? (
-            <Button title="Counter in thread" variant="ghost" onPress={() => onNegotiate()} disabled={busy} />
-          ) : null}
-        </View>
-      ) : mode === 'sent' && display === 'pending' ? (
-        <Text style={styles.hint}>Tap above to open negotiation</Text>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -149,18 +195,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 74, 114, 0.16)',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(216, 220, 230, 0.9)',
+    shadowColor: '#1A1D26',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
     elevation: 3,
     overflow: 'hidden',
   },
   topGlow: { height: 4, width: '100%' },
-  tapMain: { padding: spacing.md },
-  tapPressed: { opacity: 0.96 },
+  body: { padding: spacing.md, paddingTop: spacing.lg },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -171,33 +216,139 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.button,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
-  badgeText: { fontSize: 11, fontWeight: '800',
-    fontFamily: fonts.bold, letterSpacing: 0.4 },
-  time: { fontSize: 12, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium, },
-  planTitle: { fontSize: 17, fontWeight: '800', color: colors.text, letterSpacing: -0.3, lineHeight: 22, fontFamily: fonts.bold, },
-  person: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
-  personText: { flex: 1, minWidth: 0 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  name: { fontSize: 16, fontWeight: '800', color: colors.text, flexShrink: 1, fontFamily: fonts.bold, },
-  roleHint: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
-  amount: { fontSize: 15, fontWeight: '800', color: colors.primary, marginTop: spacing.sm, fontFamily: fonts.bold, },
-  actions: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
-  actionRow: { flexDirection: 'row', gap: spacing.sm },
-  hint: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    fontSize: 13,
+  time: {
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.textMuted,
-    fontWeight: '600',
     fontFamily: fonts.medium,
   },
+  planTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.3,
+    lineHeight: 24,
+    fontFamily: fonts.bold,
+  },
+  amount: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.primary,
+    marginTop: spacing.sm,
+    fontFamily: fonts.bold,
+    letterSpacing: -0.4,
+  },
+  message: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    lineHeight: 20,
+    fontFamily: fonts.regular,
+  },
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  personText: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  name: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+    flexShrink: 1,
+    fontFamily: fonts.bold,
+  },
+  location: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: 2,
+    fontFamily: fonts.medium,
+  },
+  chevronBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(237, 232, 255, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  actions: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  actionFlex: {
+    flex: 1,
+    minWidth: 0,
+  },
+  acceptOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
+  actionBtn: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  acceptLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+  },
+  declineBtn: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+  },
+  declineLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  counterBtn: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.25)',
+    backgroundColor: 'rgba(237, 232, 255, 0.5)',
+    paddingHorizontal: spacing.md,
+  },
+  counterLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  pressed: { opacity: 0.92 },
 });

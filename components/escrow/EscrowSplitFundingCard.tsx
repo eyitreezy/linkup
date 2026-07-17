@@ -15,6 +15,11 @@ type Props = {
   currency: string;
   fundingDeadlineIso: string | null | undefined;
   currentUserIsHost: boolean;
+  kicker?: string;
+  title?: string;
+  sub?: string;
+  hostLegLabel?: string;
+  guestLegLabel?: string;
 };
 
 function LegRow({
@@ -65,6 +70,11 @@ export function EscrowSplitFundingCard({
   currency,
   fundingDeadlineIso,
   currentUserIsHost,
+  kicker,
+  title,
+  sub,
+  hostLegLabel,
+  guestLegLabel,
 }: Props) {
   const hostState: LegState = hostFunded ? 'paid' : currentUserIsHost ? 'yours' : 'pending';
   const guestState: LegState = guestFunded ? 'paid' : !currentUserIsHost ? 'yours' : 'pending';
@@ -77,14 +87,14 @@ export function EscrowSplitFundingCard({
         end={{ x: 1, y: 0 }}
         style={styles.rule}
       />
-      <Text style={styles.kicker}>Pattern B · split escrow</Text>
-      <Text style={styles.title}>Each person pays their share here</Text>
+      <Text style={styles.kicker}>{kicker ?? 'Pattern B · split escrow'}</Text>
+      <Text style={styles.title}>{title ?? 'Each person pays their share here'}</Text>
       <Text style={styles.sub}>
-        Payments happen on this screen only, not during negotiation. Both legs must complete before the plan goes
-        active.
+        {sub ??
+          'Payments happen on this screen only, not during negotiation. Both legs must complete before the plan goes active.'}
       </Text>
-      <LegRow label="Host share" cents={hostShareCents} currency={currency} state={hostState} />
-      <LegRow label="Guest share" cents={guestShareCents} currency={currency} state={guestState} />
+      <LegRow label={hostLegLabel ?? 'Host share'} cents={hostShareCents} currency={currency} state={hostState} />
+      <LegRow label={guestLegLabel ?? 'Guest share'} cents={guestShareCents} currency={currency} state={guestState} />
       {fundingDeadlineIso ? (
         <Text style={styles.deadline}>Fund by {formatIsoDateTime(fundingDeadlineIso)}</Text>
       ) : null}

@@ -31,6 +31,7 @@ const emptyDraft = (): PlanDraft => ({
   isPaid: true,
   escrowPattern: 'A',
   hostContributionBps: 5000,
+  isNegotiable: true,
   isMoodPlan: false,
   moodExpiresAt: null,
   budgetTier: null,

@@ -2,6 +2,8 @@
  * Single Expo config (no app.json) — env-driven Maps keys + EAS env extras.
  * New Architecture is enabled in android/gradle.properties (newArchEnabled=true).
  */
+const { colors } = require('./constants/theme.ts');
+
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = {
   expo: {
@@ -16,7 +18,7 @@ module.exports = {
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
-      backgroundColor: '#FFFFFF',
+      backgroundColor: colors.splashBackground,
     },
     ios: {
       supportsTablet: true,

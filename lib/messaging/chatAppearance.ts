@@ -2,7 +2,7 @@
  * Persisted chat thread look — presets, optional wallpaper, readable text sizing.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DISCOVERY_SHELL_GRADIENT } from '@/constants/gradients';
+import { CHAT_LAVENDER_WALLPAPER_GRADIENT } from '@/constants/gradients';
 import { colors, fonts } from '@/constants/theme';
 import { fontFamilyForWeight } from '@/constants/typography';
 
@@ -55,7 +55,7 @@ export const CHAT_APPEARANCE_PRESETS: Record<ChatAppearancePresetId, ChatAppeara
   default: {
     id: 'default',
     label: 'Lavender',
-    threadGradient: [...DISCOVERY_SHELL_GRADIENT] as [string, string, string, string],
+    threadGradient: [...CHAT_LAVENDER_WALLPAPER_GRADIENT] as [string, string, string, string],
     locations: [0, 0.3, 0.55, 1],
     mineBubble: [colors.primary, '#9D5CFF', colors.secondary],
     themBubble: ['#FFFFFF', '#F4F0FF', '#FFD1E3'],

@@ -1,3 +1,6 @@
+/**
+ * Plan creation draft — negotiable toggle defaults true (existing plans stay negotiable).
+ */
 import type { BudgetTier, EscrowPattern } from '@/types/database';
 import type { MoodListingHours, MoodWindowPreset } from '@/lib/plans/moodPlanComputations';
 
@@ -17,6 +20,8 @@ export type PlanDraft = {
   escrowPattern: EscrowPattern | null;
   /** Pattern B — host share in basis points (0–10000). */
   hostContributionBps: number;
+  /** Guests negotiate price (true) or request to join at formula price (false). Split/guest-funded only. */
+  isNegotiable: boolean;
   isMoodPlan: boolean;
   moodExpiresAt: Date | null;
   budgetTier: BudgetTier | null;

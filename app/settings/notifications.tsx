@@ -299,7 +299,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
   leadAccent: {
@@ -335,7 +334,6 @@ const styles = StyleSheet.create({
   },
   sectionHead: {
     marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
   },
   sectionHeadSpaced: {
     marginTop: spacing.md,
@@ -368,7 +366,6 @@ const styles = StyleSheet.create({
   sectionSub: {
     fontSize: 14,
     color: colors.textMuted,
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
     lineHeight: 20,
     fontWeight: '600',
@@ -377,7 +374,6 @@ const styles = StyleSheet.create({
   cardOuter: {
     borderRadius: radius.xl,
     padding: 2,
-    marginHorizontal: spacing.md,
     marginBottom: spacing.xs,
   },
   cardInner: {

@@ -9,6 +9,7 @@
  */
 import { dispatchUserNotification } from '../_shared/dispatch.ts';
 import { parsePaystackBody, verifyPaystackSignature } from '../_shared/paystack.ts';
+import { patternBLegGrossCents } from '../_shared/flutterwaveMeta.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 function metaString(m: Record<string, unknown> | undefined, key: string): string | undefined {
@@ -143,8 +144,7 @@ Deno.serve(async (req) => {
 
   let expectedAmount: number | null = null;
   if (pattern === 'B' && (escrowLeg === 'host' || escrowLeg === 'guest')) {
-    expectedAmount =
-      escrowLeg === 'host' ? (escrow.host_share_cents as number) : (escrow.guest_share_cents as number);
+    expectedAmount = patternBLegGrossCents(escrow, escrowLeg);
   } else {
     expectedAmount = escrow.amount_cents as number;
   }

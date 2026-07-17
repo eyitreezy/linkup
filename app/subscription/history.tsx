@@ -2,6 +2,7 @@
  * Member-facing subscription history from subscription_events.
  */
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { TierBadge } from '@/components/TierBadge';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import {
@@ -139,13 +140,7 @@ export default function SubscriptionHistoryScreen() {
   return (
     <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.root}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.28, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        <AppShellBackground />
 
         <View style={styles.headerSticky}>
           <View style={styles.topNav}>

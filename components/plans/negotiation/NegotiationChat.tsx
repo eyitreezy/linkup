@@ -3,40 +3,62 @@
  */
 import { Button } from '@/components/Button';
 import { Input, planCreateTouchableFieldStyle } from '@/components/Input';
+import { APP_CTA_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { openPlanMeetupChat, PlanMeetupChatError } from '@/lib/messaging/openPlanMeetupChat';
 import { checkOfferBeforeChatOnPlan } from '@/lib/messaging/offerBeforeChatGate';
-import { subscribePlanOffersRealtime } from '@/lib/plans/subscribePlanOffersRealtime';
-import { acceptPlanOffer } from '@/lib/plans/acceptPlanOffer';
+import { GroupSplitHostFooter } from '@/components/plans/negotiation/GroupSplitHostFooter';
+import { OfferFeeBreakdown } from '@/components/plans/OfferFeeBreakdown';
+import {
+  calculateGroupSuggestedShareCents,
+  formatGroupSplitCents,
+  isGroupSplitPlan,
+} from '@/lib/plans/groupSplitDynamic';
+import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
+import {
+  guestRespondToCounter,
+  hostRespondToOffer,
+  submitOfferOrCounter,
+  withdrawOffer,
+} from '@/lib/plans/negotiationActions';
+import { deriveNegotiationContext, isOfferLive } from '@/lib/plans/negotiationState';
+import { resolvePlanAgreementHref, shouldRedirectFromNegotiate } from '@/lib/plans/planAgreementRoute';
 import {
   countOffersTowardLimit,
   countOffersTowardLimitForBidder,
   bidderHasActiveGroupSlotOffer,
   isOfferExpired,
   MAX_OFFERS_PER_PLAN,
-  nextOfferRound,
-  OFFER_TTL_MS,
 } from '@/lib/plans/offerRules';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { attachPlanNegotiationRoundsChannels } from '@/lib/plans/subscribePlanNegotiationRealtime';
+import { subscribePlanOffersRealtime } from '@/lib/plans/subscribePlanOffersRealtime';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { useKeyboardAnimation } from '@/hooks/useKeyboardAnimation';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { DropIdeaSheet } from '@/components/plans/negotiation/DropIdeaSheet';
+import { NegotiationOfferActions } from '@/components/plans/negotiation/NegotiationOfferActions';
+import { negotiationPanelStyles } from '@/components/plans/negotiation/negotiationPanelStyles';
+import { OfferCounterSheet } from '@/components/plans/negotiation/OfferCounterSheet';
+import { GradientSelectionChip, GRADIENT_CHIP_HEIGHT } from '@/components/ui/GradientSelectionChip';
 import { useDraggableSheet } from '@/hooks/useDraggableSheet';
-import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
+import { useKeyboardStickyFooterMode } from '@/hooks/useKeyboardStickyFooterMode';
 import { OfferBubble } from '@/components/plans/negotiation/OfferBubble';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -47,18 +69,37 @@ import {
   type ViewStyle,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
+import { KeyboardAwareScrollView as ControllerAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = {
   plan: DbPlan;
+  initialOfferId?: string | null;
+  openCounterOnMount?: boolean;
+  onPlanFlowAdvance?: (href: Href) => void;
+  onPlanRefresh?: () => void;
 };
 
-function appendNoteLine(current: string, line: string): string {
-  const t = current.trim();
-  const L = line.trim();
-  if (!L) return current;
-  if (t.includes(L)) return current;
-  return t ? `${t}\n${L}` : L;
+type QuickSparkId = 'tonight' | 'tomorrow' | 'sat_brunch' | 'public' | 'your_pick' | 'low_key';
+
+const NOTE_SPARK_TONIGHT = 'Tonight at 7pm works for me.';
+const NOTE_SPARK_TOMORROW = 'Tomorrow at noon works for me.';
+const NOTE_SPARK_SAT_BRUNCH = 'Saturday brunch works for me.';
+const NOTE_SPARK_PUBLIC = 'Somewhere public works for me.';
+const NOTE_SPARK_YOUR_PICK = 'Happy to try your favorite place nearby.';
+const NOTE_SPARK_LOW_KEY = 'Keep it casual. Open to ideas.';
+
+const QUICK_SPARK_NOTES: Record<QuickSparkId, string> = {
+  tonight: NOTE_SPARK_TONIGHT,
+  tomorrow: NOTE_SPARK_TOMORROW,
+  sat_brunch: NOTE_SPARK_SAT_BRUNCH,
+  public: NOTE_SPARK_PUBLIC,
+  your_pick: NOTE_SPARK_YOUR_PICK,
+  low_key: NOTE_SPARK_LOW_KEY,
+};
+
+function isTimeQuickSpark(id: QuickSparkId): boolean {
+  return id === 'tonight' || id === 'tomorrow' || id === 'sat_brunch';
 }
 
 function tonightAt(hour: number, minute: number): Date {
@@ -89,14 +130,17 @@ function nextSaturdayAt(hour: number, minute: number): Date {
   return d;
 }
 
-export function NegotiationChat({ plan }: Props) {
+export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPlanFlowAdvance, onPlanRefresh }: Props) {
   const { user, dbUser } = useAuth();
   const insets = useSafeAreaInsets();
-  const { typingBackdropStyle } = useKeyboardAnimation();
+  const { typingBackdropStyle, composerLiftStyle } = useKeyboardAnimation({ liftOnAndroid: true });
   const listRef = useRef<FlatList>(null);
+  const collapseSheetRef = useRef<() => void>(() => {});
   const [offers, setOffers] = useState<DbPlanOffer[]>([]);
+  const [offersLoading, setOffersLoading] = useState(true);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [activeQuickSpark, setActiveQuickSpark] = useState<QuickSparkId | null>(null);
   const [proposedAt, setProposedAt] = useState<Date | null>(plan.scheduled_at ? new Date(plan.scheduled_at) : null);
   /** iOS only — Android uses imperative DateTimePickerAndroid (datetime JSX breaks dismiss on unmount). */
   const [showTime, setShowTime] = useState(false);
@@ -108,6 +152,21 @@ export function NegotiationChat({ plan }: Props) {
     title: string;
     message: string;
   } | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [suggestionSheetVisible, setSuggestionSheetVisible] = useState(false);
+  const [counterOffer, setCounterOffer] = useState<DbPlanOffer | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [negotiationRefreshToken, setNegotiationRefreshToken] = useState(0);
+  const [suggestedShareCents, setSuggestedShareCents] = useState<number | null>(null);
+  const [suggestedSharePrefilled, setSuggestedSharePrefilled] = useState(false);
+  const [confirm, setConfirm] = useState<{
+    kind: 'accept' | 'decline' | 'withdraw';
+    offer: DbPlanOffer;
+  } | null>(null);
+
+  const bumpNegotiationRefresh = useCallback(() => {
+    setNegotiationRefreshToken((n) => n + 1);
+  }, []);
 
   function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
     setFeedback({ variant, title, message });
@@ -117,32 +176,252 @@ export function NegotiationChat({ plan }: Props) {
   const isCreator = user?.id === plan.creator_id;
   const moodClosed = isPlanMoodWindowClosed(plan);
   const canNegotiate = plan.status === 'negotiating' && !moodClosed;
+  const groupSplitPlan = isGroupSplitPlan(plan);
+  const offerBudgetCents = useMemo(() => {
+    if (!amount.trim()) return 0;
+    const n = Number(amount);
+    if (Number.isNaN(n) || n <= 0) return 0;
+    return Math.round(n * 100);
+  }, [amount]);
 
-  const load = useCallback(async () => {
-    if (!planId || !isSupabaseConfigured) return;
+  const remainingGuestSlots = Math.max(0, (plan.max_guests ?? 1) - (plan.accepted_guest_count ?? 0));
+
+  const refreshSuggestedShare = useCallback(async () => {
+    if (!groupSplitPlan || isCreator || !planId) {
+      setSuggestedShareCents(null);
+      return;
+    }
     const { data } = await supabase
-      .from('plan_offers')
-      .select('*')
-      .eq('plan_id', planId)
-      .order('created_at', { ascending: true });
-    if (data) setOffers(data as DbPlanOffer[]);
-  }, [planId]);
+      .from('plans')
+      .select(
+        'current_suggested_share_cents, starting_price_cents, agreed_price_cents, accepted_guest_amounts_sum_cents, max_guests, accepted_guest_count'
+      )
+      .eq('id', planId)
+      .single();
+    if (data) {
+      const row = data as DbPlan;
+      const cents = row.current_suggested_share_cents ?? calculateGroupSuggestedShareCents(row);
+      setSuggestedShareCents(cents);
+    }
+  }, [groupSplitPlan, isCreator, planId]);
 
   useEffect(() => {
+    void refreshSuggestedShare();
+  }, [refreshSuggestedShare, plan.updated_at, plan.accepted_guest_count]);
+
+  useEffect(() => {
+    if (!suggestedSharePrefilled && suggestedShareCents && suggestedShareCents > 0 && !amount.trim()) {
+      setAmount(String(suggestedShareCents / 100));
+      setSuggestedSharePrefilled(true);
+    }
+  }, [amount, suggestedShareCents, suggestedSharePrefilled]);
+
+  const load = useCallback(async () => {
+    if (!planId || !isSupabaseConfigured) {
+      setOffersLoading(false);
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from('plan_offers')
+        .select('*')
+        .eq('plan_id', planId)
+        .order('created_at', { ascending: true });
+      if (data) setOffers(data as DbPlanOffer[]);
+    } finally {
+      setOffersLoading(false);
+    }
+  }, [planId]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  const applyOfferRealtimeRef = useRef<(payload: RealtimePostgresChangesPayload<DbPlanOffer>) => void>(
+    () => {}
+  );
+  applyOfferRealtimeRef.current = (payload) => {
+    const { eventType } = payload;
+    const newRow = payload.new as DbPlanOffer | undefined;
+    const oldRow = payload.old as DbPlanOffer | undefined;
+    setOffers((prev) => {
+      if (eventType === 'INSERT' && newRow?.id) {
+        const exists = prev.some((o) => o.id === newRow.id);
+        if (exists) {
+          return prev.map((o) => (o.id === newRow.id ? { ...o, ...newRow } : o));
+        }
+        return [...prev, newRow].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      }
+      if (eventType === 'UPDATE' && newRow?.id) {
+        return prev.map((o) => (o.id === newRow.id ? { ...o, ...newRow } : o));
+      }
+      if (eventType === 'DELETE' && oldRow?.id) {
+        return prev.filter((o) => o.id !== oldRow.id);
+      }
+      return prev;
+    });
+    bumpNegotiationRefresh();
+  };
+
+  useEffect(() => {
+    setOffersLoading(true);
     void load();
   }, [load]);
+
+  const sorted = [...offers].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const flowAdvance = useMemo(
+    () => shouldRedirectFromNegotiate(plan, user?.id, sorted),
+    [plan, user?.id, sorted]
+  );
+
+  useEffect(() => {
+    if (offersLoading || !flowAdvance.redirect) return;
+    onPlanFlowAdvance?.(flowAdvance.href);
+  }, [offersLoading, flowAdvance, onPlanFlowAdvance]);
+
+  const liveOffers = useMemo(() => sorted.filter((o) => isOfferLive(o)), [sorted]);
+
+  const guestLiveOffers = useMemo(
+    () => (user ? liveOffers.filter((o) => o.bidder_id === user.id) : []),
+    [liveOffers, user]
+  );
+
+  const hostSelectableOffers = useMemo(
+    () => liveOffers.filter((o) => o.bidder_id !== plan.creator_id),
+    [liveOffers, plan.creator_id]
+  );
+
+  useEffect(() => {
+    if (!isCreator) return;
+    if (initialOfferId && hostSelectableOffers.some((o) => o.id === initialOfferId)) {
+      setSelectedOfferId(initialOfferId);
+      return;
+    }
+    if (selectedOfferId && hostSelectableOffers.some((o) => o.id === selectedOfferId)) return;
+    setSelectedOfferId(hostSelectableOffers[hostSelectableOffers.length - 1]?.id ?? null);
+  }, [isCreator, hostSelectableOffers, selectedOfferId, initialOfferId]);
+
+  const focusOffer = isCreator
+    ? hostSelectableOffers.find((o) => o.id === selectedOfferId) ??
+      (initialOfferId ? hostSelectableOffers.find((o) => o.id === initialOfferId) : null) ??
+      hostSelectableOffers[hostSelectableOffers.length - 1] ??
+      null
+    : (initialOfferId
+        ? guestLiveOffers.find((o) => o.id === initialOfferId)
+        : null) ??
+      guestLiveOffers[guestLiveOffers.length - 1] ??
+      null;
 
   useEffect(() => {
     if (!planId || !isSupabaseConfigured) return;
     return subscribePlanOffersRealtime({
       planId,
       onRefresh: () => {
-        void load();
+        void loadRef.current();
+        bumpNegotiationRefresh();
+      },
+      onOffersChange: (payload) => applyOfferRealtimeRef.current(payload),
+      onPlanChange: () => {
+        onPlanRefresh?.();
       },
     });
-  }, [planId, load]);
+  }, [planId, bumpNegotiationRefresh, onPlanRefresh]);
 
-  const sorted = [...offers].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  useEffect(() => {
+    if (!planId || !isSupabaseConfigured) return;
+    return attachPlanNegotiationRoundsChannels({
+      planId,
+      offerId: focusOffer?.id ?? initialOfferId ?? null,
+      onRefresh: bumpNegotiationRefresh,
+    });
+  }, [planId, focusOffer?.id, initialOfferId, bumpNegotiationRefresh]);
+
+  const counterOpenedRef = useRef(false);
+  useEffect(() => {
+    if (counterOpenedRef.current || !openCounterOnMount || !focusOffer || !user) return;
+    const ctx = deriveNegotiationContext(focusOffer, plan, user.id);
+    if (ctx.isLive && ctx.isMyTurn) {
+      counterOpenedRef.current = true;
+      setCounterOffer(focusOffer);
+    }
+  }, [openCounterOnMount, focusOffer, plan, user]);
+
+  const showActionBar = Boolean(focusOffer && canNegotiate && !moodClosed);
+
+  const guestAcceptedOffer =
+    !isCreator && user?.id
+      ? sorted.find((o) => o.bidder_id === user.id && o.status === 'accepted')
+      : null;
+
+  const hostAcceptedOffer =
+    isCreator
+      ? [...sorted]
+          .filter((o) => o.status === 'accepted' && o.bidder_id !== plan.creator_id)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null
+      : null;
+
+  const acceptedOfferPanel = guestAcceptedOffer ?? hostAcceptedOffer;
+
+  const sparkTonight = tonightAt(19, 0);
+  const sparkTomorrowNoon = tomorrowAt(12, 0);
+  const sparkSaturdayBrunch = nextSaturdayAt(11, 0);
+
+  const clearQuickSparkSelection = useCallback(() => {
+    setActiveQuickSpark(null);
+  }, []);
+
+  const applyManualProposedAt = useCallback(
+    (date: Date | null) => {
+      setProposedAt(date);
+      clearQuickSparkSelection();
+    },
+    [clearQuickSparkSelection]
+  );
+
+  const applyManualNote = useCallback(
+    (text: string) => {
+      setNote(text);
+      clearQuickSparkSelection();
+    },
+    [clearQuickSparkSelection]
+  );
+
+  const toggleQuickSpark = useCallback(
+    (id: QuickSparkId) => {
+      if (activeQuickSpark === id) {
+        setActiveQuickSpark(null);
+        setNote('');
+        if (isTimeQuickSpark(id)) {
+          setProposedAt(null);
+        }
+        return;
+      }
+
+      setActiveQuickSpark(id);
+      setNote(QUICK_SPARK_NOTES[id]);
+      switch (id) {
+        case 'tonight':
+          setProposedAt(sparkTonight);
+          break;
+        case 'tomorrow':
+          setProposedAt(sparkTomorrowNoon);
+          break;
+        case 'sat_brunch':
+          setProposedAt(sparkSaturdayBrunch);
+          break;
+        case 'public':
+        case 'your_pick':
+        case 'low_key':
+          setProposedAt(null);
+          break;
+        default:
+          break;
+      }
+    },
+    [activeQuickSpark, sparkSaturdayBrunch, sparkTonight, sparkTomorrowNoon]
+  );
 
   function openMeetTimePicker() {
     const base = proposedAt ?? new Date();
@@ -161,7 +440,7 @@ export function NegotiationChat({ plan }: Props) {
               is24Hour: false,
               onChange: (ev, timeDate) => {
                 if (ev.type === 'dismissed' || !timeDate) return;
-                setProposedAt(timeDate);
+                applyManualProposedAt(timeDate);
               },
             });
           }, 0);
@@ -206,17 +485,25 @@ export function NegotiationChat({ plan }: Props) {
       setGateOpen(true);
       return;
     }
+    const myWaiting = guestLiveOffers.find(
+      (o) => o.awaiting_response_from === 'host' && o.status !== 'countered_by_host'
+    );
+    const counterTarget = guestLiveOffers.find((o) => o.status === 'countered_by_host') ?? null;
+    if (myWaiting && !counterTarget) {
+      showFeedback('warning', 'Offer pending', 'Wait for the host to respond or withdraw your offer.');
+      return;
+    }
     if (plan.is_group_plan) {
       const active = bidderHasActiveGroupSlotOffer(offers, user.id);
       if (active?.status === 'accepted') {
         showFeedback('warning', 'Already in the group', 'You already have an accepted slot on this plan.');
         return;
       }
-      if (active) {
+      if (active && !counterTarget) {
         showFeedback('warning', 'Offer pending', 'You already have an active slot request on this plan.');
         return;
       }
-      if (countOffersTowardLimitForBidder(offers, user.id) >= MAX_OFFERS_PER_PLAN) {
+      if (countOffersTowardLimitForBidder(offers, user.id) >= MAX_OFFERS_PER_PLAN && !counterTarget) {
         showFeedback(
           'warning',
           'Let’s pause here',
@@ -224,7 +511,7 @@ export function NegotiationChat({ plan }: Props) {
         );
         return;
       }
-    } else if (countOffersTowardLimit(offers) >= MAX_OFFERS_PER_PLAN) {
+    } else if (countOffersTowardLimit(offers) >= MAX_OFFERS_PER_PLAN && !counterTarget) {
       showFeedback(
         'warning',
         'Let’s pause here',
@@ -242,57 +529,97 @@ export function NegotiationChat({ plan }: Props) {
       return;
     }
     setSending(true);
-    const expires = new Date(Date.now() + OFFER_TTL_MS).toISOString();
-    const { error } = await supabase.from('plan_offers').insert({
-      plan_id: planId,
-      bidder_id: user.id,
-      amount_cents: cents,
-      message: note.trim() || null,
-      status: 'pending',
-      round: nextOfferRound(offers),
-      expires_at: expires,
-      proposed_scheduled_at: proposedAt ? proposedAt.toISOString() : null,
+    const noteBody = note.trim() || null;
+    const noteWithSuggested =
+      groupSplitPlan && suggestedShareCents && !counterTarget
+        ? noteBody
+          ? `Suggested: ${formatGroupSplitCents(suggestedShareCents, plan.currency)} | ${noteBody}`
+          : `Suggested: ${formatGroupSplitCents(suggestedShareCents, plan.currency)}`
+        : noteBody;
+    const res = await submitOfferOrCounter(supabase, {
+      planId,
+      amountCents: cents,
+      note: noteWithSuggested,
+      proposedScheduledAt: proposedAt ? proposedAt.toISOString() : null,
+      offerId: counterTarget?.id ?? null,
     });
     setSending(false);
-    if (error) showFeedback('error', 'Error', error.message);
+    if (res.error) showFeedback('error', 'Error', res.error);
     else {
       setAmount('');
       setNote('');
+      setActiveQuickSpark(null);
+      setProposedAt(plan.scheduled_at ? new Date(plan.scheduled_at) : null);
+      setShowTime(false);
+      Keyboard.dismiss();
+      closeSuggestionSheet();
       void load();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
     }
   }
 
-  async function declineOffer(offer: DbPlanOffer) {
-    if (!isCreator || !isSupabaseConfigured) return;
-    const { error } = await supabase.from('plan_offers').update({ status: 'declined' }).eq('id', offer.id);
-    if (error) showFeedback('error', 'Error', error.message);
-    else void load();
+  async function runConfirmAction() {
+    if (!confirm || !user || !isSupabaseConfigured) return;
+    const { kind, offer } = confirm;
+    const ctx = deriveNegotiationContext(offer, plan, user.id);
+    setActionBusy(true);
+    let error: string | null = null;
+
+    if (kind === 'accept') {
+      const res = ctx.isHost
+        ? await hostRespondToOffer(supabase, { offerId: offer.id, action: 'accept' })
+        : await guestRespondToCounter(supabase, { offerId: offer.id, action: 'accept' });
+      error = res.error;
+      if (!error) {
+        const href = plan.is_group_plan
+          ? resolvePlanAgreementHref(plan, { offerId: offer.id })
+          : resolvePlanAgreementHref(plan);
+        router.replace(href);
+      }
+    } else if (kind === 'decline') {
+      const res = ctx.isHost
+        ? await hostRespondToOffer(supabase, { offerId: offer.id, action: 'decline' })
+        : await guestRespondToCounter(supabase, { offerId: offer.id, action: 'decline' });
+      error = res.error;
+      if (!error) void load();
+    } else if (kind === 'withdraw') {
+      const res = await withdrawOffer(supabase, offer.id);
+      error = res.error;
+      if (!error) void load();
+    }
+
+    setActionBusy(false);
+    setConfirm(null);
+    if (error) showFeedback('error', 'Error', error);
   }
 
-  async function acceptOfferRow(offer: DbPlanOffer) {
-    if (!user || !isCreator || !isSupabaseConfigured) return;
-    if (requiresVerificationGate(dbUser?.verification_status)) {
-      setGateOpen(true);
-      return;
-    }
-    if (isOfferExpired(offer)) {
-      showFeedback('warning', 'Expired', 'This suggestion timed out. Send a fresh one when you’re ready.');
-      return;
-    }
-    const res = await acceptPlanOffer(supabase, {
-      planId,
-      offer,
-      plan,
-      currentUserId: user.id,
-    });
+  async function handleCounterSubmit(
+    amountCents: number | null,
+    counterNote: string,
+    proposedScheduledAt: string | null
+  ) {
+    if (!counterOffer || !user || !isSupabaseConfigured) return;
+    const ctx = deriveNegotiationContext(counterOffer, plan, user.id);
+    setActionBusy(true);
+    const res = ctx.isHost
+      ? await hostRespondToOffer(supabase, {
+          offerId: counterOffer.id,
+          action: 'counter',
+          counterAmountCents: amountCents,
+          note: counterNote || null,
+          proposedScheduledAt,
+        })
+      : await guestRespondToCounter(supabase, {
+          offerId: counterOffer.id,
+          action: 'counter',
+          counterAmountCents: amountCents,
+          note: counterNote || null,
+          proposedScheduledAt,
+        });
+    setActionBusy(false);
+    setCounterOffer(null);
     if (res.error) showFeedback('error', 'Error', res.error);
-    else {
-      const href = plan.is_group_plan
-        ? (`/plan/${planId}/agreement?offerId=${offer.id}` as Href)
-        : (`/plan/${planId}/agreement` as Href);
-      router.replace(href);
-    }
+    else void load();
   }
 
   /** Offset for stacked chrome above this screen (plan title bar + safe area). */
@@ -314,34 +641,52 @@ export function NegotiationChat({ plan }: Props) {
     return Math.min(ideal, maxCollapsed);
   }, [expandedHeight]);
 
-  const midHeight = useMemo(
-    () => Math.round(collapsedHeight + (expandedHeight - collapsedHeight) * 0.5),
-    [collapsedHeight, expandedHeight]
-  );
+  const midHeight = collapsedHeight;
 
   const sheet = useDraggableSheet({ expandedHeight, collapsedHeight, midHeight });
+  collapseSheetRef.current = sheet.collapse;
 
-  const listPaddingBottom = useMemo(
-    () =>
-      canNegotiate && user && !isCreator
-        ? collapsedHeight + Math.max(insets.bottom, spacing.md) + spacing.md
-        : spacing.xl * 1.25,
-    [canNegotiate, collapsedHeight, insets.bottom, isCreator, user]
-  );
+  const openSuggestionSheet = useCallback(() => {
+    setSuggestionSheetVisible(true);
+    requestAnimationFrame(() => sheet.expand());
+  }, [sheet]);
+
+  const closeSuggestionSheet = useCallback(() => {
+    sheet.collapse();
+    setTimeout(() => setSuggestionSheetVisible(false), 280);
+  }, [sheet]);
+
+  useEffect(() => {
+    if (suggestionSheetVisible) {
+      sheet.expand();
+    }
+  }, [suggestionSheetVisible, sheet]);
+
+  const suggestionSheetOpen = !!(canNegotiate && user && !isCreator && suggestionSheetVisible);
+  useKeyboardStickyFooterMode(suggestionSheetOpen || counterOffer != null);
+
+  const listPaddingBottom = useMemo(() => {
+    if (suggestionSheetOpen) {
+      return expandedHeight + Math.max(insets.bottom, spacing.md) + spacing.md;
+    }
+    return Math.max(insets.bottom, spacing.md) + spacing.lg;
+  }, [expandedHeight, insets.bottom, suggestionSheetOpen]);
 
   const composer =
-    canNegotiate && user && !isCreator ? (
+    suggestionSheetOpen ? (
       <DropIdeaSheet
         controller={sheet}
-        expandedHeight={expandedHeight}
         keyboardVerticalOffset={kbOffset}
         typingBackdropStyle={typingBackdropStyle}
+        composerLiftStyle={composerLiftStyle}
       >
-        <KeyboardAwareScrollView
+        <ControllerAwareScrollView
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}
           bounces
+          bottomOffset={20}
+          extraKeyboardSpace={16}
           style={{ flex: 1 }}
           contentContainerStyle={{
             paddingBottom: Math.max(insets.bottom, spacing.md),
@@ -353,44 +698,74 @@ export function NegotiationChat({ plan }: Props) {
               together.
             </Text>
             <Text style={styles.chipsSectionLabel}>Quick sparks</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              <Pressable
-                onPress={() => setProposedAt(tonightAt(19, 0))}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              >
-                <Text style={styles.chipTxt}>Tonight · 7pm</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setProposedAt(tomorrowAt(12, 0))}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              >
-                <Text style={styles.chipTxt}>Tomorrow · noon</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setProposedAt(nextSaturdayAt(11, 0))}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              >
-                <Text style={styles.chipTxt}>Sat · brunch</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setNote((n) => appendNoteLine(n, 'Somewhere public works for me.'))}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              >
-                <Text style={styles.chipTxt}>Public spot</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setNote((n) => appendNoteLine(n, 'Happy to try your favorite place nearby.'))}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              >
-                <Text style={styles.chipTxt}>Your pick</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setNote((n) => appendNoteLine(n, 'Keep it casual. Open to ideas.'))}
-                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-              >
-                <Text style={styles.chipTxt}>Low-key</Text>
-              </Pressable>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chipScroll}
+              contentContainerStyle={styles.chipRow}
+            >
+              <GradientSelectionChip
+                compact
+                label="Tonight · 7pm"
+                selected={activeQuickSpark === 'tonight'}
+                onPress={() => toggleQuickSpark('tonight')}
+              />
+              <GradientSelectionChip
+                compact
+                label="Tomorrow · noon"
+                selected={activeQuickSpark === 'tomorrow'}
+                onPress={() => toggleQuickSpark('tomorrow')}
+              />
+              <GradientSelectionChip
+                compact
+                label="Sat · brunch"
+                selected={activeQuickSpark === 'sat_brunch'}
+                onPress={() => toggleQuickSpark('sat_brunch')}
+              />
+              <GradientSelectionChip
+                compact
+                label="Public spot"
+                selected={activeQuickSpark === 'public'}
+                onPress={() => toggleQuickSpark('public')}
+              />
+              <GradientSelectionChip
+                compact
+                label="Your pick"
+                selected={activeQuickSpark === 'your_pick'}
+                onPress={() => toggleQuickSpark('your_pick')}
+              />
+              <GradientSelectionChip
+                compact
+                label="Low-key"
+                selected={activeQuickSpark === 'low_key'}
+                onPress={() => toggleQuickSpark('low_key')}
+              />
             </ScrollView>
+            {groupSplitPlan && suggestedShareCents != null && suggestedShareCents > 0 ? (
+              <View style={styles.suggestedShareAnchor}>
+                <Text style={styles.chipsSectionLabel}>Suggested share</Text>
+                <Text style={styles.suggestedShareAmount}>
+                  {formatGroupSplitCents(grossAmountCents(suggestedShareCents), plan.currency)}
+                </Text>
+                <Text style={styles.composerSubtitle}>
+                  {`Based on ${remainingGuestSlots} remaining slot${remainingGuestSlots === 1 ? '' : 's'} and the plan total of ${formatGroupSplitCents(plan.starting_price_cents, plan.currency)}`}
+                </Text>
+                <View style={styles.suggestedShareBreakdown}>
+                  <View style={styles.suggestedShareBudgetRow}>
+                    <Text style={styles.suggestedShareBudgetLabel}>Plan contribution</Text>
+                    <Text style={styles.suggestedShareBudgetValue}>
+                      {formatGroupSplitCents(suggestedShareCents, plan.currency)}
+                    </Text>
+                  </View>
+                  <OfferFeeBreakdown
+                    budgetCents={suggestedShareCents}
+                    currency={plan.currency}
+                    showDivider
+                  />
+                </View>
+                <View style={styles.formDivider} />
+              </View>
+            ) : null}
             <Input
               label="If it’s paid (optional)"
               variant="onboardingFlat"
@@ -399,6 +774,15 @@ export function NegotiationChat({ plan }: Props) {
               onChangeText={setAmount}
               placeholder="Skip for now"
             />
+            {offerBudgetCents > 0 ? (
+              <View style={styles.inputFeeBreakdown}>
+                <OfferFeeBreakdown
+                  budgetCents={offerBudgetCents}
+                  currency={plan.currency}
+                  showDivider
+                />
+              </View>
+            ) : null}
             <Text style={styles.fieldLabel}>When</Text>
             <Pressable onPress={openMeetTimePicker} style={planCreateTouchableFieldStyle(styles.timeBtnRow)}>
               <View style={styles.timeRowLeft}>
@@ -425,7 +809,7 @@ export function NegotiationChat({ plan }: Props) {
                   mode="datetime"
                   display="spinner"
                   onChange={(_, d) => {
-                    if (d) setProposedAt(d);
+                    if (d) applyManualProposedAt(d);
                   }}
                 />
                 <Button title="Done" variant="ghost" onPress={() => setShowTime(false)} />
@@ -435,20 +819,125 @@ export function NegotiationChat({ plan }: Props) {
               label="Add a note"
               variant="onboardingFlat"
               value={note}
-              onChangeText={setNote}
+              onChangeText={applyManualNote}
               placeholder="What sounds fun?"
             />
-            <Button
-              title="Send suggestion"
-              onPress={() => void sendOffer()}
-              loading={sending}
-              pill
-              fullWidth
-              style={styles.sendCta}
-            />
-        </KeyboardAwareScrollView>
+            <View style={styles.sheetButtonRow}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={sending}
+                onPress={() => void sendOffer()}
+                style={({ pressed }) => [
+                  styles.sheetBtnOuter,
+                  styles.sheetBtnPrimaryShadow,
+                  pressed && styles.hostCtaPressed,
+                ]}
+              >
+                <LinearGradient
+                  colors={[...APP_CTA_GRADIENT]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sheetBtnPrimary}
+                >
+                  {sending ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.sheetBtnPrimaryTxt}>Suggest</Text>
+                  )}
+                </LinearGradient>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={closeSuggestionSheet}
+                style={({ pressed }) => [styles.sheetBtnOuter, pressed && styles.hostCtaPressed]}
+              >
+                <LinearGradient
+                  colors={[...APP_CTA_GRADIENT]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sheetBtnSecondaryBorder}
+                >
+                  <View style={styles.sheetBtnSecondaryInner}>
+                    <Text style={styles.sheetBtnSecondaryTxt}>Close</Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            </View>
+        </ControllerAwareScrollView>
       </DropIdeaSheet>
     ) : null;
+
+  const listFooter = (
+    <>
+      {isCreator && groupSplitPlan ? (
+        <GroupSplitHostFooter
+          plan={plan}
+          onPlanUpdated={() => {
+            void load();
+            onPlanRefresh?.();
+          }}
+        />
+      ) : null}
+      {showActionBar && focusOffer ? (
+      <View
+        style={[
+          negotiationPanelStyles.footer,
+          { paddingBottom: Math.max(insets.bottom, spacing.sm) },
+        ]}
+      >
+        <NegotiationOfferActions
+          offer={focusOffer}
+          plan={plan}
+          currentUserId={user?.id}
+          busy={actionBusy}
+          refreshToken={negotiationRefreshToken}
+          onAccept={() => {
+            if (requiresVerificationGate(dbUser?.verification_status)) {
+              setGateOpen(true);
+              return;
+            }
+            if (isOfferExpired(focusOffer)) {
+              showFeedback('warning', 'Expired', 'This suggestion timed out. Send a fresh one when you’re ready.');
+              return;
+            }
+            setConfirm({ kind: 'accept', offer: focusOffer });
+          }}
+          onCounter={() => setCounterOffer(focusOffer)}
+          onDecline={() => setConfirm({ kind: 'decline', offer: focusOffer })}
+          onWithdraw={() => setConfirm({ kind: 'withdraw', offer: focusOffer })}
+        />
+      </View>
+      ) : null}
+      {!showActionBar && acceptedOfferPanel ? (
+        <View
+          style={[
+            negotiationPanelStyles.footer,
+            { paddingBottom: Math.max(insets.bottom, spacing.sm) },
+          ]}
+        >
+          <NegotiationOfferActions
+            offer={acceptedOfferPanel}
+            plan={plan}
+            currentUserId={user?.id}
+            busy={actionBusy}
+            refreshToken={negotiationRefreshToken}
+            onAccept={() => {}}
+            onCounter={() => {}}
+            onDecline={() => {}}
+            onWithdraw={() => {}}
+          />
+        </View>
+      ) : null}
+    </>
+  );
+
+  if (!offersLoading && flowAdvance.redirect) {
+    return (
+      <View style={[styles.flex, styles.redirectingWrap]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex} onLayout={(e) => setChatAreaHeight(e.nativeEvent.layout.height)}>
@@ -468,9 +957,50 @@ export function NegotiationChat({ plan }: Props) {
             : 'Share an offer on this meetup before opening chat. Use the form below to suggest a time, note, or amount.'
         }
         primaryLabel={isCreator ? 'Got it' : 'Make an offer'}
-        onPrimary={() => setDmGateOpen(false)}
+        onPrimary={() => {
+          setDmGateOpen(false);
+          if (!isCreator) {
+            openSuggestionSheet();
+          }
+        }}
         secondaryLabel="Not now"
         iconVariant="warning"
+      />
+      <AppConfirmModal
+        visible={confirm != null}
+        onClose={() => !actionBusy && setConfirm(null)}
+        kicker="Offers"
+        title={
+          confirm?.kind === 'accept'
+            ? 'Accept offer?'
+            : confirm?.kind === 'decline'
+              ? 'Decline offer?'
+              : 'Withdraw offer?'
+        }
+        message={
+          confirm?.kind === 'accept'
+            ? 'You’ll move on to the agreement and payment steps next.'
+            : confirm?.kind === 'decline'
+              ? 'This will end the negotiation. The other party will be notified.'
+              : 'Take back your offer. You can submit a new one if you change your mind.'
+        }
+        primaryLabel={
+          confirm?.kind === 'accept' ? 'Accept' : confirm?.kind === 'decline' ? 'Decline' : 'Withdraw'
+        }
+        onPrimary={() => void runConfirmAction()}
+        secondaryLabel="Cancel"
+        onSecondary={() => setConfirm(null)}
+        secondaryTone={confirm?.kind === 'accept' ? 'neutral' : 'danger'}
+        iconVariant={confirm?.kind === 'accept' ? 'default' : 'warning'}
+        busyOn="primary"
+      />
+      <OfferCounterSheet
+        visible={counterOffer != null}
+        offer={counterOffer}
+        currency={plan.currency}
+        loading={actionBusy}
+        onClose={() => setCounterOffer(null)}
+        onSubmit={(cents, n, at) => void handleCounterSubmit(cents, n, at)}
       />
       <AppFeedbackModal
         visible={feedback != null}
@@ -507,14 +1037,46 @@ export function NegotiationChat({ plan }: Props) {
             Ideas expire in 24 hours, with up to {MAX_OFFERS_PER_PLAN} gentle rounds here. Send an offer first, then chat
             opens for the practical stuff.
           </Text>
-          <Pressable
-            onPress={() => void openDm()}
-            style={({ pressed }) => [styles.openChatPill, pressed && styles.openChatPillPressed]}
-          >
-            <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
-            <Text style={styles.openChatTxt}>Open chat</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.primary} style={{ opacity: 0.7 }} />
-          </Pressable>
+          <View style={styles.cardButtonRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void openDm()}
+              style={({ pressed }) => [
+                styles.sheetBtnOuter,
+                styles.sheetBtnPrimaryShadow,
+                pressed && styles.hostCtaPressed,
+              ]}
+            >
+              <LinearGradient
+                colors={[...APP_CTA_GRADIENT]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.sheetBtnPrimary, styles.cardBtnContent]}
+              >
+                <Ionicons name="chatbubbles-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.sheetBtnPrimaryTxt}>Open chat</Text>
+              </LinearGradient>
+            </Pressable>
+            {canNegotiate && !isCreator ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={openSuggestionSheet}
+                style={({ pressed }) => [styles.sheetBtnOuter, pressed && styles.hostCtaPressed]}
+              >
+                <LinearGradient
+                  colors={[...APP_CTA_GRADIENT]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sheetBtnSecondaryBorder}
+                >
+                  <View style={[styles.sheetBtnSecondaryInner, styles.cardBtnContent]}>
+                    <Ionicons name="bulb-outline" size={16} color={colors.primary} />
+                    <Text style={styles.sheetBtnSecondaryTxt}>Suggestion</Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
       <Animated.View
@@ -529,62 +1091,57 @@ export function NegotiationChat({ plan }: Props) {
         keyboardDismissMode="on-drag"
         contentContainerStyle={[
           styles.list,
-          sorted.length === 0 && styles.listEmpty,
+          !offersLoading && sorted.length === 0 ? styles.listEmpty : null,
           { paddingBottom: listPaddingBottom },
         ]}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <LinearGradient
-              colors={['rgba(94, 82, 255, 0.2)', 'rgba(255, 74, 114, 0.18)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.emptyIconRing}
-            >
-              <View style={styles.emptyIconInner}>
-                <Ionicons name="sparkles" size={30} color={colors.primary} />
-              </View>
-            </LinearGradient>
-            <Text style={styles.emptyTitle}>{isCreator ? 'Still quiet here' : 'Start a spark'}</Text>
-            <Text style={styles.empty}>
-              {isCreator
-                ? 'When someone sends a time or a vibe, it lands here. Until then, keep the chat warm. Chemistry over logistics.'
-                : 'Lead with something easy: a time, a place, a feeling. You can always fine-tune what happens next.'}
-            </Text>
-          </View>
+          offersLoading ? null : (
+            <View style={styles.emptyWrap}>
+              <LinearGradient
+                colors={['rgba(94, 82, 255, 0.2)', 'rgba(255, 74, 114, 0.18)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.emptyIconRing}
+              >
+                <View style={styles.emptyIconInner}>
+                  <Ionicons name="sparkles" size={30} color={colors.primary} />
+                </View>
+              </LinearGradient>
+              <Text style={styles.emptyTitle}>{isCreator ? 'Still quiet here' : 'Start a spark'}</Text>
+              <Text style={styles.empty}>
+                {isCreator
+                  ? 'When someone sends a time or a vibe, it lands here. Until then, keep the chat warm. Chemistry over logistics.'
+                  : 'Lead with something easy: a time, a place, a feeling. You can always fine-tune what happens next.'}
+              </Text>
+            </View>
+          )
         }
+        ListFooterComponent={listFooter}
         renderItem={({ item }) => {
           const mine = item.bidder_id === user?.id;
           const hostSent = item.bidder_id === plan.creator_id;
+          const liveActionable =
+            isCreator && isOfferLive(item) && item.bidder_id !== plan.creator_id && !moodClosed;
           return (
-            <View>
-              <OfferBubble
-                offer={item}
-                currency={plan.currency}
-                isMine={mine}
-                isHost={hostSent}
-                showHostLabel
-              />
-              {isCreator && item.status === 'pending' && !isOfferExpired(item) && !moodClosed ? (
-                <View style={styles.actions}>
-                  <Button
-                    title={plan.is_group_plan ? 'Accept slot' : 'Sounds good'}
-                    onPress={() => void acceptOfferRow(item)}
-                    style={Object.assign({}, styles.actionBtn, styles.actionBtnAccept)}
-                  />
-                  <Button
-                    title="Not quite"
-                    variant="ghost"
-                    onPress={() => void declineOffer(item)}
-                    style={styles.actionBtn}
-                  />
-                </View>
-              ) : null}
-            </View>
+            <OfferBubble
+              offer={item}
+              currency={plan.currency}
+              isMine={mine}
+              isHost={hostSent}
+              showHostLabel
+              selected={liveActionable && item.id === focusOffer?.id}
+              onPress={
+                liveActionable ? () => setSelectedOfferId(item.id) : undefined
+              }
+            />
           );
         }}
       />
       </Animated.View>
+      {suggestionSheetVisible ? (
+        <Pressable style={styles.sheetOverlay} onPress={closeSuggestionSheet} accessibilityLabel="Close suggestion sheet" />
+      ) : null}
       {composer}
     </View>
   );
@@ -592,7 +1149,9 @@ export function NegotiationChat({ plan }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  topBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  redirectingWrap: { justifyContent: 'center', alignItems: 'center' },
+  /** Matches meetup details `scrollContent` horizontal inset. */
+  topBar: { paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.sm },
   expiredStrip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -607,11 +1166,12 @@ const styles = StyleSheet.create({
   expiredStripTxt: { flex: 1, fontSize: 13, fontWeight: '600',
     fontFamily: fonts.medium, color: colors.text, lineHeight: 18 },
   hintCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: 'rgba(94, 82, 255, 0.14)',
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#4C1D95',
@@ -649,26 +1209,86 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     letterSpacing: -0.15,
   },
-  openChatPill: {
+  cardButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  cardBtnContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: 'rgba(94, 82, 255, 0.35)',
-    backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
-  openChatPillPressed: { opacity: 0.88, transform: [{ scale: 0.98 }] },
-  openChatTxt: { fontSize: 15, fontWeight: '700',
-    fontFamily: fonts.medium, color: colors.primary, letterSpacing: -0.2 },
-  listFlex: { flex: 1 },
+  sheetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    zIndex: 15,
+  },
+  sheetButtonRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  sheetBtnOuter: {
+    flex: 1,
+    minWidth: 0,
+    height: 50,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
+  sheetBtnPrimaryShadow: {
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.24,
+        shadowRadius: 14,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  sheetBtnPrimary: {
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  sheetBtnPrimaryTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    textAlign: 'center',
+  },
+  sheetBtnSecondaryBorder: {
+    height: 50,
+    borderRadius: radius.button,
+    padding: 1.5,
+  },
+  sheetBtnSecondaryInner: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.button - 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  sheetBtnSecondaryTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    letterSpacing: -0.15,
+    textAlign: 'center',
+  },
+  listFlex: { flex: 1, minHeight: 0 },
   listFill: { flex: 1 },
   list: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   listEmpty: { flexGrow: 1, justifyContent: 'center', paddingVertical: spacing.xl },
   emptyWrap: { alignItems: 'center', paddingHorizontal: spacing.xl },
@@ -706,18 +1326,92 @@ const styles = StyleSheet.create({
     maxWidth: 300,
     letterSpacing: -0.2,
   },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, marginHorizontal: spacing.md },
-  actionBtn: { flex: 1, minHeight: 50 },
-  actionBtnAccept: {
+  hostActionSheet: {
+    width: '100%',
+    alignSelf: 'stretch',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
     ...Platform.select({
       ios: {
-        shadowColor: colors.primary,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.28,
+        shadowColor: '#1A1D26',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.06,
         shadowRadius: 10,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  hostActionRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  hostPrimaryOuter: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.24,
+        shadowRadius: 14,
       },
       android: { elevation: 4 },
     }),
+  },
+  hostPrimaryGrad: {
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: spacing.md,
+  },
+  hostPrimaryTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    textAlign: 'center',
+  },
+  hostSecondaryOuter: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: radius.button,
+    overflow: 'hidden',
+  },
+  hostSecondaryGradBorder: {
+    borderRadius: radius.button,
+    padding: 1.5,
+  },
+  hostSecondaryInner: {
+    minHeight: 47,
+    backgroundColor: colors.surface,
+    borderRadius: radius.button - 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: spacing.md,
+  },
+  hostSecondaryTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    letterSpacing: -0.15,
+    textAlign: 'center',
+  },
+  hostCtaPressed: {
+    opacity: 0.94,
+    transform: [{ scale: 0.985 }],
   },
   composerSubtitle: {
     fontSize: 14,
@@ -736,18 +1430,60 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     letterSpacing: 1.4,
   },
-  chipRow: { flexDirection: 'row', gap: 8, paddingBottom: spacing.md, flexWrap: 'nowrap' },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: radius.button,
-    backgroundColor: 'rgba(94, 82, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(94, 82, 255, 0.22)',
+  suggestedShareAnchor: {
+    marginBottom: spacing.sm,
   },
-  chipPressed: { opacity: 0.88, transform: [{ scale: 0.97 }] },
-  chipTxt: { fontSize: 13, fontWeight: '700',
-    fontFamily: fonts.medium, color: colors.text, letterSpacing: -0.2 },
+  suggestedShareAmount: {
+    fontSize: 26,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    letterSpacing: -0.4,
+    marginBottom: spacing.xs,
+  },
+  suggestedShareBreakdown: {
+    marginTop: spacing.xs,
+    gap: 6,
+  },
+  suggestedShareBudgetRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  suggestedShareBudgetLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
+  suggestedShareBudgetValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  inputFeeBreakdown: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  formDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  chipScroll: {
+    height: GRADIENT_CHIP_HEIGHT,
+    flexGrow: 0,
+    marginBottom: spacing.md,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    height: GRADIENT_CHIP_HEIGHT,
+    paddingRight: spacing.sm,
+  },
   fieldLabel: {
     fontSize: 11,
     fontWeight: '800',

@@ -91,7 +91,7 @@ export function Screen({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.splashBackground },
   fill: { flex: 1 },
   scroll: { padding: spacing.md, paddingBottom: spacing.xl },
   dimOverlay: {

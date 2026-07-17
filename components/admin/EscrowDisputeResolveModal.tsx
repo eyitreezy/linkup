@@ -38,7 +38,7 @@ export function EscrowDisputeResolveModal({ context, onClose, onResolved }: Prop
 
   if (!context) return null;
 
-  const feeApprox = Math.round(context.amountCents * 0.06);
+  const feeApprox = Math.round(context.amountCents * 0.05);
   const netApprox = Math.max(0, context.amountCents - feeApprox);
 
   async function resolve(decision: 'release' | 'refund' | 'split') {

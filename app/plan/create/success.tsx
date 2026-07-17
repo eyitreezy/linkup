@@ -3,6 +3,7 @@
  */
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { Href, router, useLocalSearchParams } from 'expo-router';
@@ -18,7 +19,8 @@ export default function CreatePlanSuccessScreen() {
   }, [reset]);
 
   return (
-    <Screen scroll>
+    <Screen scroll safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+      <AppShellBackground />
       <View style={styles.hero}>
         <Text style={styles.emoji}>{'\u{1F389}'}</Text>
         <Text style={styles.title}>Your plan is live</Text>
@@ -38,6 +40,7 @@ export default function CreatePlanSuccessScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
   hero: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,

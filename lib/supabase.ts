@@ -3,7 +3,7 @@
  * Uses EXPO_PUBLIC_* vars from app config / .env (see .env.example).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
 const extra = Constants.expoConfig?.extra as Record<string, string> | undefined;
@@ -27,3 +27,10 @@ export const supabase = createClient(
     },
   }
 );
+
+/** Tear down a Realtime channel without surfacing benign unmount races as unhandled rejections. */
+export function removeSupabaseChannel(channel: RealtimeChannel): void {
+  void supabase.removeChannel(channel).catch(() => {
+    // Channel may already be removed during fast navigation or Strict Mode remounts.
+  });
+}

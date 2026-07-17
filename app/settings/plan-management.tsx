@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { distanceKm } from '@/lib/location';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import { getCreatorEditCapabilities } from '@/lib/plans/planCreatorEditPolicy';
+import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan, DbMeetType } from '@/types/database';
 import { Href, router } from 'expo-router';
@@ -300,7 +301,10 @@ export default function PlanManagementScreen() {
       return;
     }
     const id = typeof newId === 'string' ? newId : newId != null ? String(newId) : null;
-    if (id) router.push(`/plan/${id}` as Href);
+    if (id) {
+      warmPlanDetailNavigation(id);
+      router.push(`/plan/${id}` as Href);
+    }
   }
 
   const sectionChips: { id: Section; label: string }[] = [
@@ -498,7 +502,10 @@ export default function PlanManagementScreen() {
                     >
                       <Pressable
                         style={styles.actionBtn}
-                        onPress={() => router.push(`/plan/${p.id}` as Href)}
+                        onPress={() => {
+                          warmPlanDetailNavigation(p.id, { plan: p });
+                          router.push(`/plan/${p.id}` as Href);
+                        }}
                       >
                         <Text style={styles.actionBtnTxt}>Open</Text>
                       </Pressable>

@@ -89,6 +89,48 @@ function genericEmailForType(type: string | undefined): { subject: string; text:
       text: 'Your custom meet type was not approved. Open LinkUp to create a new type or pick from the catalog.',
     };
   }
+  if (t === 'join_request_received') {
+    return {
+      subject: 'LinkUp — new join request',
+      text: 'Someone requested to join your plan. Open LinkUp to review and approve or decline.',
+    };
+  }
+  if (t === 'join_request_approved') {
+    return {
+      subject: 'LinkUp — request approved',
+      text: 'Your request to join a plan was approved. Open LinkUp to fund your share and secure your slot.',
+    };
+  }
+  if (t === 'join_request_declined') {
+    return {
+      subject: 'LinkUp — join request update',
+      text: 'Your request to join a plan was not approved. Open LinkUp to explore other plans.',
+    };
+  }
+  if (t === 'plan_invitation_received') {
+    return {
+      subject: 'LinkUp — you have been invited to a meetup',
+      text: 'Someone invited you to join a plan on LinkUp. Open the app to view the invitation and respond.',
+    };
+  }
+  if (t === 'plan_invitation_accepted') {
+    return {
+      subject: 'LinkUp — invitation accepted',
+      text: 'A guest accepted your plan invitation. Open LinkUp to see the latest on your plan.',
+    };
+  }
+  if (t === 'plan_invitation_declined') {
+    return {
+      subject: 'LinkUp — invitation declined',
+      text: 'A guest declined your plan invitation. Open LinkUp to manage your plan.',
+    };
+  }
+  if (t === 'plan_invitation_expired') {
+    return {
+      subject: 'LinkUp — invitation expired',
+      text: 'A plan invitation expired without a response. The slot is open again. Open LinkUp for details.',
+    };
+  }
   return {
     subject: 'LinkUp — notification',
     text: 'You have a new notification in LinkUp. Open the app to see more.',

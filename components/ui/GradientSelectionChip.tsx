@@ -14,6 +14,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+/** Fixed chip height — idle border and gradient selected state share the same box. */
+export const GRADIENT_CHIP_HEIGHT = 44;
+
 type Props = {
   label?: string;
   selected: boolean;
@@ -36,7 +39,7 @@ export function GradientSelectionChip({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.press, style]}
+      style={[styles.press, compact && styles.pressCompact, style]}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel ?? label}
@@ -46,13 +49,13 @@ export function GradientSelectionChip({
           colors={[...APP_CHIP_GRADIENT]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.grad, compact && styles.gradCompact]}
+          style={[styles.inner, compact && styles.innerCompact]}
         >
-          {children ?? (label ? <Text style={styles.txtOn}>{label}</Text> : null)}
+          {children ?? (label ? <Text style={styles.txtOn} numberOfLines={1}>{label}</Text> : null)}
         </LinearGradient>
       ) : (
-        <View style={[styles.idle, compact && styles.idleCompact]}>
-          {children ?? (label ? <Text style={styles.txt}>{label}</Text> : null)}
+        <View style={[styles.inner, styles.idle, compact && styles.innerCompact]}>
+          {children ?? (label ? <Text style={styles.txt} numberOfLines={1}>{label}</Text> : null)}
         </View>
       )}
     </Pressable>
@@ -60,31 +63,43 @@ export function GradientSelectionChip({
 }
 
 const styles = StyleSheet.create({
-  press: { borderRadius: radius.button, overflow: 'hidden' },
-  grad: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  press: {
+    height: GRADIENT_CHIP_HEIGHT,
     borderRadius: radius.button,
+    overflow: 'hidden',
+    alignSelf: 'flex-start',
   },
-  gradCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: radius.md,
+  pressCompact: { borderRadius: radius.button },
+  inner: {
+    height: GRADIENT_CHIP_HEIGHT,
+    minWidth: GRADIENT_CHIP_HEIGHT,
+    paddingHorizontal: 14,
+    borderRadius: radius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerCompact: {
+    paddingHorizontal: 12,
   },
   idle: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.button,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  idleCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: radius.md,
+  txt: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    letterSpacing: -0.2,
+    textAlign: 'center',
   },
-  txt: { fontSize: 13, fontWeight: '800',
-    fontFamily: fonts.bold, color: colors.text },
-  txtOn: { fontSize: 13, fontWeight: '900', color: '#fff', textAlign: 'center', fontFamily: fonts.bold, },
+  txtOn: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'center',
+    fontFamily: fonts.bold,
+    letterSpacing: -0.2,
+  },
 });

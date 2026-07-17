@@ -2,10 +2,11 @@
  * Chat-styled offer row — distinct from plain text messages.
  */
 import { colors, radius, spacing, fonts } from '@/constants/theme';
-import { isOfferExpired } from '@/lib/plans/offerRules';
+import { isOfferExpired, offerCountsTowardLimit } from '@/lib/plans/offerRules';
+import { offerLiveAmount, offerStatusLabel } from '@/lib/plans/negotiationState';
 import type { DbPlanOffer } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   offer: DbPlanOffer;
@@ -13,6 +14,9 @@ type Props = {
   isMine: boolean;
   isHost: boolean;
   showHostLabel: boolean;
+  /** Host manage-offers: highlight the offer selected for bottom actions. */
+  selected?: boolean;
+  onPress?: () => void;
 };
 
 function formatMoney(cents: number | null, currency: string): string {
@@ -32,13 +36,25 @@ function formatWhen(iso: string | null): string | null {
   });
 }
 
-export function OfferBubble({ offer, currency, isMine, isHost, showHostLabel }: Props) {
+export function OfferBubble({
+  offer,
+  currency,
+  isMine,
+  isHost,
+  showHostLabel,
+  selected,
+  onPress,
+}: Props) {
   const expired = isOfferExpired(offer);
   const alignRight = isMine;
   const statusColor =
     offer.status === 'accepted'
       ? colors.success
-      : offer.status === 'declined' || offer.status === 'superseded' || offer.status === 'expired' || expired
+      : offer.status === 'declined' ||
+          offer.status === 'superseded' ||
+          offer.status === 'expired' ||
+          offer.status === 'withdrawn' ||
+          expired
         ? colors.textMuted
         : colors.primary;
 
@@ -51,15 +67,21 @@ export function OfferBubble({ offer, currency, isMine, isHost, showHostLabel }: 
       })}`
     : null;
 
-  return (
-    <View style={[styles.wrap, alignRight ? styles.wrapRight : styles.wrapLeft]}>
-      <View style={[styles.bubble, alignRight ? styles.bubbleMine : styles.bubbleTheirs, expired && styles.bubbleDim]}>
+  const bubble = (
+    <View
+      style={[
+        styles.bubble,
+        alignRight ? styles.bubbleMine : styles.bubbleTheirs,
+        expired && styles.bubbleDim,
+        selected && styles.bubbleSelected,
+      ]}
+    >
         <View style={styles.badgeRow}>
           <Ionicons name="chatbubbles-outline" size={14} color={colors.primary} />
           <Text style={styles.badgeTxt}>Idea · round {offer.round}</Text>
           {showHostLabel && isHost ? <Text style={styles.hostTag}>Host</Text> : null}
         </View>
-        <Text style={styles.amount}>{formatMoney(offer.amount_cents, currency)}</Text>
+        <Text style={styles.amount}>{formatMoney(offerLiveAmount(offer), currency)}</Text>
         {formatWhen(offer.proposed_scheduled_at) ? (
           <View style={styles.row}>
             <Ionicons name="time-outline" size={14} color={colors.textMuted} />
@@ -68,18 +90,47 @@ export function OfferBubble({ offer, currency, isMine, isHost, showHostLabel }: 
         ) : null}
         {offer.message ? <Text style={styles.note}>{offer.message}</Text> : null}
         <Text style={[styles.status, { color: statusColor }]}>
-          {expired && offer.status === 'pending' ? 'Expired' : offer.status}
+          {offerStatusLabel(offer)}
         </Text>
-        {expiresLine && offer.status === 'pending' && !expired ? (
+        {expiresLine && offerCountsTowardLimit(offer) && !expired ? (
           <Text style={styles.expires}>{expiresLine}</Text>
         ) : null}
-      </View>
+    </View>
+  );
+
+  return (
+    <View style={[styles.wrap, alignRight ? styles.wrapRight : styles.wrapLeft]}>
+      {onPress ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          style={({ pressed }) => [pressed && styles.bubblePressed]}
+        >
+          {bubble}
+        </Pressable>
+      ) : (
+        bubble
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginVertical: 6, paddingHorizontal: spacing.md, maxWidth: '100%' },
+  wrap: { marginVertical: 6, maxWidth: '100%' },
+  bubblePressed: { opacity: 0.92 },
+  bubbleSelected: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
+  },
   wrapLeft: { alignSelf: 'flex-start' },
   wrapRight: { alignSelf: 'flex-end' },
   bubble: {
@@ -88,10 +139,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(94, 82, 255, 0.22)',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
   },
   bubbleMine: {
-    backgroundColor: 'rgba(94, 82, 255, 0.14)',
+    backgroundColor: '#F0EEFF',
     borderColor: 'rgba(94, 82, 255, 0.38)',
   },
   bubbleTheirs: {},

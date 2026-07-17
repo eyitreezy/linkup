@@ -22,15 +22,17 @@ function timingFromEvent(e: KeyboardEvent, fallback: number) {
 
 export type UseKeyboardAnimationOptions = {
   enabled?: boolean;
+  /** Lift bottom composers on Android (absolute sheets that ignore window resize). */
+  liftOnAndroid?: boolean;
 };
 
 export function useKeyboardAnimation(options: UseKeyboardAnimationOptions = {}) {
-  const { enabled = true } = options;
+  const { enabled = true, liftOnAndroid = false } = options;
   const keyboardHeight = useSharedValue(0);
   const progress = useSharedValue(0);
 
   const isIos = Platform.OS === 'ios';
-  const applyComposerLift = isIos;
+  const applyComposerLift = isIos || liftOnAndroid;
 
   useEffect(() => {
     if (!enabled) return;
@@ -58,9 +60,9 @@ export function useKeyboardAnimation(options: UseKeyboardAnimationOptions = {}) 
       subShow.remove();
       subHide.remove();
     };
-  }, [enabled, isIos]);
+  }, [enabled, isIos, liftOnAndroid, keyboardHeight, progress]);
 
-  /** Lift a bottom composer above the IME (iOS). Android: empty (window resize). */
+  /** Lift a bottom composer above the IME (iOS always; Android when `liftOnAndroid`). */
   const composerLiftStyle = useAnimatedStyle(() => {
     if (!applyComposerLift) return {};
     const lift = keyboardHeight.value;
@@ -87,7 +89,7 @@ export function useKeyboardAnimation(options: UseKeyboardAnimationOptions = {}) 
     composerLiftStyle,
     chatListFooterStyle,
     typingBackdropStyle,
-    /** Whether translateY-based composer lift is applied (iOS only). */
+    /** Whether translateY-based composer lift is applied. */
     applyComposerLift,
   };
 }

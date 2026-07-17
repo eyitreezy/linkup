@@ -7,16 +7,24 @@ import { OfferListCard } from '@/components/offers/OfferListCard';
 import { OffersSegmentedControl, type OffersSegment } from '@/components/offers/OffersSegmentedControl';
 import { EngagementCarousel } from '@/components/plans/EngagementCarousel';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import { acceptPlanOffer } from '@/lib/plans/acceptPlanOffer';
+import {
+  guestRespondToCounter,
+  hostRespondToOffer,
+} from '@/lib/plans/negotiationActions';
+import { deriveNegotiationContext } from '@/lib/plans/negotiationState';
 import {
   fetchReceivedOffers,
   fetchSentOffers,
+  getOfferDisplayStatus,
   type OfferDashboardRow,
 } from '@/lib/plans/fetchOffersDashboard';
 import { fetchFeedEngagementCarousel, type EngagementCarouselItem } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { isOfferExpired } from '@/lib/plans/offerRules';
+import { planIsPastNegotiation, resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
+import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import { Href, router, useFocusEffect } from 'expo-router';
@@ -24,7 +32,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useRef, useState } from 'react';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { Alert, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -50,7 +57,6 @@ function OffersSkeleton() {
 
 export default function OffersScreen() {
   const tabBarScroll = useTabBarScrollProps();
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user, dbUser } = useAuth();
   const [segment, setSegment] = useState<OffersSegment>('sent');
   const [sent, setSent] = useState<OfferDashboardRow[]>([]);
@@ -149,36 +155,85 @@ export default function OffersScreen() {
       return;
     }
     setBusyOfferId(row.offer.id);
-    const res = await acceptPlanOffer(supabase, {
-      planId: row.plan.id,
-      offer: row.offer,
-      plan: row.plan,
-      currentUserId: user.id,
-    });
+    const ctx = deriveNegotiationContext(row.offer, row.plan, user.id);
+    let error: string | null = null;
+
+    if (ctx.isHost) {
+      const res = await hostRespondToOffer(supabase, {
+        offerId: row.offer.id,
+        action: 'accept',
+      });
+      error = res.error;
+      if (!error) {
+        router.replace(resolvePlanAgreementHref(row.plan));
+      }
+    } else if (ctx.isGuest) {
+      const res = await guestRespondToCounter(supabase, {
+        offerId: row.offer.id,
+        action: 'accept',
+      });
+      error = res.error;
+      if (!error) {
+        router.replace(resolvePlanAgreementHref(row.plan, { offerId: row.offer.id }));
+      }
+    } else {
+      error = 'You cannot accept this offer.';
+    }
+
     setBusyOfferId(null);
-    if (res.error) Alert.alert('Could not accept', res.error);
-    else router.replace(`/plan/${row.plan.id}/agreement` as Href);
+    if (error) Alert.alert('Could not accept', error);
+    else void loadBothRef.current();
   }
 
   async function handleReject(row: OfferDashboardRow) {
-    Alert.alert('Decline offer?', 'The guest will see this offer as declined.', [
+    if (!user) return;
+    const ctx = deriveNegotiationContext(row.offer, row.plan, user.id);
+    const declineLabel = ctx.isHost ? 'The guest will see this offer as declined.' : 'The host will be notified.';
+
+    Alert.alert('Decline offer?', declineLabel, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Decline',
         style: 'destructive',
         onPress: async () => {
           setBusyOfferId(row.offer.id);
-          const { error } = await supabase.from('plan_offers').update({ status: 'declined' }).eq('id', row.offer.id);
+          let error: string | null = null;
+          if (ctx.isHost) {
+            const res = await hostRespondToOffer(supabase, {
+              offerId: row.offer.id,
+              action: 'decline',
+            });
+            error = res.error;
+          } else if (ctx.isGuest) {
+            const res = await guestRespondToCounter(supabase, {
+              offerId: row.offer.id,
+              action: 'decline',
+            });
+            error = res.error;
+          } else {
+            error = 'You cannot decline this offer.';
+          }
           setBusyOfferId(null);
-          if (error) Alert.alert('Error', error.message);
+          if (error) Alert.alert('Error', error);
           else void loadBothRef.current();
         },
       },
     ]);
   }
 
-  function openNegotiate(planId: string) {
-    router.push(`/plan/${planId}/negotiate` as Href);
+  function openOfferFlow(row: OfferDashboardRow) {
+    const display = getOfferDisplayStatus(row.offer);
+    if (display === 'accepted' || planIsPastNegotiation(row.plan.status)) {
+      router.push(
+        resolvePlanAgreementHref(row.plan, { offerId: row.offer.id, userId: user?.id })
+      );
+      return;
+    }
+    router.push(planNegotiateHref(row.plan.id, { offerId: row.offer.id }));
+  }
+
+  function openOfferCounter(row: OfferDashboardRow) {
+    router.push(planNegotiateHref(row.plan.id, { offerId: row.offer.id, action: 'counter' }));
   }
 
   const summaryLabel =
@@ -196,13 +251,7 @@ export default function OffersScreen() {
         message="Accepting offers requires a verified identity on LinkUp."
       />
       <View style={styles.root}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={bleedBgStyle}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <View style={styles.heroHeader}>
           <View style={styles.heroLeft}>
@@ -315,11 +364,12 @@ export default function OffersScreen() {
             <OfferListCard
               row={item}
               mode={segment}
+              currentUserId={user?.id}
               busy={busyOfferId === item.offer.id}
-              onPressOpen={() => openNegotiate(item.plan.id)}
-              onAccept={segment === 'received' ? () => void handleAccept(item) : undefined}
-              onReject={segment === 'received' ? () => void handleReject(item) : undefined}
-              onNegotiate={segment === 'received' ? () => openNegotiate(item.plan.id) : undefined}
+              onOpenNegotiate={() => openOfferFlow(item)}
+              onAccept={() => void handleAccept(item)}
+              onReject={() => void handleReject(item)}
+              onCounter={() => openOfferCounter(item)}
             />
           )}
         />

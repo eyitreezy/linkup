@@ -17,6 +17,7 @@ import { paystackHttpsCallbackUrl } from '../_shared/paystackCallback.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 import { corsHeaders, handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
+import { patternBLegGrossCents } from '../_shared/flutterwaveMeta.ts';
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
@@ -276,7 +277,7 @@ Deno.serve(async (req) => {
 
         if (escrow.host_funded_at) return jsonError('Host share already funded', 409, 'already_funded');
 
-        amountKobo = (escrow.host_share_cents as number) ?? 0;
+        amountKobo = patternBLegGrossCents(escrow, 'host');
 
       } else if (leg === 'guest') {
 
@@ -284,7 +285,7 @@ Deno.serve(async (req) => {
 
         if (escrow.guest_funded_at) return jsonError('Guest share already funded', 409, 'already_funded');
 
-        amountKobo = (escrow.guest_share_cents as number) ?? 0;
+        amountKobo = patternBLegGrossCents(escrow, 'guest');
 
       } else {
 

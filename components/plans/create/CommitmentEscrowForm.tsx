@@ -2,6 +2,7 @@
  * Step 2 — paid / free, escrow pattern, price, split slider (pattern B/C tier gates).
  */
 import { Input, onboardingInputShadow } from '@/components/Input';
+import { PlanBudgetFeeNotifier } from '@/components/plans/PlanBudgetFeeNotifier';
 import { EscrowTrustExplainerCard } from '@/components/plans/create/EscrowTrustExplainerCard';
 import { FundingPatternCard } from '@/components/plans/create/FundingPatternCard';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
@@ -167,6 +168,36 @@ export function CommitmentEscrowForm() {
             </View>
           </View>
 
+          {(draft.escrowPattern === 'B' || draft.escrowPattern === 'C') ? (
+            <View style={styles.negotiableToggleCard}>
+              <View style={styles.negotiableToggleRow}>
+                <View style={styles.negotiableToggleText}>
+                  <Text style={styles.sectionLabel}>Allow price negotiation</Text>
+                  <Text style={styles.hint}>
+                    {draft.isNegotiable
+                      ? 'Guests can make offers and negotiate the price with you.'
+                      : 'Guests request to join at the formula price. You approve or decline each request.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={draft.isNegotiable}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, isNegotiable: v }))}
+                  trackColor={{ true: colors.primary, false: '#D8DCE6' }}
+                  thumbColor={draft.isNegotiable ? '#fff' : '#f4f4f5'}
+                />
+              </View>
+              {!draft.isNegotiable ? (
+                <View style={styles.nonNegotiableExplainer}>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                  <Text style={styles.nonNegotiableExplainerTxt}>
+                    Guests will be shown the formula share price and can request to join. You will
+                    receive a notification for each request and can approve or decline.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {patternCAlert ? (
             <View style={styles.patternCAlert}>
               <Ionicons name="information-circle-outline" size={18} color="#B45309" />
@@ -204,6 +235,11 @@ export function CommitmentEscrowForm() {
             value={draft.startingPrice}
             onChangeText={(t) => setDraft((d) => ({ ...d, startingPrice: t }))}
             placeholder="e.g. 15000"
+          />
+          <PlanBudgetFeeNotifier
+            budgetCents={Number.isFinite(ngn) && ngn > 0 ? Math.round(ngn * 100) : 0}
+            participantCount={(draft.maxGuests ?? 0) + 1}
+            isGroupPlan={draft.isGroupPlan}
           />
           <View style={styles.hintCard}>
             <Text style={styles.hintStrong}>Smart hint</Text>
@@ -280,4 +316,39 @@ const styles = StyleSheet.create({
   hintStrong: { fontSize: 12, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.primary, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   hintCardTxt: { fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
+  negotiableToggleCard: {
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: FIELD_BORDER,
+    ...onboardingInputShadow,
+  },
+  negotiableToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  negotiableToggleText: { flex: 1, paddingRight: spacing.sm },
+  nonNegotiableExplainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: '#F8F7FF',
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.14)',
+  },
+  nonNegotiableExplainerTxt: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    lineHeight: 19,
+  },
 });

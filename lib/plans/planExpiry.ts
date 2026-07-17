@@ -13,7 +13,7 @@ export function isPlanMoodWindowClosed(plan: PlanLike, nowMs: number = Date.now(
 export function planExpiryReason(plan: PlanLike, nowMs: number = Date.now()): string {
   if (!plan.is_mood_plan) return '';
   if (plan.is_expired || isPlanMoodWindowClosed(plan, nowMs)) {
-    return 'This mood moment ended — it now stays on your shelf for memories, not the public floor.';
+    return 'This mood moment ended. It stays on your shelf for memories, not the public floor.';
   }
   return '';
 }

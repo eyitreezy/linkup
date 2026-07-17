@@ -169,13 +169,7 @@ export function PlansFilterSheet({
           style={[styles.sheetOuter, { height: sheetHeight, maxHeight: sheetHeight }]}
           onPress={(e) => e.stopPropagation()}
         >
-          <LinearGradient
-            colors={['#FFFFFF', '#FAF7FF', '#FFFAFC', '#F4FFFB']}
-            locations={[0, 0.35, 0.72, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.sheetGradient}
-          >
+          <View style={styles.sheetGradient}>
             <View style={styles.sheetBody}>
               <View style={styles.sheetHeader}>
                 <View style={styles.sheetHandleWrap} pointerEvents="none">
@@ -403,16 +397,30 @@ export function PlansFilterSheet({
                 <View style={styles.footerRow}>
                   <Pressable
                     onPress={clearFilters}
-                    style={({ pressed }) => [styles.footerClear, pressed && styles.footerPressed]}
+                    style={({ pressed }) => [
+                      styles.footerBtn,
+                      pressed && styles.footerPressed,
+                    ]}
                     accessibilityRole="button"
                     accessibilityLabel="Clear discover filters"
-                    hitSlop={8}
                   >
-                    <Text style={styles.footerClearTxt}>Clear</Text>
+                    <LinearGradient
+                      colors={[colors.primary, '#8B7CFF', colors.secondary]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.footerClearShell}
+                    >
+                      <View style={styles.footerClearInner}>
+                        <Text style={styles.footerClearTxt}>Clear</Text>
+                      </View>
+                    </LinearGradient>
                   </Pressable>
                   <Pressable
                     onPress={apply}
-                    style={({ pressed }) => [styles.footerApplyOuter, pressed && styles.footerPressed]}
+                    style={({ pressed }) => [
+                      styles.footerBtn,
+                      pressed && styles.footerPressed,
+                    ]}
                     accessibilityRole="button"
                     accessibilityLabel="Apply discover filters"
                   >
@@ -428,7 +436,7 @@ export function PlansFilterSheet({
                 </View>
               </View>
             </View>
-          </LinearGradient>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -450,6 +458,7 @@ const styles = StyleSheet.create({
   },
   sheetGradient: {
     flex: 1,
+    backgroundColor: colors.splashBackground,
     borderTopLeftRadius: radius.xl + 4,
     borderTopRightRadius: radius.xl + 4,
     borderTopWidth: 1,
@@ -613,51 +622,44 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: spacing.md,
     paddingTop: spacing.sm,
   },
-  footerClear: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 52,
-    paddingVertical: 14,
-    paddingHorizontal: spacing.lg,
+  footerBtn: {
+    flex: 1,
+    height: 54,
     borderRadius: radius.button,
-    borderWidth: 1.5,
-    borderColor: 'rgba(26, 29, 38, 0.12)',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerClearShell: {
+    width: '100%',
+    height: '100%',
+    padding: 2,
+    borderRadius: radius.button,
+  },
+  footerClearInner: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.button - 2,
+    backgroundColor: '#fff',
   },
   footerClearTxt: {
     fontSize: 16,
-    fontWeight: '700',
-    fontFamily: fonts.medium,
-    color: colors.textMuted,
-  },
-  footerApplyOuter: {
-    flex: 1,
-    borderRadius: radius.button,
-    overflow: 'hidden',
-    minHeight: 52,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#5E52FF',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.22,
-        shadowRadius: 14,
-      },
-      android: { elevation: 4 },
-      default: {},
-    }),
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    letterSpacing: -0.2,
+    color: colors.primary,
   },
   footerApplyGrad: {
-    minHeight: 52,
-    paddingVertical: 15,
-    paddingHorizontal: spacing.lg,
+    width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    borderRadius: radius.button,
   },
   footerApplyTxt: {
     color: '#fff',

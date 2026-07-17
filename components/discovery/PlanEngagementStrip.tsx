@@ -5,6 +5,7 @@
 import { colors, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import type { EngagementCarouselItem, EngagementStripKind } from '@/lib/plans/fetchFeedEngagementCarousel';
+import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { DbUserPresence } from '@/types/database';
@@ -54,8 +55,12 @@ function PlanEngagementStripInner({ items, loading, presenceByUser }: Props) {
   const { user } = useAuth();
 
   const openPlan = useCallback((item: EngagementCarouselItem) => {
+    warmPlanDetailNavigation(item.planId);
     if (item.navigateTo === 'agreement') {
-      router.push(`/plan/${item.planId}/agreement` as Href);
+      const href = item.offerId
+        ? (`/plan/${item.planId}/agreement?offerId=${item.offerId}` as Href)
+        : (`/plan/${item.planId}/agreement` as Href);
+      router.push(href);
     } else {
       router.push(`/plan/${item.planId}` as Href);
     }

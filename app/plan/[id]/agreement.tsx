@@ -7,13 +7,21 @@ import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgree
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
 import { PreAgreementFullscreenModal } from '@/components/plans/agreement/PreAgreementFullscreenModal';
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
+import { GroupSplitAgreementPanel } from '@/components/plans/agreement/GroupSplitAgreementPanel';
 import { GroupEscrowStatusCard } from '@/components/plans/agreement/GroupEscrowStatusCard';
+import { isGroupSplitPlan, formatGroupSplitCents, hostShareFromGuestCommitments, projectedHostShareCents } from '@/lib/plans/groupSplitDynamic';
+import {
+  deriveEscrowPhase,
+  resolveEscrowScreenContent,
+} from '@/lib/escrow/escrowScreenContent';
+import { PlanEscrowPaymentCard } from '@/components/plans/agreement/PlanEscrowPaymentCard';
 import { AgreementPaymentPreviewCard } from '@/components/plans/agreement/AgreementPaymentPreviewCard';
 import { HighValueEscrowNoticeCard } from '@/components/plans/agreement/HighValueEscrowNoticeCard';
 import { MeetupFundingReminderBanner } from '@/components/plans/agreement/MeetupFundingReminderBanner';
 import { PlanSummaryCard } from '@/components/plans/agreement/PlanSummaryCard';
 import { DiscoveryGradientBg } from '@/components/ui/DiscoveryGradientBg';
-import { PlanFlowScreenSkeleton } from '@/components/ui/PlanFlowScreenSkeleton';
+import { AgreementScreenSkeleton } from '@/components/plans/agreement/AgreementScreenSkeleton';
+import { PlanAgreementEmptyState, resolveAgreementEmptyReason } from '@/components/plans/agreement/PlanAgreementEmptyState';
 import { Screen } from '@/components/Screen';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
@@ -21,25 +29,31 @@ import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFe
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
-import { openDirectChat } from '@/lib/messaging/openDirectChat';
+import { openPlanMeetupChat, PlanMeetupChatError } from '@/lib/messaging/openPlanMeetupChat';
 import {
+  formatEscrowMoney,
   getAgreementPaymentPreview,
   isMeetupWithinHours,
 } from '@/lib/escrow/escrowPaymentPreview';
-import { MAX_ESCROW_TIER1_CENTS } from '@/lib/plans/planFinancialConfig';
+import { getEscrowFundingUiState } from '@/lib/escrow/escrowFundingUi';
+import { isUserEscrowLegFunded, isSplitEscrowPattern } from '@/lib/escrow/splitEscrowFunding';
+import { MAX_ESCROW_TIER1_CENTS, patternBLegGrossCents } from '@/lib/plans/planFinancialConfig';
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
+import { bothAgreementPartiesConfirmed } from '@/lib/plans/agreementConfirmations';
+import { fetchPlanAgreementBundle } from '@/lib/plans/fetchPlanAgreementBundle';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { goToDiscoveryFeed } from '@/lib/navigation/goToDiscoveryFeed';
+import { goBackOrFallback } from '@/lib/navigation/goBackOrFallback';
 import {
   goodwillCreditCents,
   goodwillCreditCentsForTier,
 } from '@/lib/plans/cancellationPolicy';
 import { requiresVerificationGate } from '@/lib/verification/access';
-import type { DbPlan, DbPlanOffer, SubscriptionTier } from '@/types/database';
+import type { DbEscrowTransaction, DbPlan, DbPlanOffer, SubscriptionTier } from '@/types/database';
 import { Href, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -77,11 +91,145 @@ function cancelBandFromOutcome(outcome: CancellationOutcome): CancellationBandSu
   return 'late';
 }
 
-function AgreementTopNav() {
+function formatMyEscrowAmount(
+  escrow: DbEscrowTransaction,
+  userId: string,
+  isHost: boolean,
+  isGroupSplit: boolean
+): string {
+  if (isGroupSplit) {
+    return formatGroupSplitCents(escrow.amount_cents, escrow.currency);
+  }
+  if (isSplitEscrowPattern(escrow.escrow_pattern)) {
+    const leg = userId === escrow.host_id ? 'host' : 'guest';
+    return formatEscrowMoney(
+      patternBLegGrossCents(escrow, leg),
+      escrow.currency
+    );
+  }
+  return formatEscrowMoney(escrow.amount_cents, escrow.currency);
+}
+
+type FundedWaitingViewProps = {
+  myEscrow: DbEscrowTransaction;
+  isHost: boolean;
+  isGroupSplit: boolean;
+  plan: DbPlan;
+  guestEscrowRows: DbEscrowTransaction[];
+  currentUserId: string;
+};
+
+function FundedWaitingView({
+  myEscrow,
+  isHost,
+  isGroupSplit,
+  plan,
+  guestEscrowRows,
+  currentUserId,
+}: FundedWaitingViewProps) {
+  const amountLabel = formatMyEscrowAmount(myEscrow, currentUserId, isHost, isGroupSplit);
+
+  if (!isHost) {
+    return (
+      <View style={styles.fundedContainer}>
+        <View style={styles.fundedIconRow}>
+          <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+        </View>
+        <Text style={styles.fundedTitle}>Your payment is secured</Text>
+        <Text style={styles.fundedAmount}>{amountLabel}</Text>
+        {isGroupSplit ? (
+          <Text style={styles.fundedMessage}>
+            Waiting for the host to close the group and complete their payment. You will be notified
+            when the meetup is confirmed.
+          </Text>
+        ) : (
+          <Text style={styles.fundedMessage}>
+            Your escrow payment is held securely. The meetup will be confirmed once all payments are
+            complete.
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  if (isHost && isGroupSplit) {
+    const pendingGuests = guestEscrowRows.filter((e) => e.status !== 'funded');
+    const fundedGuests = guestEscrowRows.filter((e) => e.status === 'funded');
+
+    return (
+      <View style={styles.fundedContainer}>
+        <View style={styles.fundedIconRow}>
+          <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+        </View>
+        <Text style={styles.fundedTitle}>Your payment is secured</Text>
+        <Text style={styles.fundedAmount}>{amountLabel}</Text>
+        <View style={styles.guestStatusSummary}>
+          <Text style={styles.guestStatusLabel}>
+            {`${fundedGuests.length} of ${guestEscrowRows.length} guests have paid`}
+          </Text>
+          {pendingGuests.length > 0 ? (
+            <Text style={styles.pendingGuestsNote}>
+              {`Waiting for ${pendingGuests.length} guest${pendingGuests.length === 1 ? '' : 's'} to fund their share. They have been notified.`}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.fundedContainer}>
+      <View style={styles.fundedIconRow}>
+        <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+      </View>
+      <Text style={styles.fundedTitle}>Your payment is secured</Text>
+      <Text style={styles.fundedMessage}>
+        Waiting for the guest to fund their share. They have been notified.
+      </Text>
+    </View>
+  );
+}
+
+type PlanConfirmedViewProps = {
+  onGoToChat: () => void;
+};
+
+function PlanConfirmedView({ onGoToChat }: PlanConfirmedViewProps) {
+  return (
+    <View style={styles.confirmedContainer}>
+      <View style={styles.fundedIconRow}>
+        <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+      </View>
+      <Text style={styles.confirmedTitle}>Meetup confirmed!</Text>
+      <Text style={styles.confirmedMessage}>
+        All payments are secured. Your meetup is confirmed and ready to go.
+      </Text>
+      <Pressable
+        onPress={onGoToChat}
+        style={({ pressed }) => [styles.confirmedPrimaryOuter, pressed && { opacity: 0.94 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Go to chat"
+      >
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.confirmedPrimaryGrad}
+        >
+          <Text style={styles.confirmedPrimaryLabel}>Go to chat</Text>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+function AgreementTopNav({ planId }: { planId?: string }) {
+  const backFallback = planId ? (`/plan/${planId}` as Href) : undefined;
+
   return (
     <View style={styles.topNav}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => goBackOrFallback(backFallback)}
         style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
         hitSlop={8}
         accessibilityRole="button"
@@ -109,8 +257,9 @@ export default function PlanAgreementScreen() {
   const [offer, setOffer] = useState<DbPlanOffer | null>(null);
   const [hostParty, setHostParty] = useState<AgreementParty | null>(null);
   const [guestParty, setGuestParty] = useState<AgreementParty | null>(null);
-  /** False until the current `load()` finishes — avoids flashing “no offer” while `plan` is set but `offer` is still fetching (React commits between awaits). */
+  /** False until the current `load()` finishes — avoids flashing “no offer” while data is still fetching. */
   const [loadDone, setLoadDone] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelOptionsOpen, setCancelOptionsOpen] = useState(false);
@@ -132,6 +281,10 @@ export default function PlanAgreementScreen() {
   } | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [counterpartyKycTier, setCounterpartyKycTier] = useState<number | null>(null);
+  const [existingEscrowId, setExistingEscrowId] = useState<string | null>(null);
+  const [myEscrow, setMyEscrow] = useState<DbEscrowTransaction | null>(null);
+  const [guestEscrowRows, setGuestEscrowRows] = useState<DbEscrowTransaction[]>([]);
+  const [showTermsWarning, setShowTermsWarning] = useState(false);
 
   function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
     setFeedback({ variant, title, message });
@@ -141,7 +294,10 @@ export default function PlanAgreementScreen() {
     () => !!(user?.id && confirmationUserIds.includes(user.id)),
     [confirmationUserIds, user?.id]
   );
-  const bothConfirmed = useMemo(() => new Set(confirmationUserIds).size >= 2, [confirmationUserIds]);
+  const bothConfirmed = useMemo(
+    () => (plan && offer ? bothAgreementPartiesConfirmed(confirmationUserIds, plan, offer) : false),
+    [confirmationUserIds, plan, offer]
+  );
 
   const load = useCallback(async () => {
     if (!id || !isSupabaseConfigured) {
@@ -149,89 +305,73 @@ export default function PlanAgreementScreen() {
       return;
     }
     setLoadDone(false);
+    setLoadError(null);
     try {
-      const { data: p } = await supabase.from('plans').select('*').eq('id', id).single();
-      if (!p) {
+      const { data, error } = await fetchPlanAgreementBundle(supabase, id, {
+        offerId: offerIdParam ?? null,
+        userId: user?.id ?? null,
+      });
+
+      if (error || !data) {
+        setLoadError(error ?? 'Agreement not available');
         setPlan(null);
         setOffer(null);
         setHostParty(null);
         setGuestParty(null);
         setConfirmationUserIds([]);
+        setMutualVoteCount(0);
+        setHasVotedMutualCancel(false);
+        setCounterpartyKycTier(null);
+        setExistingEscrowId(null);
+        setMyEscrow(null);
+        setGuestEscrowRows([]);
         return;
       }
-      const pl = p as DbPlan;
 
-      let off: DbPlanOffer | null = null;
-      if (offerIdParam) {
-        const { data: o } = await supabase.from('plan_offers').select('*').eq('id', offerIdParam).single();
-        if (o) off = o as DbPlanOffer;
-      } else if (pl.accepted_offer_id) {
-        const { data: o } = await supabase.from('plan_offers').select('*').eq('id', pl.accepted_offer_id).single();
-        if (o) off = o as DbPlanOffer;
-      } else if (pl.is_group_plan && user?.id) {
-        const { data: o } = await supabase
-          .from('plan_offers')
-          .select('*')
-          .eq('plan_id', pl.id)
-          .eq('bidder_id', user.id)
-          .eq('status', 'accepted')
-          .maybeSingle();
-        if (o) off = o as DbPlanOffer;
-      }
-
-      const bidderId = off?.bidder_id ?? pl.creator_id;
-
-      const [{ data: hp }, { data: bp }, { data: confRows }, { data: guestUser }, { data: mutualVotes }] =
-        await Promise.all([
-        supabase
-          .from('profiles')
-          .select('user_id, display_name, avatar_url, verified_badge')
-          .eq('user_id', pl.creator_id)
-          .maybeSingle(),
-        supabase
-          .from('profiles')
-          .select('user_id, display_name, avatar_url, verified_badge')
-          .eq('user_id', bidderId)
-          .maybeSingle(),
-        supabase.from('agreement_confirmations').select('user_id').eq('plan_id', pl.id),
-        supabase.from('users').select('kyc_tier').eq('id', bidderId).maybeSingle(),
-        supabase.from('mutual_plan_cancel_votes').select('user_id').eq('plan_id', pl.id),
-      ]);
-
-      setConfirmationUserIds((confRows ?? []).map((r) => r.user_id as string));
-      const voteIds = (mutualVotes ?? []).map((r) => r.user_id as string);
+      const voteIds = data.mutualVoteIds;
+      setConfirmationUserIds(data.confirmationUserIds);
       setMutualVoteCount(voteIds.length);
       setHasVotedMutualCancel(!!(user?.id && voteIds.includes(user.id)));
-
-      // Apply plan + offer + parties in one commit so we never render “accepted id set, offer null”.
-      setPlan(pl);
-      setOffer(off);
-      if (hp) {
-        setHostParty({
-          userId: hp.user_id,
-          name: hp.display_name ?? 'Host',
-          avatarUrl: hp.avatar_url,
-          verified: !!hp.verified_badge,
-        });
-      } else setHostParty(null);
-      if (bp) {
-        setGuestParty({
-          userId: bp.user_id,
-          name: bp.display_name ?? 'Guest',
-          avatarUrl: bp.avatar_url,
-          verified: !!bp.verified_badge,
-        });
-      } else setGuestParty(null);
-      setCounterpartyKycTier((guestUser?.kyc_tier as number | undefined) ?? null);
+      setPlan(data.plan);
+      setOffer(data.offer);
+      setHostParty(
+        data.hostProfile
+          ? {
+              userId: data.hostProfile.user_id,
+              name: data.hostProfile.display_name ?? 'Host',
+              avatarUrl: data.hostProfile.avatar_url,
+              verified: !!data.hostProfile.verified_badge,
+            }
+          : null
+      );
+      setGuestParty(
+        data.guestProfile
+          ? {
+              userId: data.guestProfile.user_id,
+              name: data.guestProfile.display_name ?? 'Guest',
+              avatarUrl: data.guestProfile.avatar_url,
+              verified: !!data.guestProfile.verified_badge,
+            }
+          : null
+      );
+      setCounterpartyKycTier(data.counterpartyKycTier);
+      setExistingEscrowId(data.escrowId);
+      setMyEscrow(data.myEscrow);
+      setGuestEscrowRows(data.guestEscrowRows);
     } finally {
       setLoadDone(true);
     }
   }, [id, offerIdParam, user?.id]);
 
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
   useEffect(() => {
     if (!id || !isSupabaseConfigured || !hasVotedMutualCancel) return;
-    const channel = supabase
-      .channel(`plan-mutual-${id}`)
+    const channel = supabase.channel(
+      `plan-mutual-${id}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`
+    );
+    channel
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'plans', filter: `id=eq.${id}` },
@@ -263,52 +403,67 @@ export default function PlanAgreementScreen() {
     }, [load])
   );
 
+  useEffect(() => {
+    if (!id || !isSupabaseConfigured) return;
+    const channel = supabase.channel(
+      `plan-agreement-${id}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`
+    );
+    channel
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'agreement_confirmations', filter: `plan_id=eq.${id}` },
+        () => {
+          void loadRef.current();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'plans', filter: `id=eq.${id}` },
+        () => {
+          void loadRef.current();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'escrow_transactions', filter: `plan_id=eq.${id}` },
+        () => {
+          void loadRef.current();
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [id]);
+
   if (!user || !loadDone) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          {user ? <AgreementTopNav /> : null}
+          {user ? <AgreementTopNav planId={id} /> : null}
           <ScrollView
             contentContainerStyle={styles.scroll}
             showsVerticalScrollIndicator={false}
           >
-            <PlanFlowScreenSkeleton />
+            <AgreementScreenSkeleton />
           </ScrollView>
         </View>
       </Screen>
     );
   }
 
-  if (!plan) {
+  if (loadError || !plan || !offer) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav />
-          <View style={styles.fallbackPad}>
-            <Text style={styles.muted}>This plan could not be loaded.</Text>
-            <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
-              <Text style={styles.linkTxt}>Back to plan</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Screen>
-    );
-  }
-
-  if (!offer || (!plan.is_group_plan && !plan.accepted_offer_id)) {
-    return (
-      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-        <View style={styles.flex}>
-          <DiscoveryGradientBg />
-          <AgreementTopNav />
-          <View style={styles.fallbackPad}>
-            <Text style={styles.muted}>No accepted offer for this plan.</Text>
-            <Pressable onPress={() => router.replace(`/plan/${id}` as Href)} style={styles.linkBtn}>
-              <Text style={styles.linkTxt}>Back to plan</Text>
-            </Pressable>
-          </View>
+          <AgreementTopNav planId={id} />
+          <PlanAgreementEmptyState
+            planId={id ?? ''}
+            reason={resolveAgreementEmptyReason(loadError, !!plan, !!offer)}
+            planTitle={plan?.title}
+          />
         </View>
       </Screen>
     );
@@ -319,11 +474,8 @@ export default function PlanAgreementScreen() {
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav />
-          <View style={styles.fallbackPad}>
-            <Text style={styles.title}>Plan cancelled</Text>
-            <Text style={styles.muted}>This agreement is no longer active.</Text>
-          </View>
+          <AgreementTopNav planId={id} />
+          <PlanAgreementEmptyState planId={id ?? ''} reason="cancelled" planTitle={plan.title} />
         </View>
       </Screen>
     );
@@ -342,10 +494,8 @@ export default function PlanAgreementScreen() {
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
           <DiscoveryGradientBg />
-          <AgreementTopNav />
-          <View style={styles.fallbackPad}>
-            <Text style={styles.muted}>You don&apos;t have access to this agreement.</Text>
-          </View>
+          <AgreementTopNav planId={id} />
+          <PlanAgreementEmptyState planId={id ?? ''} reason="no_access" planTitle={plan.title} />
         </View>
       </Screen>
     );
@@ -370,16 +520,63 @@ export default function PlanAgreementScreen() {
     planRow.status === 'agreed' ||
     (planRow.is_group_plan && slotAccepted && !paymentRequired && planRow.status === 'negotiating');
 
-  const escrowCents = paymentRequired
-    ? (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? null)
-    : null;
+  const escrowCents =
+    paymentRequired && myEscrow?.amount_cents ? myEscrow.amount_cents : null;
+  const paymentPreview =
+    paymentRequired &&
+    user?.id &&
+    (planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? 0) > 0
+      ? getAgreementPaymentPreview(
+          planRow,
+          offerRow.bidder_id,
+          planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? 0,
+          user.id
+        )
+      : null;
+  const userIsPayer = paymentPreview?.userIsPayer ?? false;
   const isHighValue = escrowCents != null && escrowCents > MAX_ESCROW_TIER1_CENTS;
   const highValuePlatinum = dbUser?.subscription_tier === 'PLATINUM';
   const highValueTier3 = (dbUser?.kyc_tier ?? 1) >= 3;
   const highValueCounterpartyOk =
     planRow.escrow_pattern !== 'C' || (counterpartyKycTier ?? 1) >= 3;
   const highValueReady = !isHighValue || (highValuePlatinum && highValueTier3 && highValueCounterpartyOk);
-  const payerBlockedByHighValue = isHighValue && isBidder && !highValueReady;
+  const payerBlockedByHighValue = isHighValue && userIsPayer && !highValueReady;
+
+  const isGroupSplit = isGroupSplitPlan(planRow);
+  const isPlanActive = planRow.status === 'active';
+  const userLegFunded = !!(myEscrow && user?.id && isUserEscrowLegFunded(myEscrow, user.id));
+  const agreementPhase = deriveEscrowPhase({
+    isGroupSplit,
+    isHost,
+    hostEscrowId: planRow.host_escrow_id ?? null,
+    myEscrowStatus: myEscrow?.status ?? null,
+    planStatus: planRow.status ?? null,
+    planTier: paymentRequired ? 'paid' : 'free',
+    userLegFunded,
+  });
+  const splitRatioLabel =
+    planRow.host_contribution_bps != null
+      ? `${Math.round(planRow.host_contribution_bps / 100)}% host / ${100 - Math.round(planRow.host_contribution_bps / 100)}% guest`
+      : null;
+  const agreementContent = resolveEscrowScreenContent({
+    screen: 'agreement',
+    planTier: paymentRequired ? 'paid' : 'free',
+    planKind: planRow.is_group_plan ? 'group' : planRow.is_mood_plan ? 'mood' : 'standard',
+    pattern: (planRow.escrow_pattern as 'A' | 'B' | 'C') ?? null,
+    role: isHost ? 'host' : 'guest',
+    phase: agreementPhase,
+    isGroupSplit,
+    splitRatioLabel,
+    counterpartyName: isHost ? guestParty?.name ?? null : hostParty?.name ?? null,
+    userLegFunded,
+  });
+  const showPaymentFlow = paymentRequired && (needsConfirm || awaitingPay);
+  const isFunded = userLegFunded;
+  const isPendingPayment =
+    !!myEscrow &&
+    !userLegFunded &&
+    (myEscrow.status === 'pending_funding' ||
+      (!!user?.id && getEscrowFundingUiState(myEscrow, user.id).canFund));
 
   async function runConfirmFree() {
     if (busy) return;
@@ -445,9 +642,11 @@ export default function PlanAgreementScreen() {
 
   async function onLegalGateConfirm() {
     if (!user) return;
-    const action = pendingLegal;
     setLegalBusy(true);
-    const { error } = await supabase.rpc('record_agreement_confirmation', { p_plan_id: planRow.id });
+    const { error } = await supabase.rpc('record_agreement_confirmation', {
+      p_plan_id: planRow.id,
+      ...(planRow.is_group_plan && offerRow.id ? { p_offer_id: offerRow.id } : {}),
+    });
     if (error) {
       setLegalBusy(false);
       showFeedback('error', 'Could not record confirmation', error.message);
@@ -456,14 +655,26 @@ export default function PlanAgreementScreen() {
     const { data: refreshed } = await supabase.from('agreement_confirmations').select('user_id').eq('plan_id', planRow.id);
     const ids = (refreshed ?? []).map((r) => r.user_id as string);
     setConfirmationUserIds(ids);
-    const complete = new Set(ids).size >= 2;
+    const complete = bothAgreementPartiesConfirmed(ids, planRow, offerRow);
     setLegalGateOpen(false);
     setLegalBusy(false);
     setPendingLegal(null);
     if (complete) {
-      if (action === 'free') await runConfirmFree();
-      else if (action === 'pay' && isBidder) await runProceedPayment();
-      else await load();
+      if (!paymentRequired) {
+        await runConfirmFree();
+      } else {
+        const preview = getAgreementPaymentPreview(
+          planRow,
+          offerRow.bidder_id,
+          planRow.agreed_price_cents ?? offerRow.amount_cents ?? planRow.starting_price_cents ?? 0,
+          user.id
+        );
+        if (preview.userIsPayer) {
+          await runProceedPayment();
+        } else {
+          await load();
+        }
+      }
     } else {
       await load();
     }
@@ -534,11 +745,35 @@ export default function PlanAgreementScreen() {
 
   async function onMessageCounterpart() {
     if (!user) return;
-    const otherId = isHost ? offerRow.bidder_id : planRow.creator_id;
     try {
-      await openDirectChat(supabase, user.id, otherId, { skipOfferGate: true });
+      let offersForChat: DbPlanOffer[] = [offerRow];
+      if (planRow.is_group_plan) {
+        const { data, error } = await supabase
+          .from('plan_offers')
+          .select('*')
+          .eq('plan_id', planRow.id);
+        if (error) {
+          showFeedback('error', 'Chat', error.message);
+          return;
+        }
+        offersForChat = (data ?? []) as DbPlanOffer[];
+      }
+      await openPlanMeetupChat({
+        plan: planRow,
+        userId: user.id,
+        isCreator: isHost,
+        offers: offersForChat,
+      });
     } catch (e) {
-      showFeedback('error', 'Chat', e instanceof Error ? e.message : 'Could not open chat');
+      const message =
+        e instanceof PlanMeetupChatError || e instanceof Error
+          ? e.message
+          : 'Could not open chat';
+      showFeedback(
+        'warning',
+        'Chat',
+        message
+      );
     }
   }
 
@@ -546,6 +781,54 @@ export default function PlanAgreementScreen() {
     planRow.status === 'agreed' ||
     planRow.status === 'awaiting_payment' ||
     planRow.status === 'active';
+
+  async function goToEscrowPayment() {
+    if (busy) return;
+    if (isGroupSplit && isHost && !planRow.host_escrow_id) {
+      router.push(`/plan/${planRow.id}/offers` as Href);
+      return;
+    }
+    if (!userConfirmed) {
+      setShowTermsWarning(true);
+      return;
+    }
+    if (payerBlockedByHighValue) {
+      onHighValueAction();
+      return;
+    }
+    if (requiresVerificationGate(dbUser?.verification_status)) {
+      setGateOpen(true);
+      return;
+    }
+    if (existingEscrowId) {
+      router.replace(`/escrow/${existingEscrowId}` as Href);
+      return;
+    }
+    if (offerRow.bidder_id) {
+      const { data: escrowRow } = await supabase
+        .from('escrow_transactions')
+        .select('id')
+        .eq('plan_id', planRow.id)
+        .eq('guest_id', offerRow.bidder_id)
+        .maybeSingle();
+      if (escrowRow?.id) {
+        setExistingEscrowId(escrowRow.id as string);
+        router.replace(`/escrow/${escrowRow.id}` as Href);
+        return;
+      }
+    }
+    if (!bothConfirmed) {
+      showFeedback(
+        'warning',
+        'Waiting for confirmation',
+        'Both parties must review and confirm the agreement before secure payment.'
+      );
+      return;
+    }
+    await runProceedPayment();
+  }
+
+  const counterpartyPayerName = isHost ? guestParty?.name ?? 'Guest' : hostParty?.name ?? 'Host';
 
   let primaryLabel = 'View plan';
   let onPrimary = () => router.replace(`/plan/${planRow.id}` as Href);
@@ -556,12 +839,45 @@ export default function PlanAgreementScreen() {
     onPrimary = () => router.replace(`/plan/${planRow.id}` as Href);
     primaryDisabled = false;
   } else if (awaitingPay) {
-    if (isBidder) {
-      primaryLabel = payerBlockedByHighValue ? 'Complete high-value requirements' : 'Continue to secure payment';
-      onPrimary = () => (payerBlockedByHighValue ? onHighValueAction() : void runProceedPayment());
-      primaryDisabled = busy && !payerBlockedByHighValue;
+    const otherName = isHost ? guestParty?.name ?? 'guest' : hostParty?.name ?? 'host';
+    if (isFunded) {
+      primaryLabel = 'View plan';
+      onPrimary = () => router.replace(`/plan/${planRow.id}` as Href);
+      primaryDisabled = false;
+    } else if (userIsPayer) {
+      if (!agreementContent.showPaymentButton) {
+        primaryLabel = agreementContent.waitingTitle ?? `Waiting for ${otherName}`;
+        onPrimary = () => {};
+        primaryDisabled = true;
+      } else if (!bothConfirmed) {
+        if (!userConfirmed) {
+          primaryLabel = 'Review terms & pay';
+          onPrimary = () => openLegalGate('pay');
+          primaryDisabled = busy || legalBusy;
+        } else {
+          primaryLabel = `Waiting for ${otherName}`;
+          onPrimary = () => {};
+          primaryDisabled = true;
+        }
+      } else if (payerBlockedByHighValue) {
+        primaryLabel = 'Complete high-value requirements';
+        onPrimary = () => void goToEscrowPayment();
+        primaryDisabled = false;
+      } else if (existingEscrowId) {
+        primaryLabel = 'Complete secure payment';
+        onPrimary = () => void goToEscrowPayment();
+        primaryDisabled = busy;
+      } else {
+        primaryLabel = 'Continue to secure payment';
+        onPrimary = () => void goToEscrowPayment();
+        primaryDisabled = busy;
+      }
+    } else if (existingEscrowId) {
+      primaryLabel = 'View payment status';
+      onPrimary = () => router.push(`/escrow/${existingEscrowId}` as Href);
+      primaryDisabled = false;
     } else {
-      primaryLabel = 'Waiting for secure payment';
+      primaryLabel = `Waiting for ${counterpartyPayerName}`;
       onPrimary = () => {};
       primaryDisabled = true;
     }
@@ -571,7 +887,7 @@ export default function PlanAgreementScreen() {
       if (!paymentRequired) {
         primaryLabel = 'Review & confirm plan';
         onPrimary = () => openLegalGate('free');
-      } else if (isBidder) {
+      } else if (userIsPayer) {
         primaryLabel = 'Review terms & pay';
         onPrimary = () => openLegalGate('pay');
       } else {
@@ -587,12 +903,22 @@ export default function PlanAgreementScreen() {
       primaryLabel = 'Confirm plan';
       onPrimary = () => void runConfirmFree();
       primaryDisabled = busy;
-    } else if (isBidder) {
-      primaryLabel = payerBlockedByHighValue ? 'Complete high-value requirements' : 'Proceed to secure payment';
-      onPrimary = () => (payerBlockedByHighValue ? onHighValueAction() : void runProceedPayment());
-      primaryDisabled = busy && !payerBlockedByHighValue;
+    } else if (userIsPayer) {
+      if (!agreementContent.showPaymentButton) {
+        primaryLabel = agreementContent.waitingTitle ?? `Waiting for ${counterpartyPayerName}`;
+        onPrimary = () => {};
+        primaryDisabled = true;
+      } else {
+        primaryLabel = payerBlockedByHighValue ? 'Complete high-value requirements' : 'Proceed to secure payment';
+        onPrimary = () => void goToEscrowPayment();
+        primaryDisabled = busy && !payerBlockedByHighValue;
+      }
+    } else if (existingEscrowId) {
+      primaryLabel = 'View payment status';
+      onPrimary = () => router.push(`/escrow/${existingEscrowId}` as Href);
+      primaryDisabled = false;
     } else {
-      primaryLabel = 'Waiting for guest payment';
+      primaryLabel = `Waiting for ${counterpartyPayerName}`;
       onPrimary = () => {};
       primaryDisabled = true;
     }
@@ -600,12 +926,9 @@ export default function PlanAgreementScreen() {
 
   const showCancelPlan = needsConfirm || awaitingPay;
   const counterpartDisplay = isHost ? guestParty?.name ?? 'Guest' : hostParty?.name ?? 'Host';
+  const counterpartMessageName =
+    counterpartDisplay.trim().split(/\s+/)[0] || counterpartDisplay;
   const inlineMessageAndView = showMessageCta && primaryLabel === 'View plan';
-
-  const paymentPreview =
-    paymentRequired && escrowCents != null && escrowCents > 0
-      ? getAgreementPaymentPreview(planRow, offerRow.bidder_id, escrowCents, user.id)
-      : null;
 
   const meetupIso =
     planRow.agreed_scheduled_at ?? planRow.scheduled_at ?? offerRow.proposed_scheduled_at ?? null;
@@ -615,8 +938,10 @@ export default function PlanAgreementScreen() {
   let paymentPreviewVariant: 'you_pay_next' | 'counterparty_pays' | 'split_you_pay' | 'split_waiting' | null =
     null;
   if (paymentPreview) {
-    if (paymentPreview.pattern === 'B') {
+    if (paymentPreview.pattern === 'B' && paymentPreview.userIsPayer) {
       paymentPreviewVariant = 'split_you_pay';
+    } else if (paymentPreview.pattern === 'B' && !paymentPreview.userIsPayer) {
+      paymentPreviewVariant = 'split_waiting';
     } else if (paymentPreview.userIsPayer) {
       paymentPreviewVariant = 'you_pay_next';
     } else {
@@ -624,13 +949,25 @@ export default function PlanAgreementScreen() {
     }
   }
 
+  const userPaymentGrossCents = myEscrow?.amount_cents ?? null;
+  let paymentCardGrossCents: number | null = null;
+  if (paymentPreviewVariant === 'counterparty_pays' || paymentPreviewVariant === 'split_waiting') {
+    const guestEsc =
+      guestEscrowRows.find((e) => e.guest_id === offerRow.bidder_id) ?? guestEscrowRows[0];
+    paymentCardGrossCents = guestEsc?.amount_cents ?? null;
+  } else if (paymentPreviewVariant) {
+    paymentCardGrossCents = userPaymentGrossCents;
+  }
+
   const gateTitle = 'Verification required to continue';
   const gateMessage =
     'Confirming plans and sending secure payments requires a verified identity on LinkUp.';
 
-  const leadSub = paymentRequired
-    ? 'Review the summary below. Secure payment happens on the next screen, not while you negotiate.'
-    : 'Review the meetup summary and confirm when you are ready.';
+  const leadSub =
+    agreementContent.headerSubtitle ??
+    (paymentRequired
+      ? 'Review the summary below. Secure payment happens on the next screen, not while you negotiate.'
+      : 'Review the meetup summary and confirm when you are ready.');
 
   const guestTier = (dbUser?.subscription_tier ?? 'FREE') as SubscriptionTier;
   const noShowGoodwillPreview = isBidder
@@ -782,14 +1119,47 @@ export default function PlanAgreementScreen() {
           whenLabel={whenLabel}
           locationLabel={locationLabel ?? null}
           priceLabel={priceLabel}
-          escrowAmountCents={escrowCents != null && escrowCents > 0 ? escrowCents : null}
-          userPaysCents={paymentPreview?.userPaysCents ?? null}
+          escrowAmountCents={
+            userPaymentGrossCents != null && userPaymentGrossCents > 0 ? userPaymentGrossCents : null
+          }
           currencyLabel={planRow.currency ?? 'NGN'}
           busy={legalBusy}
           onConfirm={() => void onLegalGateConfirm()}
+          onTermsRequired={() => setShowTermsWarning(true)}
         />
+        <Modal
+          visible={showTermsWarning}
+          animationType="fade"
+          transparent
+          statusBarTranslucent
+          onRequestClose={() => setShowTermsWarning(false)}
+        >
+          <View style={styles.termsWarningOverlay}>
+            <View style={styles.termsWarningCard}>
+              <View style={styles.termsWarningIconWrap}>
+                <Ionicons name="alert-circle-outline" size={32} color={colors.warning} />
+              </View>
+              <Text style={styles.termsWarningTitle}>Please review the terms</Text>
+              <Text style={styles.termsWarningBody}>
+                You need to read and agree to the plan terms and policy before proceeding to payment.
+                Please check the box below to confirm.
+              </Text>
+              <Pressable
+                onPress={() => setShowTermsWarning(false)}
+                style={styles.termsWarningBtn}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  style={styles.termsWarningBtnGrad}
+                >
+                  <Text style={styles.termsWarningBtnTxt}>Got it</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
 
-        <AgreementTopNav />
+        <AgreementTopNav planId={id} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -862,10 +1232,87 @@ export default function PlanAgreementScreen() {
             />
           ) : null}
 
-          {plan.is_group_plan && plan.is_paid ? <GroupEscrowStatusCard plan={plan} /> : null}
+          {agreementContent.showGroupHostCloseGuard ? (
+            <View style={styles.trustCard}>
+              <View style={styles.trustSectionRow}>
+                <View style={styles.sectionDot} />
+                <Text style={styles.trustSectionLabel}>Host action needed</Text>
+              </View>
+              <Text style={styles.trustTitle}>Close the group first</Text>
+              <Text style={styles.trustLineMuted}>
+                Your share is calculated once you close the group. Go to Manage Offers to review your
+                projected share and close the group.
+              </Text>
+              <Pressable
+                onPress={() => router.push(`/plan/${planRow.id}/offers` as Href)}
+                style={({ pressed }) => [styles.termsWarningBtn, pressed && { opacity: 0.92 }]}
+              >
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  style={styles.termsWarningBtnGrad}
+                >
+                  <Text style={styles.termsWarningBtnTxt}>Go to Manage Offers</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          ) : null}
 
-          {paymentPreview && paymentPreviewVariant ? (
-            <AgreementPaymentPreviewCard preview={paymentPreview} variant={paymentPreviewVariant} />
+          {agreementContent.showProjectedHostShare ? (
+            <View style={styles.trustCard}>
+              <Text style={styles.trustTitle}>Your projected host share</Text>
+              <Text style={styles.trustLineMuted}>{agreementContent.projectedShareNote}</Text>
+              <Text style={[styles.trustTitle, { marginTop: spacing.sm }]}>
+                {formatGroupSplitCents(
+                  guestEscrowRows.length > 0
+                    ? hostShareFromGuestCommitments(planRow, guestEscrowRows)
+                    : projectedHostShareCents(planRow),
+                  planRow.currency
+                )}
+              </Text>
+            </View>
+          ) : null}
+
+          {isGroupSplitPlan(plan) && user?.id ? (
+            <GroupSplitAgreementPanel
+              plan={plan}
+              offer={offerRow}
+              isHost={isHost}
+              currentUserId={user.id}
+              onRefresh={() => void loadRef.current()}
+              showPaymentCta={agreementContent.showPaymentButton}
+            />
+          ) : plan.is_group_plan && plan.is_paid ? (
+            <GroupEscrowStatusCard plan={plan} />
+          ) : null}
+
+          {showPaymentFlow &&
+          agreementContent.showPaymentButton &&
+          !plan.is_group_plan &&
+          plan.is_paid &&
+          user?.id &&
+          !isFunded ? (
+            <PlanEscrowPaymentCard
+              plan={plan}
+              offer={offerRow}
+              currentUserId={user.id}
+              userIsPayer={userIsPayer}
+            />
+          ) : null}
+
+          {showPaymentFlow &&
+          agreementContent.showPaymentButton &&
+          paymentPreview &&
+          paymentPreviewVariant &&
+          paymentCardGrossCents != null &&
+          paymentCardGrossCents > 0 &&
+          !isFunded ? (
+            <AgreementPaymentPreviewCard
+              grossCents={paymentCardGrossCents}
+              currency={planRow.currency ?? 'NGN'}
+              pattern={paymentPreview.pattern}
+              plan={planRow}
+              variant={paymentPreviewVariant}
+            />
           ) : null}
 
           <CancellationSummaryCard />
@@ -891,13 +1338,28 @@ export default function PlanAgreementScreen() {
             ) : null}
           </View>
 
+          {isFunded && isPlanActive ? (
+            <PlanConfirmedView onGoToChat={() => void onMessageCounterpart()} />
+          ) : null}
+
+          {isFunded && !isPlanActive && myEscrow && user?.id && (!isGroupSplit || isHost) ? (
+            <FundedWaitingView
+              myEscrow={myEscrow}
+              isHost={isHost}
+              isGroupSplit={isGroupSplit}
+              plan={planRow}
+              guestEscrowRows={guestEscrowRows}
+              currentUserId={user.id}
+            />
+          ) : null}
+
           {inlineMessageAndView ? (
             <View style={styles.dualActionRow}>
               <Pressable
                 onPress={() => void onMessageCounterpart()}
                 style={({ pressed }) => [styles.dualMessageOuter, pressed && { opacity: 0.92 }]}
                 accessibilityRole="button"
-                accessibilityLabel={`Message ${counterpartDisplay}`}
+                accessibilityLabel={`Message ${counterpartMessageName}`}
               >
                 <LinearGradient
                   colors={[colors.primary, colors.secondary]}
@@ -908,7 +1370,7 @@ export default function PlanAgreementScreen() {
                   <View style={styles.dualMessageInner}>
                     <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
                     <Text style={styles.dualMessageText} numberOfLines={1}>
-                      Message {counterpartDisplay}
+                      Message {counterpartMessageName}
                     </Text>
                   </View>
                 </LinearGradient>
@@ -960,7 +1422,7 @@ export default function PlanAgreementScreen() {
                 <View style={styles.messageCtaInner}>
                   <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
                   <Text style={styles.messageCtaText} numberOfLines={1}>
-                    Message {counterpartDisplay}
+                    Message {counterpartMessageName}
                   </Text>
                 </View>
               </LinearGradient>
@@ -979,7 +1441,7 @@ export default function PlanAgreementScreen() {
 
           {showCancelPlan || !inlineMessageAndView ? (
             <PlanAgreementCTAButton
-              omitPrimary={inlineMessageAndView}
+              omitPrimary={inlineMessageAndView || (isFunded && isPlanActive)}
               primaryLabel={primaryLabel}
               onPrimary={onPrimary}
               primaryDisabled={primaryDisabled}
@@ -1364,4 +1826,179 @@ const styles = StyleSheet.create({
   },
   outcomeDoneLabel: { fontSize: 16, fontWeight: '800',
     fontFamily: fonts.bold, color: '#fff' },
+  fundedContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.12)',
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  fundedIconRow: {
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  fundedTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  fundedAmount: {
+    fontSize: 24,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  fundedMessage: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  guestStatusSummary: {
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  guestStatusLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  pendingGuestsNote: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  confirmedContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.12)',
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  confirmedTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  confirmedMessage: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: spacing.md,
+  },
+  confirmedPrimaryOuter: {
+    width: '100%',
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    minHeight: 52,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  confirmedPrimaryGrad: {
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmedPrimaryLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
+  termsWarningOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26,29,38,0.55)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  termsWarningCard: {
+    backgroundColor: '#fff',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  termsWarningIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(232, 144, 8, 0.12)',
+  },
+  termsWarningTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  termsWarningBody: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  termsWarningBtn: { alignSelf: 'stretch', borderRadius: radius.button, overflow: 'hidden' },
+  termsWarningBtnGrad: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  termsWarningBtnTxt: {
+    color: '#fff',
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    fontSize: 16,
+  },
 });

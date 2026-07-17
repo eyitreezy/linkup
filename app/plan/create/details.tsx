@@ -27,13 +27,13 @@ import { getFourthVisibilityOptionCopy, canCreatorSelectPremiumVisibility } from
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
 import { requiresVerificationGate } from '@/lib/verification/access';
-import { LinearGradient } from 'expo-linear-gradient';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { Href, router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
-import { PLAN_WIZARD_GRADIENT } from '@/constants/gradients';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const EXAMPLES = ['Dinner in Lekki tonight', 'Gym partner this weekend', 'Coffee walk after work'];
 
@@ -249,6 +249,10 @@ export default function CreatePlanDetailsScreen() {
       max_guests: draft.isGroupPlan ? draft.maxGuests : null,
       multi_city: draft.isGroupPlan && draft.multiCity,
       city_ids: draft.isGroupPlan && draft.cityIds.length ? draft.cityIds : null,
+      is_negotiable:
+        draft.isPaid && (draft.escrowPattern === 'B' || draft.escrowPattern === 'C')
+          ? draft.isNegotiable
+          : true,
     };
 
     const { data: planIdRaw, error } = await supabase.rpc('publish_plan', { payload: insertRow });
@@ -304,13 +308,7 @@ export default function CreatePlanDetailsScreen() {
   return (
     <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
         <View style={{ flex: 1 }}>
-          <LinearGradient
-            colors={[...PLAN_WIZARD_GRADIENT]}
-            locations={[0, 0.28, 0.62, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
+          <AppShellBackground />
           <VerificationHardGateModal
             visible={gateOpen}
             onClose={() => setGateOpen(false)}

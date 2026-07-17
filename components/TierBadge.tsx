@@ -6,6 +6,8 @@ import { StyleSheet, Text, View } from 'react-native';
 type Props = {
   tier: SubscriptionTier;
   compact?: boolean;
+  /** Inline with buttons/chips — vertically centers in flex rows. */
+  align?: 'start' | 'center';
 };
 
 const TIER_STYLES: Record<
@@ -17,12 +19,19 @@ const TIER_STYLES: Record<
   PLATINUM: { colors: ['#E8EAF6', '#7C4DFF'], label: 'Platinum', border: '#5E35B1' },
 };
 
-export function TierBadge({ tier, compact }: Props) {
+export function TierBadge({ tier, compact, align = 'start' }: Props) {
   if (tier === 'FREE') return null;
 
   const style = TIER_STYLES[tier];
   return (
-    <View style={[styles.wrap, compact && styles.wrapCompact, style.border && { borderColor: style.border, borderWidth: 1 }]}>
+    <View
+      style={[
+        styles.wrap,
+        compact && styles.wrapCompact,
+        align === 'center' && styles.wrapCenter,
+        style.border && { borderColor: style.border, borderWidth: 1 },
+      ]}
+    >
       <LinearGradient colors={style.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.grad}>
         <Text style={[styles.label, compact && styles.labelCompact]}>{style.label}</Text>
       </LinearGradient>
@@ -37,6 +46,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   wrapCompact: { transform: [{ scale: 0.9 }] },
+  wrapCenter: { alignSelf: 'center' },
   grad: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,

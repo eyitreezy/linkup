@@ -5,11 +5,16 @@ import { EscrowStatusBadge } from '@/components/escrow/EscrowStatusBadge';
 import { APP_CHIP_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
+import {
+  findGuestEscrowForBidder,
+  isGuestEscrowFunded,
+} from '@/lib/plans/groupGuestEscrowDisplay';
 import type { DbEscrowTransaction, DbPlan } from '@/types/database';
 import { Href, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type GuestEscrow = {
@@ -58,8 +63,9 @@ export function GroupEscrowStatusCard({ plan }: Props) {
       supabase.from('profiles').select('user_id, display_name').in('user_id', bidders),
       supabase
         .from('escrow_transactions')
-        .select('id, guest_id, status, group_plan_index')
+        .select('id, guest_id, payer_id, status, escrow_pattern, host_funded_at, guest_funded_at, group_plan_index')
         .eq('plan_id', plan.id)
+        .not('guest_id', 'is', null)
         .order('group_plan_index', { ascending: true }),
     ]);
 
@@ -67,9 +73,9 @@ export function GroupEscrowStatusCard({ plan }: Props) {
 
     setGuests(
       bidders.map((bid) => {
-        const esc = (escrows ?? []).find((e) => e.guest_id === bid);
+        const esc = findGuestEscrowForBidder(escrows ?? [], bid);
         const st = (esc?.status as DbEscrowTransaction['status'] | undefined) ?? null;
-        const funded = st === 'funded' || st === 'active' || st === 'released';
+        const funded = isGuestEscrowFunded(esc ?? null, bid);
         return {
           bidderId: bid,
           name: profMap.get(bid) ?? 'Guest',
@@ -85,6 +91,19 @@ export function GroupEscrowStatusCard({ plan }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+
+  useEffect(() => {
+    if (!plan.is_group_plan) return;
+    return subscribeEscrowRealtime({
+      planId: plan.id,
+      onRefresh: () => {
+        void loadRef.current();
+      },
+    });
+  }, [plan.id, plan.is_group_plan]);
 
   if (!plan.is_group_plan) return null;
 

@@ -1,0 +1,186 @@
+import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { formatEscrowMoney, patternLabel } from '@/lib/escrow/escrowPaymentPreview';
+import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
+import type { EscrowPattern } from '@/types/database';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+
+type Props = {
+  pattern: EscrowPattern;
+  amountCents: number;
+  currency: string;
+  fundingDeadlineIso: string | null | undefined;
+  payerLabel: string;
+  isCurrentUserPayer: boolean;
+  payerFunded: boolean;
+  isMoodPlan?: boolean;
+  kicker?: string;
+  title?: string;
+  sub?: string;
+};
+
+export function EscrowSinglePayerFundingCard({
+  pattern,
+  amountCents,
+  currency,
+  fundingDeadlineIso,
+  payerLabel,
+  isCurrentUserPayer,
+  payerFunded,
+  isMoodPlan,
+  kicker,
+  title,
+  sub,
+}: Props) {
+  const amount = formatEscrowMoney(amountCents, currency);
+  const state = payerFunded ? 'paid' : isCurrentUserPayer ? 'yours' : 'pending';
+
+  return (
+    <View style={styles.wrap}>
+      <LinearGradient
+        colors={['rgba(94, 82, 255,0.14)', 'rgba(255, 74, 114,0.08)', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.rule}
+      />
+      <Text style={styles.kicker}>
+        {kicker ?? `${patternLabel(pattern)}${isMoodPlan ? ' · Mood plan' : ''}`}
+      </Text>
+      <Text style={styles.title}>
+        {title ?? (pattern === 'A' ? 'Host funds the full amount' : 'Guest funds the full amount')}
+      </Text>
+      <Text style={styles.sub}>
+        {sub ??
+          (isMoodPlan
+            ? 'Mood plans require funding within 1 hour. Complete checkout on this screen.'
+            : 'Complete checkout on this screen. Funds stay in escrow until the meetup is confirmed.')}
+      </Text>
+      <View style={[styles.leg, state === 'yours' && styles.legYours]}>
+        <View style={styles.legLeft}>
+          <Text style={styles.legLabel}>{payerLabel}</Text>
+          <Text style={styles.legAmount}>{amount}</Text>
+        </View>
+        <View style={[styles.badge, state === 'paid' && styles.badgePaid, state === 'yours' && styles.badgeYours]}>
+          {state === 'paid' ? (
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+          ) : state === 'yours' ? (
+            <Ionicons name="arrow-forward-circle" size={16} color={colors.primary} />
+          ) : (
+            <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+          )}
+          <Text
+            style={[
+              styles.badgeTxt,
+              state === 'paid' && styles.badgeTxtPaid,
+              state === 'yours' && styles.badgeTxtYours,
+            ]}
+          >
+            {state === 'paid' ? 'Paid' : state === 'yours' ? 'Your turn' : 'Pending'}
+          </Text>
+        </View>
+      </View>
+      {fundingDeadlineIso ? (
+        <Text style={styles.deadline}>Fund by {formatIsoDateTime(fundingDeadlineIso)}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.14)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#2a1f55',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  rule: { height: 3, borderRadius: 2, marginBottom: spacing.md },
+  kicker: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: colors.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 6,
+  },
+  sub: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 19,
+    marginBottom: spacing.md,
+    fontFamily: fonts.medium,
+  },
+  leg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(94, 82, 255, 0.12)',
+  },
+  legYours: {
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  legLeft: { flex: 1 },
+  legLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  legAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.text,
+    fontFamily: fonts.bold,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.button,
+    backgroundColor: colors.background,
+  },
+  badgePaid: { backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+  badgeYours: { backgroundColor: 'rgba(94, 82, 255, 0.12)' },
+  badgeTxt: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.textMuted,
+  },
+  badgeTxtPaid: { color: colors.success },
+  badgeTxtYours: { color: colors.primary },
+  deadline: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    fontFamily: fonts.medium,
+  },
+});

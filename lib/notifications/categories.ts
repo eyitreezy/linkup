@@ -5,6 +5,10 @@ export type NotificationFilterTab = 'all' | 'activity' | 'payments' | 'system';
 const ACTIVITY: NotificationEventType[] = [
   'offer_new',
   'offer_counter',
+  'offer_received',
+  'offer_countered',
+  'offer_accepted',
+  'offer_declined',
   'mutual_agreement',
   'plan_reminder',
   'payment_reminder',

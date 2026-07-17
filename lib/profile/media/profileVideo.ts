@@ -30,6 +30,24 @@ function publicVideoUrl(storagePath: string): string {
   return data.publicUrl;
 }
 
+function rowToProfileVideo(row: {
+  id: string;
+  storage_path: string;
+  mime_type: string | null;
+  metadata: unknown;
+}): ProfileVideoRecord | null {
+  const meta = row.metadata as { kind?: string } | null;
+  const isVideo =
+    meta?.kind === PROFILE_MEDIA_VIDEO_KIND || String(row.mime_type ?? '').startsWith('video/');
+  if (!isVideo || !row.storage_path) return null;
+  return {
+    id: row.id,
+    url: publicVideoUrl(row.storage_path),
+    storagePath: row.storage_path,
+    mimeType: row.mime_type,
+  };
+}
+
 export async function fetchProfileVideo(userId: string): Promise<ProfileVideoRecord | null> {
   const { data, error } = await supabase
     .from('media')
@@ -41,19 +59,37 @@ export async function fetchProfileVideo(userId: string): Promise<ProfileVideoRec
 
   if (error || !data?.length) return null;
 
-  const row = data.find((r) => {
-    const meta = r.metadata as { kind?: string } | null;
-    return meta?.kind === PROFILE_MEDIA_VIDEO_KIND || String(r.mime_type ?? '').startsWith('video/');
-  });
+  for (const row of data) {
+    const video = rowToProfileVideo(row);
+    if (video) return video;
+  }
+  return null;
+}
 
-  if (!row?.storage_path) return null;
+/** Batch intro videos for discover feed creators (newest per user). */
+export async function fetchProfileVideosForUsers(
+  userIds: string[]
+): Promise<Map<string, ProfileVideoRecord>> {
+  const unique = [...new Set(userIds)].filter(Boolean);
+  const map = new Map<string, ProfileVideoRecord>();
+  if (unique.length === 0) return map;
 
-  return {
-    id: row.id,
-    url: publicVideoUrl(row.storage_path),
-    storagePath: row.storage_path,
-    mimeType: row.mime_type,
-  };
+  const { data, error } = await supabase
+    .from('media')
+    .select('id, storage_path, mime_type, metadata, parent_id')
+    .eq('parent_table', 'profiles')
+    .in('parent_id', unique)
+    .order('created_at', { ascending: false });
+
+  if (error || !data?.length) return map;
+
+  for (const row of data) {
+    const userId = row.parent_id as string;
+    if (map.has(userId)) continue;
+    const video = rowToProfileVideo(row);
+    if (video) map.set(userId, video);
+  }
+  return map;
 }
 
 async function removeVideoStorage(storagePath: string) {

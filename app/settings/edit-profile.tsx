@@ -16,7 +16,7 @@ import { TagSelector } from '@/components/onboarding/TagSelector';
 import { SettingsStickyShell, SettingsStickyTopNav } from '@/components/settings/SettingsStickyShell';
 import { Screen } from '@/components/Screen';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -102,7 +102,6 @@ function GradientChip({ label, selected, onPress }: { label: string; selected: b
 }
 
 export default function EditProfileScreen() {
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user, profile, refreshProfile } = useAuth();
   const [draft, setDraft] = useState<OnboardingDraft>(() => defaultOnboardingDraft());
   const [showDate, setShowDate] = useState(false);
@@ -201,14 +200,7 @@ export default function EditProfileScreen() {
       />
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
         <View style={styles.flex}>
-          <LinearGradient
-            colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-            locations={[0, 0.32, 0.62, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={bleedBgStyle}
-            pointerEvents="none"
-          />
+          <AppShellBackground />
           <SettingsStickyTopNav />
           <KeyboardSafeScrollView style={styles.flex} contentContainerStyle={styles.scroll}>
             <View style={styles.leadBlock}>
@@ -505,9 +497,9 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenRoot: { flex: 1, backgroundColor: colors.background },
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
   flex: { flex: 1 },
-  scroll: { paddingBottom: spacing.xl },
+  scroll: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl },
   leadBlock: {
     flexDirection: 'row',
     alignItems: 'flex-start',

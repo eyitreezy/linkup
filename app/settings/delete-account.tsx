@@ -1,5 +1,6 @@
 import { Input } from '@/components/Input';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { AppFeedbackModal } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
@@ -79,14 +80,7 @@ export default function DeleteAccountScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           <View style={styles.topNav}>

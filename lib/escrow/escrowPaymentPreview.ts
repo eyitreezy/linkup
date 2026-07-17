@@ -4,11 +4,22 @@ import {
   groupPlanPerPersonCents,
   isGroupEqualSplitPlan,
 } from '@/lib/plans/groupEscrowSplit';
+import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
 import type { DbPlan, EscrowPattern } from '@/types/database';
 
 export function formatEscrowMoney(cents: number, currency: string): string {
-  const sym = currency === 'NGN' ? '₦' : `${currency} `;
-  return `${sym}${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  if (currency === 'NGN') {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.round(cents) / 100);
+  }
+  return `${currency} ${Math.round(cents / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
 }
 
 export function isMeetupWithinHours(iso: string | null | undefined, withinHours: number): boolean {
@@ -55,8 +66,8 @@ export function getAgreementPaymentPreview(
     return {
       pattern,
       totalCents,
-      userPaysCents: perPerson,
-      counterpartyPaysCents: Math.max(0, totalCents - perPerson),
+      userPaysCents: grossAmountCents(perPerson),
+      counterpartyPaysCents: grossAmountCents(Math.max(0, totalCents - perPerson)),
       userIsPayer: true,
       currency: plan.currency ?? 'NGN',
     };
@@ -64,7 +75,7 @@ export function getAgreementPaymentPreview(
 
   const { payerId, hostShareCents, guestShareCents } = resolveEscrowParties(plan, guestUserId, totalCents);
   const userIsHost = currentUserId === plan.creator_id;
-  const userPaysCents =
+  const userPaysBudget =
     pattern === 'B'
       ? userIsHost
         ? hostShareCents
@@ -72,13 +83,13 @@ export function getAgreementPaymentPreview(
       : payerId === currentUserId
         ? totalCents
         : 0;
-  const counterpartyPaysCents = totalCents - userPaysCents;
+  const counterpartyPaysBudget = totalCents - userPaysBudget;
   return {
     pattern,
     totalCents,
-    userPaysCents,
-    counterpartyPaysCents,
-    userIsPayer: userPaysCents > 0,
+    userPaysCents: grossAmountCents(userPaysBudget),
+    counterpartyPaysCents: grossAmountCents(counterpartyPaysBudget),
+    userIsPayer: userPaysBudget > 0,
     currency: plan.currency ?? 'NGN',
   };
 }

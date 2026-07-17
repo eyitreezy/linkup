@@ -21,6 +21,7 @@ type Serialized = {
   isPaid: boolean;
   escrowPattern: EscrowPattern | null;
   hostContributionBps: number;
+  isNegotiable?: boolean;
   isMoodPlan: boolean;
   moodExpiresAt: string | null;
   budgetTier: BudgetTier | null;
@@ -53,6 +54,7 @@ export function serializePlanDraft(d: PlanDraft): string {
     isPaid: d.isPaid,
     escrowPattern: d.escrowPattern,
     hostContributionBps: d.hostContributionBps,
+    isNegotiable: d.isNegotiable,
     isMoodPlan: d.isMoodPlan,
     moodExpiresAt: d.moodExpiresAt?.toISOString() ?? null,
     budgetTier: d.budgetTier,
@@ -89,6 +91,7 @@ export function deserializePlanDraft(raw: string): PlanDraft | null {
       isPaid: !!p.isPaid,
       escrowPattern: p.escrowPattern ?? null,
       hostContributionBps: p.hostContributionBps ?? 5000,
+      isNegotiable: p.isNegotiable !== false,
       isMoodPlan: !!p.isMoodPlan,
       moodExpiresAt: p.moodExpiresAt ? new Date(p.moodExpiresAt) : null,
       budgetTier: p.budgetTier ?? null,

@@ -76,6 +76,8 @@ export type DraggableSheetController = {
   /** Positive translate pushes the sheet down (more collapsed). Range [0, maxTranslate]. */
   translateY: SharedValue<number>;
   maxTranslate: number;
+  /** Snap positions for expand / mid / collapse (ascending translateY). */
+  snaps: number[];
   panGesture: ReturnType<typeof Gesture.Pan>;
   sheetAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
   backdropAnimatedStyle: ReturnType<typeof useAnimatedStyle>;
@@ -101,15 +103,22 @@ export function useDraggableSheet(options: {
 
   const translateY = useSharedValue(maxTranslate);
   const startY = useSharedValue(0);
+  const expandedHeightSv = useSharedValue(expandedHeight);
   const prevMaxTRef = useRef(maxTranslate);
 
   useEffect(() => {
+    expandedHeightSv.value = expandedHeight;
+  }, [expandedHeight, expandedHeightSv]);
+
+  useEffect(() => {
     const prev = prevMaxTRef.current;
+    let target = translateY.value;
     if (prev > 0.5 && Math.abs(maxTranslate - prev) > 0.5) {
-      translateY.value = (translateY.value / prev) * maxTranslate;
+      target = (translateY.value / prev) * maxTranslate;
     }
     prevMaxTRef.current = maxTranslate;
-    translateY.value = Math.max(0, Math.min(maxTranslate, translateY.value));
+    target = Math.max(0, Math.min(maxTranslate, target));
+    translateY.value = withSpring(target, SPRING);
   }, [maxTranslate, translateY]);
 
   const animateTo = useCallback(
@@ -157,11 +166,11 @@ export function useDraggableSheet(options: {
             if (finished) runOnJS(lightHaptic)();
           });
         }),
-    [maxTranslate, snaps]
+    [maxTranslate, snaps, startY, translateY]
   );
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    height: expandedHeightSv.value - translateY.value,
   }));
 
   const backdropAnimatedStyle = useAnimatedStyle(() => {
@@ -190,6 +199,7 @@ export function useDraggableSheet(options: {
   return {
     translateY,
     maxTranslate,
+    snaps,
     panGesture,
     sheetAnimatedStyle,
     backdropAnimatedStyle,

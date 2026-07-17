@@ -16,7 +16,8 @@ function mergeEscrowMetadata(
 export async function recordEscrowPaymentInitiated(
   client: SupabaseClient,
   escrowId: string,
-  checkoutRef: string
+  checkoutRef: string,
+  initiatedByUserId: string
 ): Promise<{ error: string | null }> {
   const { data, error: readErr } = await client
     .from('escrow_transactions')
@@ -27,8 +28,47 @@ export async function recordEscrowPaymentInitiated(
   const meta = mergeEscrowMetadata(data?.metadata as Record<string, unknown> | null, {
     payment_initiated_at: new Date().toISOString(),
     checkout_reference: checkoutRef,
+    checkout_initiated_by: initiatedByUserId,
+    checkout_returned_at: new Date().toISOString(),
   });
-  const { error } = await client.from('escrow_transactions').update({ metadata: meta }).eq('id', escrowId);
+  const { error } = await client
+    .from('escrow_transactions')
+    .update({
+      metadata: meta,
+      payment_tx_ref: checkoutRef,
+    })
+    .eq('id', escrowId);
+  return { error: error?.message ?? null };
+}
+
+/** Drop abandoned checkout metadata so the payer can retry (cancelled / failed Flutterwave session). */
+export async function clearEscrowCheckoutPending(
+  client: SupabaseClient,
+  escrowId: string
+): Promise<{ error: string | null }> {
+  const { data, error: readErr } = await client
+    .from('escrow_transactions')
+    .select('metadata, payment_tx_ref')
+    .eq('id', escrowId)
+    .single();
+  if (readErr) return { error: readErr.message };
+
+  const existing =
+    data?.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
+      ? { ...(data.metadata as Record<string, unknown>) }
+      : {};
+  delete existing.payment_initiated_at;
+  delete existing.checkout_reference;
+  delete existing.checkout_initiated_by;
+  delete existing.checkout_returned_at;
+
+  const { error } = await client
+    .from('escrow_transactions')
+    .update({
+      metadata: existing,
+      payment_tx_ref: null,
+    })
+    .eq('id', escrowId);
   return { error: error?.message ?? null };
 }
 
@@ -44,7 +84,16 @@ export async function markEscrowFunded(
   if (escrow.status !== 'pending_funding') {
     return { error: 'Escrow is not waiting for payment.' };
   }
-  const { data: row } = await client.from('escrow_transactions').select('metadata').eq('id', escrow.id).single();
+
+  const { data: row } = await client
+    .from('escrow_transactions')
+    .select('metadata, escrow_pattern')
+    .eq('id', escrow.id)
+    .single();
+  if (row?.escrow_pattern === 'B') {
+    return { error: 'Split escrow must be funded per share via checkout, not demo fund.' };
+  }
+
   const meta = mergeEscrowMetadata(row?.metadata as Record<string, unknown> | null, {
     charge_confirmed_at: new Date().toISOString(),
   });
@@ -56,11 +105,16 @@ export async function markEscrowFunded(
     .eq('status', 'pending_funding');
   if (e1) return { error: e1.message };
 
+  const { data: planRow } = await client.from('plans').select('is_group_plan').eq('id', escrow.plan_id).maybeSingle();
+  const activeStatuses = planRow?.is_group_plan
+    ? ['negotiating', 'awaiting_payment', 'agreed']
+    : ['awaiting_payment', 'agreed'];
+
   const { error: e2 } = await client
     .from('plans')
     .update({ status: 'active' })
     .eq('id', escrow.plan_id)
-    .in('status', ['awaiting_payment', 'agreed']);
+    .in('status', activeStatuses);
   if (e2) return { error: e2.message };
 
   return { error: null };

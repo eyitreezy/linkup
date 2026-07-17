@@ -1,5 +1,5 @@
 /**
- * Admin — verification (KYC), user reports, moderation audit.
+ * Admin - verification (KYC), user reports, moderation audit.
  */
 import { AdminPlansPanel } from '@/components/admin/AdminPlansPanel';
 import { AdminSupportTicketModal } from '@/components/admin/AdminSupportTicketModal';
@@ -42,6 +42,7 @@ import type {
   DbSupportTicket,
   DbVerificationEvent,
 } from '@/types/database';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
@@ -213,7 +214,7 @@ function moderationContentIcon(ct: string): keyof typeof Ionicons.glyphMap {
 }
 
 function formatModerationScore(score: number | null): string {
-  if (score == null || Number.isNaN(Number(score))) return '—';
+  if (score == null || Number.isNaN(Number(score))) return '-';
   const pct = Math.round(Number(score) * 100);
   return `${pct}% · heuristic`;
 }
@@ -605,7 +606,7 @@ export default function AdminScreen() {
       const { data } = await supabase.from('plans').select('title, description').eq('id', r.content_id).maybeSingle();
       if (data) {
         setRelatedSnippet(
-          [data.title, data.description].filter(Boolean).join(' — ').slice(0, 500) || null
+          [data.title, data.description].filter(Boolean).join(' - ').slice(0, 500) || null
         );
       }
     } else if (r.content_type === 'message') {
@@ -747,13 +748,7 @@ export default function AdminScreen() {
   return (
     <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <View style={styles.root}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.28, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        <AppShellBackground />
         <View style={styles.headerSticky}>
           <View style={styles.heroRow}>
             <LinearGradient
@@ -988,7 +983,7 @@ export default function AdminScreen() {
                             <View style={styles.kycTimelineEmpty}>
                               <Ionicons name="git-commit-outline" size={22} color={colors.textMuted} />
                               <Text style={styles.kycTimelineEmptyTxt}>
-                                No events logged yet — approvals and vendor webhooks will appear here.
+                                No events logged yet. Approvals and vendor webhooks will appear here.
                               </Text>
                             </View>
                           ) : (
@@ -1044,7 +1039,7 @@ export default function AdminScreen() {
             <>
               <SectionHeader
                 title="Safety reports"
-                subtitle="Member-reported issues — pending items sort first."
+                subtitle="Member-reported issues. Pending items sort first."
                 icon="warning-outline"
               />
               <FlatList
@@ -1090,7 +1085,7 @@ export default function AdminScreen() {
             <>
               <SectionHeader
                 title="Member plan disputes"
-                subtitle="Evidence in private storage — open signed links in the browser; audit is chronological."
+                subtitle="Evidence in private storage. Open signed links in the browser; audit is chronological."
                 icon="briefcase-outline"
               />
               <View style={styles.nestedTabs}>
@@ -1136,7 +1131,7 @@ export default function AdminScreen() {
               />
               <SectionHeader
                 title="Escrow disputes"
-                subtitle={`Legacy escrow queue — ${dashboardStats.escrowOpen} needing attention.`}
+                subtitle={`Legacy escrow queue: ${dashboardStats.escrowOpen} needing attention.`}
                 icon="wallet-outline"
               />
               <FlatList
@@ -1317,7 +1312,7 @@ export default function AdminScreen() {
                             <View style={styles.escrowClosedFoot}>
                               <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
                               <Text style={styles.escrowClosedFootTxt}>
-                                Closed — no further action available from this list.
+                                Closed. No further action available from this list.
                               </Text>
                             </View>
                           )}
@@ -1434,7 +1429,7 @@ export default function AdminScreen() {
             <>
               <SectionHeader
                 title="Member directory"
-                subtitle="Account health, verification, and profile cards — pair with KYC for identity."
+                subtitle="Account health, verification, and profile cards. Pair with KYC for identity."
                 icon="people-outline"
               />
               <AdminUsersPanel refreshing={refreshing} registerReload={registerPanelReload} />
@@ -1467,7 +1462,7 @@ export default function AdminScreen() {
             <>
               <SectionHeader
                 title="Plans directory"
-                subtitle="Mood TTL, suppression, and deep links — pair with Reports for context."
+                subtitle="Mood TTL, suppression, and deep links. Pair with Reports for context."
                 icon="albums-outline"
               />
               <AdminPlansPanel refreshing={refreshing} registerReload={registerPanelReload} />
@@ -1814,7 +1809,7 @@ export default function AdminScreen() {
               style={styles.modalAccent}
             />
             <Text style={styles.modalTitle}>Rejection reason</Text>
-            <Text style={styles.hint}>Required — this text is shared with the member.</Text>
+            <Text style={styles.hint}>Required. This text is shared with the member.</Text>
             <TextInput
               value={rejectReason}
               onChangeText={setRejectReason}
@@ -1990,7 +1985,7 @@ const styles = StyleSheet.create({
         }
       : {
           // Android: never put elevation / legacy shadow on a transparent wrapper above
-          // overflow:hidden + LinearGradient — it routinely produces a blurred “blob” that
+          // overflow:hidden + LinearGradient - it routinely produces a blurred “blob” that
           // covers icon + label after the view hierarchy updates (tab switch).
           elevation: 0,
         },

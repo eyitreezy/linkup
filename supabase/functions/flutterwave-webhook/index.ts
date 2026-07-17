@@ -1,7 +1,15 @@
 /**
  * Flutterwave webhook — subscriptions + escrow (sole server activation path).
+ *
+ * Deploy: npx supabase functions deploy flutterwave-webhook --no-verify-jwt
  */
 import { processEscrowCharge } from '../_shared/flutterwaveEscrow.ts';
+import { processVirtualAccountBankTransfer } from '../_shared/flutterwaveVirtualAccount.ts';
+import {
+  isEscrowFlutterwaveReference,
+  normalizeFlutterwaveMeta,
+  parseFlutterwaveAmountNgn,
+} from '../_shared/flutterwaveMeta.ts';
 import { calculateExpiry, type BillingCycle, type PaidTier } from '../_shared/pricing.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
@@ -29,7 +37,15 @@ Deno.serve(async (req) => {
   const verifHash = req.headers.get('verif-hash');
 
   if (!webhookSecret || verifHash !== webhookSecret) {
-    return new Response('Unauthorized', { status: 401 });
+    console.warn('[flutterwave-webhook] auth_failed', {
+      hasWebhookSecret: !!webhookSecret,
+      hasVerifHash: !!verifHash,
+      verifHashMatches: verifHash === webhookSecret,
+    });
+    return new Response(JSON.stringify({ received: true, ignored: 'auth_failed' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   let body: Record<string, unknown>;
@@ -41,6 +57,20 @@ Deno.serve(async (req) => {
 
   const event = resolveEvent(body);
   const data = (body.data ?? body) as Record<string, unknown>;
+  console.log(
+    '[flutterwave-webhook] Received event:',
+    JSON.stringify(
+      {
+        event,
+        tx_ref: data?.tx_ref,
+        status: data?.status,
+        amount: data?.amount,
+        id: data?.id,
+      },
+      null,
+      2
+    )
+  );
 
   let supabase;
   try {
@@ -50,7 +80,8 @@ Deno.serve(async (req) => {
     return new Response('Server misconfigured', { status: 500 });
   }
 
-  if (event === 'charge.completed' || event === 'charge.complete') {
+  try {
+    if (event === 'charge.completed' || event === 'charge.complete') {
     const txId = data.id;
     if (!txId || !flwSecret) {
       return new Response('Missing transaction id', { status: 400 });
@@ -77,14 +108,94 @@ Deno.serve(async (req) => {
       });
     }
 
-    const meta = (verifyJson.data?.meta ?? data.meta ?? {}) as FlwMeta;
+    const meta = normalizeFlutterwaveMeta(verifyJson.data?.meta ?? data.meta);
     const reference = verifyJson.data?.tx_ref ?? (data.tx_ref as string | undefined) ?? String(txId);
-    const amountNgn = typeof verifyJson.data?.amount === 'number' ? verifyJson.data.amount : null;
-    const linkup = metaString(meta, 'linkup');
+    const amountNgn = parseFlutterwaveAmountNgn(verifyJson.data?.amount);
+    const paymentType =
+      typeof verifyJson.data?.payment_type === 'string'
+        ? verifyJson.data.payment_type
+        : typeof data.payment_type === 'string'
+          ? (data.payment_type as string)
+          : undefined;
+    const linkup = typeof meta.linkup === 'string' ? meta.linkup : undefined;
+    const isVirtualAccountRef = reference.startsWith('linkup-va-');
+    const isEscrowPayment =
+      !isVirtualAccountRef && (linkup === 'escrow' || isEscrowFlutterwaveReference(reference));
 
-    if (linkup === 'escrow') {
-      return processEscrowCharge(supabase, meta, reference, amountNgn);
-    }
+    console.log('[flutterwave-webhook] charge.completed resolved', {
+      tx_ref: reference,
+      linkup,
+      isEscrowPayment,
+      isVirtualAccountRef,
+      paymentType,
+      amountNgn,
+      meta_keys: Object.keys(meta),
+    });
+
+      if (isVirtualAccountRef || paymentType === 'bank_transfer') {
+        const vaResponse = await processVirtualAccountBankTransfer(
+          supabase,
+          reference,
+          verifyJson.data,
+          txId
+        );
+        if (!vaResponse.ok) {
+          const bodyText = await vaResponse.text();
+          console.error('[flutterwave-webhook] bank transfer fulfillment failed', {
+            status: vaResponse.status,
+            body: bodyText,
+            tx_ref: reference,
+          });
+        }
+        const bodyText = await vaResponse.text();
+        return new Response(bodyText || JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (isEscrowPayment) {
+        const fulfillmentMeta: Record<string, unknown> = {
+          ...meta,
+          linkup: 'escrow',
+        };
+        const escrowResponse = await processEscrowCharge(
+          supabase,
+          fulfillmentMeta,
+          reference,
+          amountNgn,
+          txId
+        );
+        if (!escrowResponse.ok) {
+          const bodyText = await escrowResponse.text();
+          console.error('[flutterwave-webhook] escrow fulfillment failed', {
+            status: escrowResponse.status,
+            body: bodyText,
+            tx_ref: reference,
+          });
+          return new Response(
+            JSON.stringify({
+              received: true,
+              ok: false,
+              source_status: escrowResponse.status,
+              error: bodyText || 'escrow_fulfillment_failed',
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+        const bodyText = await escrowResponse.text();
+        console.log('[flutterwave-webhook] escrow fulfillment ok', {
+          tx_ref: reference,
+          body: bodyText,
+        });
+        return new Response(bodyText || JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
 
     const userId = metaString(meta, 'user_id');
     const tier = metaString(meta, 'tier') as PaidTier | undefined;
@@ -147,17 +258,17 @@ Deno.serve(async (req) => {
       flutterwave_reference: reference,
     });
 
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (event === 'subscription.cancelled') {
-    const meta = (data.meta ?? data) as FlwMeta;
-    const userId = metaString(meta, 'user_id') ?? (data.customer_email as string | undefined);
-    if (!userId) {
-      return new Response('Missing user', { status: 400 });
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
+
+    if (event === 'subscription.cancelled') {
+      const meta = (data.meta ?? data) as FlwMeta;
+      const userId = metaString(meta, 'user_id') ?? (data.customer_email as string | undefined);
+      if (!userId) {
+        return new Response('Missing user', { status: 400 });
+      }
 
     const { data: userRow } = await supabase
       .from('users')
@@ -173,27 +284,38 @@ Deno.serve(async (req) => {
       metadata: { access_until: userRow?.subscription_expires_at },
     });
 
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (event === 'charge.failed') {
-    const meta = (data.meta ?? data) as FlwMeta;
-    const userId = metaString(meta, 'user_id');
-    if (userId) {
-      await supabase.from('subscription_events').insert({
-        user_id: userId,
-        event_type: 'payment_failed',
-        metadata: data,
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
-    return new Response(JSON.stringify({ ok: true }), {
+
+    if (event === 'charge.failed') {
+      const meta = (data.meta ?? data) as FlwMeta;
+      const userId = metaString(meta, 'user_id');
+      if (userId) {
+        await supabase.from('subscription_events').insert({
+          user_id: userId,
+          event_type: 'payment_failed',
+          metadata: data,
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true, ignored: event }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('[flutterwave-webhook] Unhandled error:', {
+      error: error instanceof Error ? error.message : String(error),
+      event,
+      tx_ref: data?.tx_ref,
+    });
+    return new Response(JSON.stringify({ received: true, error: 'internal_error' }), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-
-  return new Response(JSON.stringify({ ok: true, ignored: event }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
 });

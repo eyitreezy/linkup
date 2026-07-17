@@ -54,14 +54,14 @@ const LABELS: Record<EscrowStatus, { label: string; bg: string; fg: string; dot:
   },
 };
 
-type Props = { status: EscrowStatus; compact?: boolean };
+type Props = { status: EscrowStatus; compact?: boolean; label?: string };
 
-export function EscrowStatusBadge({ status, compact }: Props) {
+export function EscrowStatusBadge({ status, compact, label }: Props) {
   const cfg = LABELS[status] ?? LABELS.pending_funding;
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
       <View style={[styles.dot, { backgroundColor: cfg.dot }]} />
-      <Text style={[styles.txt, compact && styles.txtCompact, { color: cfg.fg }]}>{cfg.label}</Text>
+      <Text style={[styles.txt, compact && styles.txtCompact, { color: cfg.fg }]}>{label ?? cfg.label}</Text>
     </View>
   );
 }

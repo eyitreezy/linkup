@@ -3,9 +3,9 @@
  */
 import { PlansFeedSkeleton } from '@/components/plans/PlansFeedSkeleton';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing } from '@/constants/theme';
 import { MotiView } from 'moti';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, View } from 'react-native';
 
 function PulseBlock({ style }: { style: object }) {
@@ -22,11 +22,7 @@ function PulseBlock({ style }: { style: object }) {
 export function AuthCallbackSkeleton() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screen}>
-      <LinearGradient
-        colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-        locations={[0, 0.28, 0.55, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      <AppShellBackground />
       <View style={styles.header}>
         <PulseBlock style={styles.headerIcon} />
         <View style={styles.headerTextCol}>

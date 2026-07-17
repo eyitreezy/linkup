@@ -6,6 +6,7 @@ export function shouldRemovePlanFromDiscoverFeed(row: DiscoverPlanUpdateRow): bo
     row.is_suppressed === true ||
     (row.archived_at != null && row.archived_at !== '') ||
     (row.status != null &&
-      ['agreed', 'active', 'completed', 'cancelled'].includes(row.status))
+      ['agreed', 'active', 'completed', 'cancelled'].includes(row.status)) ||
+    (row.status === 'awaiting_payment' && !row.is_group_plan)
   );
 }

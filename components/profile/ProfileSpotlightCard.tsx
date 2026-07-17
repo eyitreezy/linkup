@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: 'rgba(251, 191, 36, 0.35)',
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: colors.cardSurface,
     shadowColor: '#FBBF24',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,

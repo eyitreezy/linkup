@@ -4,6 +4,7 @@
 import { Avatar } from '@/components/Avatar';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import type { EngagementCarouselItem } from '@/lib/plans/fetchFeedEngagementCarousel';
+import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
@@ -115,8 +116,12 @@ export function EngagementCarousel({ items, loading }: Props) {
   const onPressCard = useCallback(
     (item: EngagementCarouselItem) => {
       pause();
+      warmPlanDetailNavigation(item.planId);
       if (item.navigateTo === 'agreement') {
-        router.push(`/plan/${item.planId}/agreement` as Href);
+        const href = item.offerId
+          ? (`/plan/${item.planId}/agreement?offerId=${item.offerId}` as Href)
+          : (`/plan/${item.planId}/agreement` as Href);
+        router.push(href);
       } else {
         router.push(`/plan/${item.planId}` as Href);
       }

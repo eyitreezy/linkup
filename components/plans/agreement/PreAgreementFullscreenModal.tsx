@@ -1,16 +1,23 @@
 /**
  * Bumble-style fullscreen legal gate before escrow / activation — no swipe-to-dismiss.
  */
-import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { Button } from '@/components/Button';
 import { CancellationPolicyRowGroups } from '@/components/plans/CancellationPolicyRows';
+import { APP_CTA_GRADIENT } from '@/constants/gradients';
+import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
 import { AGREEMENT_CANCELLATION_POLICY_GROUPS } from '@/lib/plans/cancellationPolicy';
-import { platformFeeCentsForAmount } from '@/lib/plans/planFinancialConfig';
+import {
+  budgetFromGrossAmountCents,
+  feeFromGrossAmountCents,
+} from '@/lib/plans/planFinancialConfig';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,12 +32,13 @@ export type PreAgreementModalProps = {
   whenLabel: string;
   locationLabel: string | null;
   priceLabel: string;
+  /** Gross escrow amount for this user's payment row (kobo). */
   escrowAmountCents: number | null;
-  /** Amount this user pays on the next screen (split = share only). */
-  userPaysCents?: number | null;
   currencyLabel: string;
   busy: boolean;
   onConfirm: () => void;
+  /** Fired when user taps confirm before checking the terms checkbox. */
+  onTermsRequired?: () => void;
 };
 
 export function PreAgreementFullscreenModal({
@@ -40,10 +48,10 @@ export function PreAgreementFullscreenModal({
   locationLabel,
   priceLabel,
   escrowAmountCents,
-  userPaysCents,
   currencyLabel,
   busy,
   onConfirm,
+  onTermsRequired,
 }: PreAgreementModalProps) {
   const insets = useSafeAreaInsets();
   const [read, setRead] = useState(false);
@@ -52,14 +60,11 @@ export function PreAgreementFullscreenModal({
     if (!visible) setRead(false);
   }, [visible]);
 
-  const fee =
-    escrowAmountCents != null && escrowAmountCents > 0
-      ? platformFeeCentsForAmount(escrowAmountCents)
-      : 0;
-  const payeeApprox =
-    escrowAmountCents != null && escrowAmountCents > 0
-      ? Math.max(escrowAmountCents - fee, 0)
-      : null;
+  const grossCents =
+    escrowAmountCents != null && escrowAmountCents > 0 ? escrowAmountCents : 0;
+  const budgetCents = grossCents > 0 ? budgetFromGrossAmountCents(grossCents) : 0;
+  const feeCents = grossCents > 0 ? feeFromGrossAmountCents(grossCents) : 0;
+  const fmt = (cents: number) => formatEscrowMoney(cents, currencyLabel);
 
   return (
     <Modal
@@ -90,20 +95,15 @@ export function PreAgreementFullscreenModal({
           <Section title="Escrow" icon="lock-closed-outline">
             {escrowAmountCents != null && escrowAmountCents > 0 ? (
               <>
-                <Text style={styles.line}>
-                  Held amount · {currencyLabel} {(escrowAmountCents / 100).toLocaleString()}
-                </Text>
+                <Text style={styles.line}>Plan contribution · {fmt(budgetCents)}</Text>
                 <Text style={styles.muted}>
                   Funds are protected with escrow and released per plan rules after the meetup.
                 </Text>
-                {(userPaysCents ?? escrowAmountCents) > 0 ? (
+                {grossCents > 0 ? (
                   <View style={styles.nextPayCallout}>
                     <Text style={styles.nextPayTitle}>After you confirm</Text>
                     <Text style={styles.nextPayBody}>
-                      The next screen opens secure payment. You&apos;ll pay{' '}
-                      {currencyLabel === 'NGN' ? '₦' : `${currencyLabel} `}
-                      {((userPaysCents ?? escrowAmountCents) / 100).toLocaleString()} via Flutterwave. Nothing is
-                      charged on this review screen.
+                      {`The next screen opens secure payment via Flutterwave. You'll pay ${fmt(grossCents)} (${fmt(budgetCents)} plan contribution + ${fmt(feeCents)} platform fee). Nothing is charged on this review screen.`}
                     </Text>
                   </View>
                 ) : null}
@@ -116,13 +116,24 @@ export function PreAgreementFullscreenModal({
           <Section title="Fees (estimate)" icon="pricetag-outline">
             {escrowAmountCents != null && escrowAmountCents > 0 ? (
               <>
-                <Row k="Platform fee (at release, est.)" v={`${currencyLabel} ${(fee / 100).toLocaleString()}`} />
+                <Row k="Plan contribution" v={fmt(budgetCents)} />
                 <Row
-                  k="Approx. to host after fee"
-                  v={`${currencyLabel} ${((payeeApprox ?? 0) / 100).toLocaleString()}`}
+                  k="Platform fee (5%, shared by all)"
+                  v={`+ ${fmt(feeCents)}`}
+                  valueStyle={styles.feeVAdditive}
                 />
+                <View style={styles.feeDivider} />
+                <Row
+                  k="Total escrow"
+                  v={fmt(grossCents)}
+                  labelStyle={styles.feeKBold}
+                  valueStyle={styles.feeVBold}
+                />
+                <Row k="Host receives after meetup" v={fmt(budgetCents)} />
                 <Text style={styles.mutedSmall}>
-                  Exact fee tier depends on amount; shown here from the in-app calculator.
+                  The 5% platform fee is added to the plan budget and shared by all
+                  participants. Each person pays their budget share plus their
+                  proportional fee contribution.
                 </Text>
               </>
             ) : (
@@ -151,28 +162,43 @@ export function PreAgreementFullscreenModal({
             accessibilityRole="checkbox"
             accessibilityState={{ checked: read }}
           >
-            <View style={[styles.box, read && styles.boxOn]}>{read ? <Text style={styles.tick}>✓</Text> : null}</View>
+            {read ? (
+              <LinearGradient
+                colors={[...APP_CTA_GRADIENT]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.checkboxChecked}
+              >
+                <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+              </LinearGradient>
+            ) : (
+              <LinearGradient
+                colors={[...APP_CTA_GRADIENT]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.checkboxRing}
+              >
+                <View style={styles.checkboxInner} />
+              </LinearGradient>
+            )}
             <Text style={styles.checkLabel}>I have read this summary and agree to the plan and policy.</Text>
           </Pressable>
-          <Pressable
+          <Button
+            title="Confirm and continue"
             onPress={() => {
-              if (!read || busy) return;
+              if (!read) {
+                onTermsRequired?.();
+                return;
+              }
               onConfirm();
             }}
-            style={({ pressed }) => [
-              styles.cta,
-              (!read || busy) && styles.ctaDisabled,
-              pressed && read && !busy && styles.ctaPressed,
-            ]}
-            accessibilityRole="button"
-            disabled={!read || busy}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.ctaTxt}>Confirm and continue</Text>
-            )}
-          </Pressable>
+            loading={busy}
+            disabled={busy}
+            gradient
+            pill
+            fullWidth
+            style={styles.ctaBtn}
+          />
         </View>
       </View>
     </Modal>
@@ -199,11 +225,21 @@ function Section({
   );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+function Row({
+  k,
+  v,
+  labelStyle,
+  valueStyle,
+}: {
+  k: string;
+  v: string;
+  labelStyle?: object;
+  valueStyle?: object;
+}) {
   return (
     <View style={styles.feeRow}>
-      <Text style={styles.feeK}>{k}</Text>
-      <Text style={styles.feeV}>{v}</Text>
+      <Text style={[styles.feeK, labelStyle]}>{k}</Text>
+      <Text style={[styles.feeV, valueStyle]}>{v}</Text>
     </View>
   );
 }
@@ -264,6 +300,14 @@ const styles = StyleSheet.create({
   feeK: { flex: 1, fontSize: 13, color: colors.textMuted, fontFamily: fonts.regular, },
   feeV: { fontSize: 13, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.text },
+  feeVAdditive: { color: colors.success },
+  feeKBold: { fontWeight: '800', fontFamily: fonts.bold, color: colors.text },
+  feeVBold: { fontWeight: '900', fontFamily: fonts.bold },
+  feeDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: 8,
+  },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -272,30 +316,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   checkRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: spacing.md },
-  box: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
+  checkboxRing: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    padding: 1.5,
+    marginTop: 1,
   },
-  boxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tick: { color: '#fff', fontSize: 13, fontWeight: '900',
-    fontFamily: fonts.bold,},
-  checkLabel: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium, },
-  cta: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.button,
-    minHeight: 52,
+  checkboxInner: {
+    flex: 1,
+    borderRadius: 5.5,
+    backgroundColor: colors.surface,
+  },
+  checkboxChecked: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.22,
+        shadowRadius: 8,
+      },
+      android: { elevation: 3 },
+    }),
+  },
+  checkLabel: { flex: 1, fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600', fontFamily: fonts.medium },
+  ctaBtn: {
     marginBottom: spacing.sm,
   },
-  ctaDisabled: { opacity: 0.45 },
-  ctaPressed: { opacity: 0.92 },
-  ctaTxt: { color: '#fff', fontSize: 16, fontWeight: '800',
-    fontFamily: fonts.bold,},
 });

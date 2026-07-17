@@ -11,6 +11,7 @@ import {
 import { OnboardingStickyProgress } from '@/components/onboarding/OnboardingStickyProgress';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { ProfilePhotoGallery } from '@/components/profile/ProfilePhotoGallery';
 import { ProfileVideoUploader } from '@/components/profile/ProfileVideoUploader';
 import { PROFILE_MIN_PHOTOS_ONBOARDING } from '@/lib/profile/media/constants';
@@ -51,6 +52,7 @@ import {
 import { userFacingOnboardingSaveError } from '@/lib/onboarding/userFacingError';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
+import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { normalizeEmail, normalizePhone } from '@/lib/contacts/hashContact';
 import { hashContactValue } from '@/lib/contacts/hashContactValue';
@@ -59,7 +61,7 @@ import type { MeetingIntent, OnboardingDraft } from '@/types/onboarding';
 import { defaultOnboardingDraft } from '@/types/onboarding';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
-import { Redirect, router, type Href } from 'expo-router';
+import { Redirect, router, useLocalSearchParams, type Href } from 'expo-router';
 import { MotiView } from 'moti';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -75,6 +77,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function OnboardingScreen() {
+  const { invitation_token: invitationTokenParam } = useLocalSearchParams<{
+    invitation_token?: string;
+  }>();
+  const invitationTokenRef = useRef(
+    typeof invitationTokenParam === 'string' ? invitationTokenParam : undefined
+  );
+  if (typeof invitationTokenParam === 'string' && invitationTokenParam) {
+    invitationTokenRef.current = invitationTokenParam;
+  }
+
   const { session, profile, refreshProfile, loading: authLoading } = useAuth();
   const { user, session: activeSession, ready: authReady } = useAuthBootstrap();
   const insets = useSafeAreaInsets();
@@ -224,6 +236,24 @@ export default function OnboardingScreen() {
     await persistAndNext();
   }, [step, canContinue1, canContinue2, canContinue3, persistAndNext]);
 
+  const routeAfterOnboarding = useCallback(async () => {
+    const token = invitationTokenRef.current;
+    if (token && isSupabaseConfigured) {
+      try {
+        const linked = await linkInvitationAfterSignup(token);
+        if (linked.linked && linked.planId && linked.invitationId) {
+          router.replace(
+            `/plan/${linked.planId}/invitation/${linked.invitationId}` as Href
+          );
+          return;
+        }
+      } catch {
+        /* fall through to default route */
+      }
+    }
+    router.replace('/(tabs)');
+  }, []);
+
   const confirmSkipOnboarding = useCallback(async () => {
     if (!user?.id) return;
     setSaving(true);
@@ -249,8 +279,8 @@ export default function OnboardingScreen() {
     skipDraftHydrateRef.current = false;
     setSaving(false);
     setShowSkipModal(false);
-    router.replace('/(tabs)');
-  }, [user?.id, draft, prefs, refreshProfile]);
+    await routeAfterOnboarding();
+  }, [user?.id, draft, prefs, refreshProfile, routeAfterOnboarding]);
 
   const finish = useCallback(
     async (mode: 'publish' | 'draft') => {
@@ -279,9 +309,9 @@ export default function OnboardingScreen() {
       skipDraftHydrateRef.current = false;
       setSaving(false);
       setShowSaveDraftModal(false);
-      router.replace('/(tabs)');
+      await routeAfterOnboarding();
     },
-    [user?.id, draft, prefs, refreshProfile]
+    [user?.id, draft, prefs, refreshProfile, routeAfterOnboarding]
   );
 
   const confirmSaveDraft = useCallback(() => {
@@ -332,13 +362,10 @@ export default function OnboardingScreen() {
   if (showBootstrapSpinner) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          style={[StyleSheet.absoluteFillObject, styles.center]}
-        >
+        <View style={[styles.flex, styles.center]}>
+          <AppShellBackground />
           <ActivityIndicator color={colors.primary} size="large" />
-        </LinearGradient>
+        </View>
       </Screen>
     );
   }
@@ -396,13 +423,7 @@ export default function OnboardingScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
+        <AppShellBackground />
 
         <OnboardingStickyProgress step={step} total={ONBOARDING_TOTAL_STEPS} />
 

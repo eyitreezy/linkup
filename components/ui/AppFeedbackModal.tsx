@@ -20,6 +20,8 @@ type Props = {
   message: string;
   primaryLabel?: string;
   onPrimary?: () => void;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
   /** Tap outside overlay to dismiss (default true). */
   dismissOnBackdrop?: boolean;
 };
@@ -38,7 +40,7 @@ function variantMeta(variant: AppFeedbackVariant): {
       };
     case 'warning':
       return {
-        icon: 'information-circle-outline',
+        icon: 'hourglass-outline',
         iconGrad: ['#F59E0B', '#FBBF24'],
         ctaGrad: [colors.primary, colors.secondary],
       };
@@ -61,12 +63,19 @@ export function AppFeedbackModal({
   message,
   primaryLabel = 'Got it',
   onPrimary,
+  secondaryLabel,
+  onSecondary,
   dismissOnBackdrop = true,
 }: Props) {
   const meta = variantMeta(variant);
 
   function handlePrimary() {
     if (onPrimary) onPrimary();
+    else onClose();
+  }
+
+  function handleSecondary() {
+    if (onSecondary) onSecondary();
     else onClose();
   }
 
@@ -120,6 +129,17 @@ export function AppFeedbackModal({
                   <Text style={styles.ctaTxt}>{primaryLabel}</Text>
                 </LinearGradient>
               </Pressable>
+
+              {secondaryLabel ? (
+                <Pressable
+                  onPress={handleSecondary}
+                  style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={secondaryLabel}
+                >
+                  <Text style={styles.secondaryTxt}>{secondaryLabel}</Text>
+                </Pressable>
+              ) : null}
             </View>
           </LinearGradient>
         </Pressable>
@@ -227,5 +247,19 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: '#FFFFFF',
     letterSpacing: -0.2,
+  },
+  secondaryBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  secondaryTxt: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.bold,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
 });

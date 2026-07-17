@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-function ChatBubbleVideo({
+function ChatBubbleVideoPlayer({
   uri,
   style,
   onError,
@@ -38,6 +38,33 @@ function ChatBubbleVideo({
       fullscreenOptions={{ enable: true }}
     />
   );
+}
+
+function ChatBubbleVideo({
+  uri,
+  style,
+  onError,
+}: {
+  uri: string;
+  style: ViewStyle;
+  onError: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  if (!armed) {
+    return (
+      <Pressable
+        onPress={() => setArmed(true)}
+        style={[style, styles.videoPoster]}
+        accessibilityRole="button"
+        accessibilityLabel="Play video"
+      >
+        <Ionicons name="play-circle" size={48} color="#fff" />
+      </Pressable>
+    );
+  }
+
+  return <ChatBubbleVideoPlayer key={uri} uri={uri} style={style} onError={onError} />;
 }
 
 export type ChatBubbleMedia = {
@@ -404,6 +431,7 @@ const styles = StyleSheet.create({
   mediaBlock: { marginBottom: 6, borderRadius: radius.md, overflow: 'hidden' },
   image: { width: 220, height: 220, borderRadius: radius.md, backgroundColor: colors.border },
   video: { width: 240, height: 180, backgroundColor: '#000' },
+  videoPoster: { alignItems: 'center', justifyContent: 'center' },
   videoFallback: { color: colors.textMuted, fontSize: 13, padding: 8, fontFamily: fonts.regular, },
   failBanner: { alignSelf: 'flex-end', marginBottom: 4, marginRight: 4 },
   failText: { fontSize: 12, color: '#c62828', fontWeight: '600', fontFamily: fonts.medium, },

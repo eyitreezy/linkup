@@ -6,6 +6,8 @@ export const colors = {
   secondary: '#FF4A72',
   background: '#EEF1FA',
   surface: '#FFFFFF',
+  /** Warm off-white card fill (discover list + profile cards) */
+  cardSurface: '#EBE6E6',
   text: '#1A1D26',
   textMuted: '#5B6577',
   border: '#D8DCE6',
@@ -20,6 +22,8 @@ export const colors = {
   authGradientBottom: '#FF4A72',
   authCard: '#FFFFFF',
   authInputBg: '#F5F7FC',
+  /** Native splash + branded shell backdrop */
+  splashBackground: '#FBE9E9',
   /** Discovery / dating-mode surfaces */
   discoveryGradientTop: '#EEF1FA',
   discoveryGradientMid: '#D2C9FF',

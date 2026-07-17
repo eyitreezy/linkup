@@ -6,11 +6,13 @@ import { ConversationCard } from '@/components/messages/ConversationCard';
 import { MessagesEmptyState } from '@/components/messages/MessagesEmptyState';
 import { MessagesInboxSkeleton } from '@/components/messages/MessagesInboxSkeleton';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { getLastReadMap } from '@/lib/messaging/inboxCache';
 import { messageDisplayText, parseLegacyImageBody } from '@/lib/messaging/chatQueries';
+import { formatGroupMentionsForDisplay } from '@/lib/messaging/groupMentions';
 import { subscribeInboxRealtime } from '@/lib/messaging/subscribeInboxRealtime';
 import { fetchFeedEngagementCarousel, type EngagementCarouselItem } from '@/lib/plans/fetchFeedEngagementCarousel';
 import { fetchPresenceMap } from '@/lib/presence/presenceHeartbeat';
@@ -20,7 +22,6 @@ import { Href, router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBarScrollProps } from '@/hooks/useTabBarScrollHandler';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -56,7 +57,6 @@ function previewForLast(
 
 export default function MessagesInboxScreen() {
   const tabBarScroll = useTabBarScrollProps();
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   const { user } = useAuth();
   const [rows, setRows] = useState<InboxRow[]>([]);
   const [convIds, setConvIds] = useState<string[]>([]);
@@ -198,6 +198,7 @@ export default function MessagesInboxScreen() {
 
       const groupMemberCounts = new Map<string, number>();
       const groupMemberPreviews = new Map<string, { avatarUrl: string | null; name: string }[]>();
+      const groupMentionNameByConv = new Map<string, Map<string, string>>();
       if (groupConvs.length > 0) {
         const gIds = groupConvs.map((c) => c.id);
         const { data: gMembers } = await supabase
@@ -213,6 +214,12 @@ export default function MessagesInboxScreen() {
         for (const gid of gIds) {
           const rows = (gMembers ?? []).filter((m) => m.conversation_id === gid);
           groupMemberCounts.set(gid, rows.length);
+          const nameMap = new Map<string, string>();
+          for (const m of rows) {
+            const p = gProfMap.get(m.user_id as string);
+            nameMap.set(m.user_id as string, (p?.display_name as string) ?? 'Member');
+          }
+          groupMentionNameByConv.set(gid, nameMap);
           groupMemberPreviews.set(
             gid,
             rows.slice(0, 4).map((m) => {
@@ -242,13 +249,17 @@ export default function MessagesInboxScreen() {
         const prof = isGroup ? null : profByUser.get(otherId);
         const last = lastByConv.get(c.id);
         const mk = last ? mediaKindByMsg.get(last.id) ?? null : null;
-        const preview = last && deletedForMeIds.has(last.id)
+        let preview = last && deletedForMeIds.has(last.id)
           ? 'Message deleted'
           : previewForLast(
               last ? messageDisplayText(last) : null,
               mk,
               last?.deleted_at ?? null
             );
+        if (isGroup && last && !deletedForMeIds.has(last.id)) {
+          const nameMap = groupMentionNameByConv.get(c.id);
+          if (nameMap) preview = formatGroupMentionsForDisplay(preview, nameMap);
+        }
         const timeIso = last?.created_at ?? c.created_at;
         const readAt = readMap[c.id];
         const unread =
@@ -336,14 +347,7 @@ export default function MessagesInboxScreen() {
       safeAreaStyle={styles.screenBg}
       style={styles.screenBg}
     >
-      <LinearGradient
-        colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-        locations={[0, 0.28, 0.55, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={bleedBgStyle}
-        pointerEvents="none"
-      />
+      <AppShellBackground />
       <View style={styles.heroHeader}>
         <View style={styles.heroLeft}>
           <LinearGradient

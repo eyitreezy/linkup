@@ -5,20 +5,15 @@ import { Screen } from '@/components/Screen';
 import { PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
 import { NegotiationChat } from '@/components/plans/negotiation/NegotiationChat';
 import { PlanScreenLoading } from '@/components/plans/PlanScreenLoading';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, spacing, fonts } from '@/constants/theme';
 import { peekPlanDetailSeed, setPlanDetailSeed } from '@/lib/plans/planDetailSeed';
+import { planIsPastNegotiation, resolvePlanAgreementHref } from '@/lib/plans/planAgreementRoute';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan } from '@/types/database';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams } from 'expo-router';
+import { Href, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-
-const GRADIENT_COLORS = [
-  colors.discoveryGradientTop,
-  colors.discoveryGradientMid,
-  colors.discoveryGradientBottom,
-] as const;
 
 function NegotiateShell({ children }: { children: React.ReactNode }) {
   return (
@@ -27,20 +22,20 @@ function NegotiateShell({ children }: { children: React.ReactNode }) {
       safeAreaStyle={styles.screenTransparent}
       style={styles.screenTransparent}
     >
-      <LinearGradient
-        colors={[...GRADIENT_COLORS]}
-        locations={[0, 0.45, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.fill}>{children}</View>
+      <View style={styles.fill}>
+        <AppShellBackground />
+        {children}
+      </View>
     </Screen>
   );
 }
 
 export default function PlanNegotiateScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, offerId, action } = useLocalSearchParams<{
+    id: string;
+    offerId?: string;
+    action?: string;
+  }>();
   const [plan, setPlan] = useState<DbPlan | null>(() => (id ? peekPlanDetailSeed(id) : null));
   const [refreshing, setRefreshing] = useState(!plan);
 
@@ -75,6 +70,17 @@ export default function PlanNegotiateScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!plan || !id) return;
+    if (!plan.is_group_plan && planIsPastNegotiation(plan.status)) {
+      router.replace(resolvePlanAgreementHref(plan));
+    }
+  }, [plan, id]);
+
+  const handlePlanFlowAdvance = useCallback((href: Href) => {
+    router.replace(href);
+  }, []);
 
   if (!plan && refreshing) {
     return (
@@ -115,7 +121,13 @@ export default function PlanNegotiateScreen() {
         titleStyle={styles.negotiateHeaderTitle}
       />
       <View style={styles.chatWrap}>
-        <NegotiationChat plan={plan} />
+        <NegotiationChat
+          plan={plan}
+          initialOfferId={typeof offerId === 'string' ? offerId : null}
+          openCounterOnMount={action === 'counter'}
+          onPlanFlowAdvance={handlePlanFlowAdvance}
+          onPlanRefresh={() => void load()}
+        />
         {refreshing ? (
           <View style={styles.refreshBar} pointerEvents="none">
             <ActivityIndicator size="small" color={colors.primary} />
@@ -138,7 +150,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   fill: { flex: 1 },
-  chatWrap: { flex: 1 },
+  chatWrap: { flex: 1, minHeight: 0 },
   refreshBar: {
     position: 'absolute',
     top: spacing.xs,

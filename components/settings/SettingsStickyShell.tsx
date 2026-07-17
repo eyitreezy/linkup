@@ -2,14 +2,9 @@
  * Settings / support screens — fixed top back row (membership-style), scrollable body below.
  */
 import { Screen } from '@/components/Screen';
-import {
-  DISCOVERY_SHELL_GRADIENT,
-  DISCOVERY_SHELL_GRADIENT_LOCATIONS,
-} from '@/constants/gradients';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing } from '@/constants/theme';
-import { useFullBleedAbsoluteFillStyle } from '@/hooks/useFullBleedAbsoluteFillStyle';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import type { ReactElement, ReactNode } from 'react';
 import {
@@ -59,18 +54,10 @@ export function SettingsStickyShell({
   safeAreaEdges = ['top', 'left', 'right'],
   refreshControl,
 }: Props) {
-  const bleedBgStyle = useFullBleedAbsoluteFillStyle();
   return (
     <Screen safeAreaEdges={safeAreaEdges} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
-        <LinearGradient
-          colors={[...DISCOVERY_SHELL_GRADIENT]}
-          locations={[...DISCOVERY_SHELL_GRADIENT_LOCATIONS]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={bleedBgStyle}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <SettingsStickyTopNav right={topNavRight} />
 

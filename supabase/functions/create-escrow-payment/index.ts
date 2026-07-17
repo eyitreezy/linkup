@@ -4,6 +4,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { koboToFlwNgn } from '../_shared/flutterwaveEscrow.ts';
+import { patternBLegGrossCents } from '../_shared/flutterwaveMeta.ts';
 import { resolveFlutterwaveRedirectUrl } from '../_shared/flutterwaveRedirect.ts';
 import { handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
@@ -100,14 +101,24 @@ Deno.serve(async (req) => {
     if (leg === 'host') {
       if (authData.user.id !== escrow.host_id) return jsonError('Forbidden', 403);
       if (escrow.host_funded_at) return jsonError('Host share already funded', 409);
-      amountKobo = (escrow.host_share_cents as number) ?? 0;
+      amountKobo = patternBLegGrossCents(escrow, 'host');
     } else if (leg === 'guest') {
       if (authData.user.id !== escrow.guest_id) return jsonError('Forbidden', 403);
       if (escrow.guest_funded_at) return jsonError('Guest share already funded', 409);
-      amountKobo = (escrow.guest_share_cents as number) ?? 0;
+      amountKobo = patternBLegGrossCents(escrow, 'guest');
     } else {
       return jsonError('escrow_leg required for split escrow', 400);
     }
+  } else if (pattern === 'A') {
+    if (authData.user.id !== escrow.host_id) {
+      return jsonError('Forbidden', 403);
+    }
+    amountKobo = escrow.amount_cents as number;
+  } else if (pattern === 'C') {
+    if (authData.user.id !== escrow.guest_id) {
+      return jsonError('Forbidden', 403);
+    }
+    amountKobo = escrow.amount_cents as number;
   } else {
     if (authData.user.id !== escrow.payer_id) {
       return jsonError('Forbidden', 403);
@@ -127,6 +138,14 @@ Deno.serve(async (req) => {
 
   const amountNgn = koboToFlwNgn(amountKobo);
   const txRef = `linkup_esc_${escrowId.slice(0, 8)}_${leg ?? 'full'}_${Date.now()}`;
+  const { error: txRefErr } = await supabase
+    .from('escrow_transactions')
+    .update({ payment_tx_ref: txRef, updated_at: new Date().toISOString() })
+    .eq('id', escrowId);
+  if (txRefErr) {
+    console.error('[create-escrow-payment] failed to persist tx_ref', txRefErr.message);
+    return jsonError('Could not prepare escrow checkout', 500);
+  }
   const redirectResolved = resolveFlutterwaveRedirectUrl(
     body.redirect_url,
     `${deepLinkScheme}://escrow/${escrowId}`

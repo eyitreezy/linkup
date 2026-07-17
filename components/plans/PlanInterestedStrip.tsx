@@ -2,6 +2,7 @@
  * Host view — interested users strip (Gold+) or gated upsell (matches linkup-web).
  */
 import { Avatar } from '@/components/Avatar';
+import { SkeletonBox } from '@/components/ui/SkeletonBox';
 import { TierBadge } from '@/components/TierBadge';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
@@ -10,10 +11,10 @@ import {
   fetchHiddenEngagementUserIds,
   filterEngagementsByIncognito,
 } from '@/lib/plans/incognitoEngagement';
-import { supabase } from '@/lib/supabase';
+import { removeSupabaseChannel, supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type EngRow = {
@@ -42,6 +43,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
 
   const load = useCallback(async () => {
     setLoading(true);
+    try {
     const { data: eng } = await supabase
       .from('plan_engagements')
       .select('user_id, kind, created_at')
@@ -59,13 +61,11 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
 
     if (!allowed) {
       setRows([]);
-      setLoading(false);
       return;
     }
 
     if (visibleUserIds.length === 0) {
       setRows([]);
-      setLoading(false);
       return;
     }
 
@@ -78,20 +78,61 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
       (p) => !hiddenIds.has(p.user_id as string)
     );
     setRows(filteredProfiles as EngRow[]);
-    setLoading(false);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }, [allowed, planId]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (currentUserId !== hostUserId || !planId) return;
+
+    const channel = supabase.channel(
+      `plan-interest-strip:${planId}:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`
+    );
+
+    channel
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'plan_engagements',
+          filter: `plan_id=eq.${planId}`,
+        },
+        () => {
+          void loadRef.current();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      removeSupabaseChannel(channel);
+    };
+  }, [currentUserId, hostUserId, planId]);
 
   if (currentUserId !== hostUserId) return null;
 
   if (permLoading || loading) {
     return (
       <View style={styles.wrap}>
-        <Text style={styles.loadingTxt}>Loading interested users…</Text>
-        <ActivityIndicator color={colors.primary} style={styles.loadingSpinner} />
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Interested</Text>
+          <ActivityIndicator color={colors.primary} size="small" />
+        </View>
+        <View style={styles.avatarRow}>
+          {BLUR_STACK.map((i) => (
+            <SkeletonBox key={i} style={styles.avatarSkeleton} />
+          ))}
+        </View>
       </View>
     );
   }
@@ -194,14 +235,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  loadingTxt: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: fonts.medium,
-    color: colors.textMuted,
-    textAlign: 'center',
+  avatarRing: {
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#5E52FF',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.12,
+        shadowRadius: 3,
+      },
+      android: { elevation: 1 },
+    }),
   },
-  loadingSpinner: { marginTop: spacing.sm },
   gatedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -269,19 +316,10 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: spacing.sm,
   },
-  avatarRing: {
+  avatarSkeleton: {
+    width: 44,
+    height: 44,
     borderRadius: 22,
-    borderWidth: 2,
-    borderColor: colors.surface,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#5E52FF',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.12,
-        shadowRadius: 3,
-      },
-      android: { elevation: 1 },
-    }),
   },
   morePill: {
     paddingHorizontal: 10,

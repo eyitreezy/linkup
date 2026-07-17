@@ -2,6 +2,7 @@
  * Media viewer — resolves Storage path from `media` row (signed URL for private buckets).
  */
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors } from '@/constants/theme';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useLocalSearchParams } from 'expo-router';
@@ -26,19 +27,22 @@ export default function MediaViewerScreen() {
 
   if (!url) {
     return (
-      <Screen safeAreaEdges={['top', 'left', 'right']}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <AppShellBackground />
         <Text style={{ color: colors.textMuted }}>Loading media…</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']}>
+    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+      <AppShellBackground />
       <Image source={{ uri: url }} style={styles.img} resizeMode="contain" />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
   img: { width: '100%', height: '80%' },
 });

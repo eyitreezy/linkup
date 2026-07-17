@@ -1,7 +1,15 @@
+import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
+import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import type { NotificationPayload } from '@/types/database';
 import type { Href } from 'expo-router';
 
 type Nav = { push: (href: Href) => void };
+
+function warmPlanFromPayload(data: NotificationPayload | null | undefined) {
+  if (data && typeof data === 'object' && typeof data.planId === 'string' && data.planId) {
+    warmPlanDetailNavigation(data.planId);
+  }
+}
 
 /**
  * Deep link from notification `data` (in-app + push tap). Paths are expo-router file routes.
@@ -13,6 +21,15 @@ export function hrefFromNotificationPayload(data: NotificationPayload | null | u
     if (data.href === '/admin' && adminTab) {
       return `/admin?tab=${adminTab}` as Href;
     }
+    if (
+      data.href.includes('/negotiate') &&
+      typeof data.offerId === 'string' &&
+      data.offerId.trim() &&
+      !data.href.includes('offerId=')
+    ) {
+      const sep = data.href.includes('?') ? '&' : '?';
+      return `${data.href}${sep}offerId=${encodeURIComponent(data.offerId)}` as Href;
+    }
     return data.href as Href;
   }
   if (typeof data.ticketId === 'string' && data.ticketId.length > 0) {
@@ -20,7 +37,12 @@ export function hrefFromNotificationPayload(data: NotificationPayload | null | u
   }
   if (data.chatId) return `/chat/${data.chatId}` as Href;
   if (data.escrowId) return `/escrow/${data.escrowId}` as Href;
-  if (data.planId) return `/plan/${data.planId}` as Href;
+  if (data.planId) {
+    if (typeof data.offerId === 'string' && data.offerId.trim()) {
+      return planNegotiateHref(data.planId, { offerId: data.offerId });
+    }
+    return `/plan/${data.planId}` as Href;
+  }
   if (data.disputeId) return '/disputes' as Href;
   return null;
 }
@@ -34,10 +56,82 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
 
   const href = hrefFromNotificationPayload(data);
   if (href) {
+    warmPlanFromPayload(data);
     router.push(href);
     return;
   }
   const t = data && typeof data === 'object' && 'type' in data ? String((data as { type?: string }).type) : '';
+  if (t === 'offer_received' || t === 'offer_countered') {
+    if (data?.planId) {
+      warmPlanFromPayload(data);
+      router.push(
+        planNegotiateHref(data.planId, {
+          offerId: typeof data.offerId === 'string' ? data.offerId : undefined,
+          action: t === 'offer_countered' ? 'counter' : undefined,
+        })
+      );
+      return;
+    }
+  }
+  if (t === 'offer_accepted' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/agreement` as Href);
+    return;
+  }
+  if (t === 'offer_declined' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}` as Href);
+    return;
+  }
+  if (t === 'slot_accepted_fund_now' && data?.planId) {
+    warmPlanFromPayload(data);
+    const offerQ =
+      typeof data.offerId === 'string' && data.offerId.trim()
+        ? (`?offerId=${encodeURIComponent(data.offerId)}` as const)
+        : '';
+    router.push(`/plan/${data.planId}/agreement${offerQ}` as Href);
+    return;
+  }
+  if (t === 'group_closed' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/agreement` as Href);
+    return;
+  }
+  if (t === 'join_request_received' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/requests` as Href);
+    return;
+  }
+  if (t === 'join_request_approved') {
+    if (data?.escrowId) {
+      router.push(`/escrow/${data.escrowId}` as Href);
+      return;
+    }
+    if (data?.planId) {
+      warmPlanFromPayload(data);
+      router.push(`/plan/${data.planId}/agreement` as Href);
+      return;
+    }
+  }
+  if (t === 'join_request_declined') {
+    router.push('/(tabs)' as Href);
+    return;
+  }
+  if (t === 'plan_invitation_received' && data?.planId && data?.invitationId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/invitation/${data.invitationId}` as Href);
+    return;
+  }
+  if (
+    (t === 'plan_invitation_accepted' ||
+      t === 'plan_invitation_declined' ||
+      t === 'plan_invitation_expired') &&
+    data?.planId
+  ) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/requests` as Href);
+    return;
+  }
   if (t === 'verification_submitted' || t === 'verification_updated') {
     router.push('/settings/verification' as Href);
     return;

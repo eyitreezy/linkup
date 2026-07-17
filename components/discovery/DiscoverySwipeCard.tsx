@@ -2,6 +2,7 @@
  * Full-bleed discovery card — profile-first, fast scanning.
  */
 import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
+import { HostMediaCarousel } from '@/components/plans/HostMediaCarousel';
 import { TierBadge } from '@/components/TierBadge';
 import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
@@ -13,12 +14,12 @@ import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { formatPlanDistanceLabel, planHasMeetupCoords } from '@/lib/plans/planDistanceLabel';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
-import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+import { buildHostMediaSequence } from '@/lib/profile/media/buildHostMediaSequence';
 import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useMemo } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { memo, useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { type AnimatedStyle } from 'react-native-reanimated';
 
 function ageFromBirthDate(iso: string | null | undefined): number | null {
   if (!iso) return null;
@@ -45,25 +46,39 @@ function escrowPatternBadge(pattern: PlanFeedRow['escrow_pattern']): string | nu
   return 'Escrow · guest pays';
 }
 
-function heroUri(row: PlanFeedRow): string | null {
-  return resolveProfileHeroPhoto(row.creatorProfile ?? null);
-}
-
 type Props = {
   row: PlanFeedRow;
   distanceKm: number | null;
   viewerHasLocation?: boolean;
   presence?: PresenceUi | null;
   onPress: () => void;
+  /** False for the stacked card behind the active swipe card. */
+  interactive?: boolean;
+  /** Subtle image parallax while the deck card is dragged. */
+  mediaParallaxStyle?: StyleProp<AnimatedStyle<StyleProp<ViewStyle>>>;
 };
 
-function DiscoverySwipeCardInner({ row, distanceKm, viewerHasLocation = true, presence, onPress }: Props) {
+function DiscoverySwipeCardInner({
+  row,
+  distanceKm,
+  viewerHasLocation = true,
+  presence,
+  onPress,
+  interactive = true,
+  mediaParallaxStyle,
+}: Props) {
+  const [layout, setLayout] = useState({ width: 0, height: 0 });
   const name = row.creatorProfile?.display_name?.trim() || 'Member';
   const age = ageFromBirthDate(row.creatorProfile?.birth_date ?? null);
-  const hero = heroUri(row);
   const when = formatPlanWhen(row);
   const caption = row.description?.trim() || row.title;
   const showTiming = !row.is_mood_plan;
+
+  const mediaItems = useMemo(
+    () => buildHostMediaSequence(row.creatorProfile, row.creatorIntroVideo),
+    [row.creatorProfile, row.creatorIntroVideo]
+  );
+  const hasMultipleMedia = mediaItems.length > 1;
 
   const tierBadge = row.is_paid ? budgetTierLabel(row.budget_tier) : null;
   const escrowBadge = row.is_paid ? escrowPatternBadge(row.escrow_pattern) : null;
@@ -84,33 +99,43 @@ function DiscoverySwipeCardInner({ row, distanceKm, viewerHasLocation = true, pr
     return showTiming && when ? `${dist} · ${when}` : dist;
   }, [distanceKm, viewerHasLocation, row, showTiming, when]);
 
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width !== layout.width || height !== layout.height) {
+      setLayout({ width, height });
+    }
+  };
+
   return (
-    <Pressable
-      onPress={onPress}
+    <View
       style={styles.card}
+      onLayout={onLayout}
       accessibilityRole="button"
       accessibilityLabel={`${name}, ${row.title}`}
     >
-      {hero ? (
-        <Image
-          source={{ uri: hero }}
-          style={styles.hero}
-          contentFit="cover"
-          transition={200}
-          cachePolicy="memory-disk"
-          priority="high"
+      <Animated.View style={[styles.mediaShell, mediaParallaxStyle]}>
+        <HostMediaCarousel
+          key={row.id}
+          items={mediaItems}
+          width={layout.width}
+          height={layout.height}
+          onCenterPress={interactive ? onPress : undefined}
+          showCounter={false}
+          previewOnly={!interactive}
+          interactive={interactive}
+          slideHaptics={interactive}
         />
-      ) : (
-        <View style={styles.heroPh}>
-          <Ionicons name="person-outline" size={48} color={colors.textMuted} />
-        </View>
-      )}
+      </Animated.View>
       <LinearGradient
         colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.42)', 'rgba(0,0,0,0.84)']}
         locations={[0, 0.48, 1]}
         style={styles.gradient}
+        pointerEvents="none"
       />
-      <View style={styles.topRow}>
+      <View
+        style={[styles.topRow, hasMultipleMedia && interactive && styles.topRowBelowSegments]}
+        pointerEvents="none"
+      >
         <View style={styles.badgeStack}>
           {boosted ? (
             <LinearGradient
@@ -153,7 +178,7 @@ function DiscoverySwipeCardInner({ row, distanceKm, viewerHasLocation = true, pr
           ) : null}
         </View>
       </View>
-      <View style={styles.bottom}>
+      <View style={styles.bottom} pointerEvents="none">
         <Text style={styles.planTitle} numberOfLines={2}>
           {row.title}
         </Text>
@@ -179,7 +204,7 @@ function DiscoverySwipeCardInner({ row, distanceKm, viewerHasLocation = true, pr
           </Text>
         ) : null}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -204,12 +229,9 @@ const styles = StyleSheet.create({
       android: { elevation: 14 },
     }),
   },
-  hero: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  heroPh: {
+  mediaShell: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#2d2d3a',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
   gradient: {
     position: 'absolute',
@@ -225,6 +247,9 @@ const styles = StyleSheet.create({
     right: spacing.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  topRowBelowSegments: {
+    top: spacing.md + 14,
   },
   badgeStack: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, maxWidth: '100%' },
   boostBadge: {
@@ -250,12 +275,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.button,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  metaBadgeTxt: { fontSize: 11, fontWeight: '800',
-    fontFamily: fonts.bold, color: '#fff' },
+  metaBadgeTxt: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
   urgencyBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -265,8 +294,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,245,200,0.85)',
   },
-  urgencyTxt: { fontSize: 11, fontWeight: '900',
-    fontFamily: fonts.bold, color: '#fff' },
+  urgencyTxt: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
   moodBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -288,8 +321,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(200,210,255,0.55)',
   },
-  trustBadgeTxt: { fontSize: 11, fontWeight: '800',
-    fontFamily: fonts.bold, color: '#fff' },
+  trustBadgeTxt: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
   bottom: {
     position: 'absolute',
     left: 0,
@@ -316,10 +353,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  name: { flex: 1, fontSize: 24, fontWeight: '800',
-    fontFamily: fonts.bold, color: '#fff', letterSpacing: -0.5 },
-  age: { fontSize: 20, fontWeight: '700', color: 'rgba(255,255,255,0.88)', fontFamily: fonts.medium, },
-  dist: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)', marginTop: 6, fontFamily: fonts.medium, },
+  name: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  age: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.88)',
+    fontFamily: fonts.medium,
+  },
+  dist: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 6,
+    fontFamily: fonts.medium,
+  },
   caption: {
     fontSize: 14,
     fontWeight: '600',

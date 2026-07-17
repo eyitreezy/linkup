@@ -1,42 +1,41 @@
 /**
  * Bottom sheet shell for “Drop your idea” — pan on header, scrollable body, keyboard-safe.
  */
-import { KeyboardAwareContainer } from '@/components/KeyboardAwareContainer';
-import { colors, radius, spacing, fonts } from '@/constants/theme';
+import { colors, spacing, fonts } from '@/constants/theme';
 import type { DraggableSheetController } from '@/hooks/useDraggableSheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type DropIdeaSheetProps = {
   controller: DraggableSheetController;
-  expandedHeight: number;
   children: React.ReactNode;
   keyboardVerticalOffset?: number;
   typingBackdropStyle?: Record<string, unknown>;
+  /** Lifts the whole sheet above the IME (iOS + Android). */
+  composerLiftStyle?: StyleProp<ViewStyle>;
 };
 
 export function DropIdeaSheet({
   controller,
-  expandedHeight,
   children,
   keyboardVerticalOffset = 0,
   typingBackdropStyle,
+  composerLiftStyle,
 }: DropIdeaSheetProps) {
   const insets = useSafeAreaInsets();
-  const {
-    panGesture,
-    sheetAnimatedStyle,
-    sheetShadowStyle,
-    translateY,
-    maxTranslate,
-    expand,
-    collapse,
-    snapToMid,
-  } = controller;
+  const { panGesture, sheetAnimatedStyle, sheetShadowStyle, translateY, maxTranslate } = controller;
 
   const expandedWash = useAnimatedStyle(() => {
     const maxT = maxTranslate > 0.5 ? maxTranslate : 1;
@@ -51,17 +50,18 @@ export function DropIdeaSheet({
       style={
         [
           styles.sheet,
-          { height: expandedHeight, paddingBottom: insets.bottom },
+          { paddingBottom: insets.bottom },
           sheetAnimatedStyle,
           sheetShadowStyle,
+          composerLiftStyle,
         ] as unknown as StyleProp<ViewStyle>
       }
       pointerEvents="box-none"
     >
-      <KeyboardAwareContainer
+      <KeyboardAvoidingView
         style={styles.flex}
+        behavior="padding"
         keyboardVerticalOffset={keyboardVerticalOffset}
-        backdropStyle={typingBackdropStyle}
       >
         <LinearGradient
           colors={['#FFFFFF', '#FFF9FB', '#F8F6FF']}
@@ -70,65 +70,25 @@ export function DropIdeaSheet({
           end={{ x: 0.5, y: 1 }}
           style={styles.gradient}
         >
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.expandedWash, expandedWash]}
-          />
+          <Animated.View pointerEvents="none" style={[styles.expandedWash, expandedWash]} />
+          {typingBackdropStyle ? (
+            <Animated.View pointerEvents="none" style={[styles.dimOverlay, typingBackdropStyle]} />
+          ) : null}
           <GestureDetector gesture={panGesture}>
             <View
               style={styles.dragHeader}
-              accessibilityRole="adjustable"
+              accessibilityRole="header"
               accessibilityLabel="Drop your idea sheet"
-              accessibilityHint="Drag up or down to resize. Or use expand and collapse."
-              onAccessibilityAction={(e) => {
-                if (e.nativeEvent.actionName === 'increment') expand();
-                if (e.nativeEvent.actionName === 'decrement') collapse();
-              }}
-              accessibilityActions={[
-                { name: 'increment', label: 'Expand sheet' },
-                { name: 'decrement', label: 'Collapse sheet' },
-              ]}
             >
-              <View style={styles.sheetHandle} accessibilityLabel="Sheet handle" />
-              <View style={styles.titleRow}>
-                <Text style={styles.composerTitle} accessibilityRole="header">
-                  Drop your idea
-                </Text>
-                <View style={styles.a11yRow}>
-                  <Pressable
-                    onPress={expand}
-                    accessibilityRole="button"
-                    accessibilityLabel="Expand sheet"
-                    style={({ pressed }) => [styles.a11yBtn, pressed && styles.a11yBtnPressed]}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.a11yBtnTxt}>Expand</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={snapToMid}
-                    accessibilityRole="button"
-                    accessibilityLabel="Mid height sheet"
-                    style={({ pressed }) => [styles.a11yBtn, pressed && styles.a11yBtnPressed]}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.a11yBtnTxt}>Mid</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={collapse}
-                    accessibilityRole="button"
-                    accessibilityLabel="Collapse sheet"
-                    style={({ pressed }) => [styles.a11yBtn, pressed && styles.a11yBtnPressed]}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.a11yBtnTxt}>Collapse</Text>
-                  </Pressable>
-                </View>
-              </View>
+              <Text style={styles.sheetKicker}>Your suggestion</Text>
+              <Text style={styles.composerTitle} accessibilityRole="header">
+                Drop your idea
+              </Text>
             </View>
           </GestureDetector>
           <View style={styles.body}>{children}</View>
         </LinearGradient>
-      </KeyboardAwareContainer>
+      </KeyboardAvoidingView>
     </Animated.View>
   );
 }
@@ -145,60 +105,43 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
-  flex: { flex: 1 },
-  gradient: { flex: 1 },
+  flex: { flex: 1, minHeight: 0 },
+  gradient: { flex: 1, minHeight: 0 },
   expandedWash: {
     ...StyleSheet.absoluteFillObject,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     backgroundColor: 'rgba(94, 82, 255, 0.06)',
   },
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.text,
+    zIndex: 4,
+  },
   dragHeader: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
     ...Platform.select({
       android: { elevation: 0 },
     }),
   },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(26, 29, 38, 0.16)',
-    marginBottom: spacing.sm,
+  sheetKicker: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.secondary,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  titleRow: { gap: spacing.xs },
   composerTitle: {
     fontSize: 24,
     fontWeight: '800',
     fontFamily: fonts.bold,
     color: colors.text,
     letterSpacing: -0.6,
+    marginBottom: spacing.sm,
   },
-  a11yRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: 2,
-    marginBottom: spacing.xs,
-  },
-  a11yBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: radius.md,
-    backgroundColor: 'rgba(94, 82, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(94, 82, 255, 0.2)',
-  },
-  a11yBtnPressed: { opacity: 0.88 },
-  a11yBtnTxt: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: fonts.medium,
-    color: colors.primary,
-    letterSpacing: -0.1,
-  },
-  body: { flex: 1, minHeight: 120 },
+  body: { flex: 1, minHeight: 0, overflow: 'hidden' },
 });

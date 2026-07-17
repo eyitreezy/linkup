@@ -11,6 +11,7 @@ import { FlutterwaveCheckoutModal } from '@/components/checkout/FlutterwaveCheck
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFlutterwaveCheckout } from '@/hooks/useFlutterwaveCheckout';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { getSubscriptionCallbackUrl } from '@/lib/flutterwave/callbackUrl';
 import {
   getInvokeErrorMessage,
@@ -34,7 +35,6 @@ import { tierRank } from '@/lib/subscription/tierRank';
 import { invalidatePermissionCache } from '@/lib/subscription/checkPermission';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -279,10 +279,7 @@ export default function SubscriptionScreen() {
 
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.root}>
-      <LinearGradient
-        colors={[colors.discoveryGradientMid, colors.discoveryGradientBottom, colors.background]}
-        style={StyleSheet.absoluteFill}
-      />
+      <AppShellBackground />
 
       <View style={styles.nav}>
         <Pressable
@@ -433,7 +430,7 @@ export default function SubscriptionScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: 'transparent' },
   nav: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,8 +8,12 @@ export const DISCOVERY_FEED_HREF = '/(tabs)' as Href;
 
 /**
  * Pop nested routes until the tab shell is active, then show the feed.
- * `dismissTo` falls back to `replace` when the tab route is not in history.
+ * Uses replace when there is nothing to dismiss (avoids unhandled GO_BACK).
  */
 export function goToDiscoveryFeed(): void {
-  router.dismissTo(DISCOVERY_FEED_HREF);
+  if (router.canDismiss()) {
+    router.dismissTo(DISCOVERY_FEED_HREF);
+    return;
+  }
+  router.replace(DISCOVERY_FEED_HREF);
 }

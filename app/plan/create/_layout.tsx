@@ -11,10 +11,10 @@ export default function CreatePlanStack() {
     <PlanDraftProvider>
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.background },
+          headerStyle: { backgroundColor: colors.splashBackground },
           headerTintColor: colors.text,
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: colors.splashBackground },
           ...(Platform.OS === 'android'
             ? { statusBarTranslucent: false, headerTopInsetEnabled: false }
             : null),

@@ -3,6 +3,7 @@
  */
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -131,7 +132,8 @@ export default function PlanDisputeDetailScreen() {
 
   if (loading) {
     return (
-      <Screen safeAreaEdges={['top', 'left', 'right']}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <AppShellBackground />
         <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
@@ -139,7 +141,8 @@ export default function PlanDisputeDetailScreen() {
 
   if (!dispute) {
     return (
-      <Screen safeAreaEdges={['top', 'left', 'right']}>
+      <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+        <AppShellBackground />
         <Text style={styles.title}>No dispute on file</Text>
         <Button title="File a dispute" onPress={() => router.push(`/dispute/${planId}` as Href)} />
       </Screen>
@@ -151,7 +154,8 @@ export default function PlanDisputeDetailScreen() {
   const images = evidence.filter((e) => e.type === 'image');
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']}>
+    <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
+      <AppShellBackground />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.top}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
@@ -202,6 +206,7 @@ export default function PlanDisputeDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenRoot: { flex: 1, backgroundColor: 'transparent' },
   scroll: { padding: spacing.md, paddingBottom: spacing.xl },
   top: {
     flexDirection: 'row',

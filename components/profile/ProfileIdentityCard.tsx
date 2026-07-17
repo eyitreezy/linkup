@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     }),
   },
   inner: {
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: colors.surface,
     borderRadius: radius.xl - 1,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,

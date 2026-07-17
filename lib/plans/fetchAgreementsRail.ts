@@ -1,15 +1,19 @@
 /**
  * Active agreements for the Plans home “connections” rail (host + accepted guest).
+ * Includes 1:1 plans in agreed/awaiting_payment/active and group plan accepted slots.
  */
 import { supabase } from '@/lib/supabase';
 import type { PlanStatus } from '@/types/database';
 
 const AGREEMENT_STATUSES: PlanStatus[] = ['agreed', 'awaiting_payment', 'active'];
 
+const GROUP_SLOT_PLAN_STATUSES: PlanStatus[] = ['negotiating', 'agreed', 'awaiting_payment', 'active'];
+
 type PlanSlice = {
   id: string;
   title: string;
   status: PlanStatus;
+  is_group_plan?: boolean;
   accepted_offer_id: string | null;
   agreed_scheduled_at: string | null;
   location_label: string | null;
@@ -20,6 +24,7 @@ type PlanSlice = {
 
 export type AgreementRailItem = {
   planId: string;
+  offerId?: string;
   planTitle: string;
   planStatus: PlanStatus;
   counterpartUserId: string;
@@ -31,7 +36,7 @@ export type AgreementRailItem = {
   whenHint: string | null;
 };
 
-function statusLabel(status: PlanStatus): string {
+function statusLabelForPlan(status: PlanStatus): string {
   switch (status) {
     case 'agreed':
       return 'Confirm';
@@ -44,8 +49,12 @@ function statusLabel(status: PlanStatus): string {
   }
 }
 
-function whenHint(plan: PlanSlice): string | null {
-  const iso = plan.agreed_scheduled_at ?? plan.scheduled_at ?? null;
+function groupSlotStatusLabel(hasEscrow: boolean): string {
+  return hasEscrow ? 'Payment' : 'Confirm';
+}
+
+function whenHint(plan: PlanSlice, offerSchedule?: string | null): string | null {
+  const iso = plan.agreed_scheduled_at ?? offerSchedule ?? plan.scheduled_at ?? null;
   if (iso) {
     const d = new Date(iso);
     if (!Number.isNaN(d.getTime())) {
@@ -61,7 +70,7 @@ export async function fetchAgreementsRail(userId: string): Promise<AgreementRail
   const { data: hostPlans, error: hostErr } = await supabase
     .from('plans')
     .select(
-      'id, title, status, accepted_offer_id, agreed_scheduled_at, location_label, scheduled_at, updated_at'
+      'id, title, status, is_group_plan, accepted_offer_id, agreed_scheduled_at, location_label, scheduled_at, updated_at'
     )
     .eq('creator_id', userId)
     .in('status', AGREEMENT_STATUSES)
@@ -83,7 +92,7 @@ export async function fetchAgreementsRail(userId: string): Promise<AgreementRail
 
   const { data: guestOffers, error: goErr } = await supabase
     .from('plan_offers')
-    .select('id, plan_id')
+    .select('id, plan_id, proposed_scheduled_at, updated_at')
     .eq('bidder_id', userId)
     .eq('status', 'accepted');
 
@@ -95,36 +104,149 @@ export async function fetchAgreementsRail(userId: string): Promise<AgreementRail
     const { data: gPlans, error: gpErr } = await supabase
       .from('plans')
       .select(
-        'id, title, status, accepted_offer_id, agreed_scheduled_at, location_label, scheduled_at, updated_at, creator_id'
+        'id, title, status, is_group_plan, accepted_offer_id, agreed_scheduled_at, location_label, scheduled_at, updated_at, creator_id'
       )
-      .in('id', planIds)
-      .in('status', AGREEMENT_STATUSES);
+      .in('id', planIds);
     if (gpErr) throw gpErr;
     guestPlanById = new Map((gPlans ?? []).map((p) => [p.id as string, p as PlanSlice]));
   }
 
-  type Merged = { plan: PlanSlice; counterpartId: string; role: 'host' | 'guest' };
+  const { data: groupHostPlans, error: ghErr } = await supabase
+    .from('plans')
+    .select(
+      'id, title, status, is_group_plan, accepted_offer_id, agreed_scheduled_at, location_label, scheduled_at, updated_at, creator_id'
+    )
+    .eq('creator_id', userId)
+    .eq('is_group_plan', true)
+    .in('status', GROUP_SLOT_PLAN_STATUSES);
+
+  if (ghErr) throw ghErr;
+
+  const groupPlanIds = [
+    ...new Set([
+      ...(groupHostPlans ?? []).map((p) => p.id as string),
+      ...(guestOffers ?? [])
+        .map((o) => guestPlanById.get(o.plan_id as string))
+        .filter((p): p is PlanSlice => !!p?.is_group_plan)
+        .map((p) => p.id),
+    ]),
+  ];
+
+  type AcceptedOfferRow = {
+    id: string;
+    plan_id: string;
+    bidder_id: string;
+    proposed_scheduled_at: string | null;
+    updated_at: string;
+  };
+
+  let groupAcceptedOffers: AcceptedOfferRow[] = [];
+  if (groupPlanIds.length > 0) {
+    const { data: gaOffers, error: gaErr } = await supabase
+      .from('plan_offers')
+      .select('id, plan_id, bidder_id, proposed_scheduled_at, updated_at')
+      .in('plan_id', groupPlanIds)
+      .eq('status', 'accepted');
+    if (gaErr) throw gaErr;
+    groupAcceptedOffers = (gaOffers ?? []) as AcceptedOfferRow[];
+  }
+
+  const escrowGuestKeys = new Set<string>();
+  if (groupPlanIds.length > 0) {
+    const { data: escrows } = await supabase
+      .from('escrow_transactions')
+      .select('plan_id, guest_id')
+      .in('plan_id', groupPlanIds);
+    for (const e of escrows ?? []) {
+      escrowGuestKeys.add(`${e.plan_id as string}:${e.guest_id as string}`);
+    }
+  }
+
+  const groupPlanById = new Map<string, PlanSlice>();
+  for (const p of groupHostPlans ?? []) {
+    groupPlanById.set(p.id as string, p as PlanSlice);
+  }
+  for (const p of guestPlanById.values()) {
+    if (p.is_group_plan) groupPlanById.set(p.id, p);
+  }
+
+  type Merged = {
+    plan: PlanSlice;
+    counterpartId: string;
+    role: 'host' | 'guest';
+    offerId: string;
+    sortAt: number;
+    statusLabel: string;
+    whenHint: string | null;
+  };
   const merged: Merged[] = [];
 
   for (const p of hostPlans ?? []) {
     const pl = p as PlanSlice;
-    if (!pl.accepted_offer_id) continue;
+    if (!pl.accepted_offer_id || pl.is_group_plan) continue;
     const bid = bidderByOffer.get(pl.accepted_offer_id);
     if (!bid) continue;
-    merged.push({ plan: pl, counterpartId: bid, role: 'host' });
+    merged.push({
+      plan: pl,
+      counterpartId: bid,
+      role: 'host',
+      offerId: pl.accepted_offer_id,
+      sortAt: new Date(pl.updated_at).getTime(),
+      statusLabel: statusLabelForPlan(pl.status),
+      whenHint: whenHint(pl),
+    });
   }
 
   for (const o of guestOffers ?? []) {
     const p = guestPlanById.get(o.plan_id as string);
-    if (!p || p.accepted_offer_id !== o.id) continue;
-    merged.push({ plan: p, counterpartId: p.creator_id!, role: 'guest' });
+    if (!p) continue;
+    if (p.is_group_plan) {
+      if (!GROUP_SLOT_PLAN_STATUSES.includes(p.status)) continue;
+      merged.push({
+        plan: p,
+        counterpartId: p.creator_id!,
+        role: 'guest',
+        offerId: o.id as string,
+        sortAt: new Date((o.updated_at as string) ?? p.updated_at).getTime(),
+        statusLabel: groupSlotStatusLabel(escrowGuestKeys.has(`${p.id}:${userId}`)),
+        whenHint: whenHint(p, o.proposed_scheduled_at as string | null),
+      });
+      continue;
+    }
+    if (!AGREEMENT_STATUSES.includes(p.status) || p.accepted_offer_id !== o.id) continue;
+    merged.push({
+      plan: p,
+      counterpartId: p.creator_id!,
+      role: 'guest',
+      offerId: o.id as string,
+      sortAt: new Date(p.updated_at).getTime(),
+      statusLabel: statusLabelForPlan(p.status),
+      whenHint: whenHint(p, o.proposed_scheduled_at as string | null),
+    });
   }
 
-  const byPlan = new Map<string, Merged>();
-  for (const m of merged) {
-    byPlan.set(m.plan.id, m);
+  for (const o of groupAcceptedOffers) {
+    const p = groupPlanById.get(o.plan_id);
+    if (!p) continue;
+    const isHostSlot = p.creator_id === userId;
+    const counterpartId = isHostSlot ? o.bidder_id : p.creator_id!;
+    if (!isHostSlot && o.bidder_id !== userId) continue;
+    merged.push({
+      plan: p,
+      counterpartId,
+      role: isHostSlot ? 'host' : 'guest',
+      offerId: o.id,
+      sortAt: new Date(o.updated_at ?? p.updated_at).getTime(),
+      statusLabel: groupSlotStatusLabel(escrowGuestKeys.has(`${p.id}:${o.bidder_id}`)),
+      whenHint: whenHint(p, o.proposed_scheduled_at),
+    });
   }
-  const unique = Array.from(byPlan.values());
+
+  const bySlot = new Map<string, Merged>();
+  for (const m of merged) {
+    bySlot.set(`${m.plan.id}:${m.offerId}`, m);
+  }
+  const unique = Array.from(bySlot.values());
 
   const counterpartIds = [...new Set(unique.map((u) => u.counterpartId))];
   if (counterpartIds.length === 0) return [];
@@ -146,22 +268,22 @@ export async function fetchAgreementsRail(userId: string): Promise<AgreementRail
     ])
   );
 
-  const items = unique.map(({ plan, counterpartId, role }) => {
-    const pr = profByUser.get(counterpartId);
-    const sortAt = new Date(plan.updated_at).getTime();
+  const items = unique.map((m) => {
+    const pr = profByUser.get(m.counterpartId);
     const row: AgreementRailItem = {
-      planId: plan.id,
-      planTitle: plan.title,
-      planStatus: plan.status,
-      counterpartUserId: counterpartId,
+      planId: m.plan.id,
+      offerId: m.offerId,
+      planTitle: m.plan.title,
+      planStatus: m.plan.status,
+      counterpartUserId: m.counterpartId,
       counterpartName: pr?.name ?? 'Member',
       counterpartAvatarUrl: pr?.avatar ?? null,
       counterpartVerified: pr?.verified ?? false,
-      role,
-      statusLabel: statusLabel(plan.status),
-      whenHint: whenHint(plan),
+      role: m.role,
+      statusLabel: m.statusLabel,
+      whenHint: m.whenHint,
     };
-    return { row, sortAt };
+    return { row, sortAt: m.sortAt };
   });
 
   items.sort((a, b) => b.sortAt - a.sortAt);

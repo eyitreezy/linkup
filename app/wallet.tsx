@@ -2,6 +2,7 @@
  * Hybrid MVP wallet — ledger + goodwill; premium dating-app visuals (trust + monetization).
  */
 import { Screen } from '@/components/Screen';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { GoodwillCreditRow } from '@/components/wallet/GoodwillCreditRow';
 import { WalletSkeleton } from '@/components/wallet/WalletSkeleton';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
@@ -124,13 +125,7 @@ export default function WalletScreen() {
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenTransparent}>
       <View style={styles.root}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', '#F5F6FA']}
-          locations={[0, 0.35, 0.7, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
+        <AppShellBackground />
 
         <View style={styles.topNav}>
           <Pressable
@@ -534,6 +529,7 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: 'center',
     padding: spacing.xl,
+    marginBottom: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.75)',
     borderRadius: radius.xl,
     borderWidth: 1,

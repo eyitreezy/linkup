@@ -47,7 +47,7 @@ export default function SubscriptionCallbackScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, backgroundColor: colors.background },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, backgroundColor: colors.splashBackground },
   txt: { fontSize: 16, fontWeight: '700',
     fontFamily: fonts.medium, color: colors.textMuted },
 });

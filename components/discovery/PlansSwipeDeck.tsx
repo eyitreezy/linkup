@@ -110,6 +110,8 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
   );
 
   const pan = Gesture.Pan()
+    // Let quick taps reach photo prev/next zones; swipe activates after horizontal drag.
+    .activeOffsetX([-16, 16])
     .onUpdate((e) => {
       if (locked.value) return;
       translateX.value = e.translationX;
@@ -145,6 +147,10 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
     opacity: interpolate(translateX.value, [-SWIPE_THRESHOLD, 0], [1, 0], 'clamp'),
   }));
 
+  const mediaParallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -translateX.value * 0.14 }],
+  }));
+
   if (!top) {
     return (
       <View style={[styles.wrap, fillParent && styles.wrapFill, styles.doneWrap]}>
@@ -172,6 +178,7 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
               viewerHasLocation={viewerHasLocation}
               presence={presenceForRow(next)}
               onPress={() => {}}
+              interactive={false}
             />
           </View>
         ) : null}
@@ -183,6 +190,7 @@ const PlansSwipeDeckInner = forwardRef<PlansSwipeDeckRef, Props>(function PlansS
               viewerHasLocation={viewerHasLocation}
               presence={presenceForRow(top)}
               onPress={() => onPressCard(top)}
+              mediaParallaxStyle={mediaParallaxStyle}
             />
             <Animated.View style={[styles.stamp, styles.stampLike, likeOpacity]} pointerEvents="none">
               <Ionicons name="heart" size={42} color={colors.secondary} />

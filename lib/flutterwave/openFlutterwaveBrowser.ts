@@ -4,6 +4,7 @@
  */
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import {
   isTrustedHostedCheckoutUrl,
   normalizeFlutterwaveCheckoutUrl,
@@ -27,12 +28,20 @@ export async function openFlutterwaveCheckoutInBrowser(
     const result = await WebBrowser.openAuthSessionAsync(normalized, returnUrl, {
       showInRecents: true,
       preferEphemeralSession: false,
+      ...(Platform.OS === 'android' ? { createTask: false } : {}),
       ...(WebBrowser.WebBrowserPresentationStyle && {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
       }),
     });
     if (result.type === 'cancel' || result.type === 'dismiss') {
       return { ok: false, error: 'Checkout closed before payment completed.' };
+    }
+    if (result.type === 'success' && 'url' in result && result.url) {
+      const returned = result.url.trim().toLowerCase();
+      const expected = returnUrl.trim().toLowerCase();
+      if (!returned.startsWith(expected.split('?')[0])) {
+        return { ok: false, error: 'Payment was not completed.' };
+      }
     }
     return { ok: true };
   } catch {

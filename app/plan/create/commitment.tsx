@@ -12,11 +12,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import { requiresVerificationGate } from '@/lib/verification/access';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
-import { PLAN_WIZARD_GRADIENT } from '@/constants/gradients';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 export default function CreatePlanCommitmentScreen() {
@@ -64,13 +64,7 @@ export default function CreatePlanCommitmentScreen() {
   return (
     <Screen scroll={false} safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenBg}>
         <View style={{ flex: 1 }}>
-          <LinearGradient
-            colors={[...PLAN_WIZARD_GRADIENT]}
-            locations={[0, 0.3, 0.65, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
+          <AppShellBackground />
           <VerificationHardGateModal
             visible={gateOpen}
             onClose={() => setGateOpen(false)}

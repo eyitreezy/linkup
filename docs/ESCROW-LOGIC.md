@@ -2,7 +2,7 @@
 
 This document describes **all escrow-related behaviour implemented in the LinkUp codebase** as of the current repository state. It is intended for engineers, product, and support — not as legal copy for end users.
 
-**Related docs:** `PLAN-TYPES-USERFLOW.md`, `PAYMENT_REMINDER_AUTOMATION.md`, `NOTIFICATIONS-AND-WEBHOOKS.md`
+**Related docs:** [ESCROW-PAYMENT-USERFLOW.md](./ESCROW-PAYMENT-USERFLOW.md) (product user journeys), [PLAN-TYPES-USERFLOW.md](./PLAN-TYPES-USERFLOW.md), [PAYMENT_REMINDER_AUTOMATION.md](./PAYMENT_REMINDER_AUTOMATION.md), [NOTIFICATIONS-AND-WEBHOOKS.md](./NOTIFICATIONS-AND-WEBHOOKS.md)
 
 ---
 

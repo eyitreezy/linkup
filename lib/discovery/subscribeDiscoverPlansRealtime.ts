@@ -5,6 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 export type DiscoverPlanUpdateRow = {
   id?: string;
   status?: string;
+  is_group_plan?: boolean;
   is_suppressed?: boolean;
   archived_at?: string | null;
 };

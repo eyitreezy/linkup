@@ -416,7 +416,7 @@ Verification rules are always in **§4**; access matrix in **§6**.
 
 **Flow label:** `Escrow — Paystack hold, funded, release, dispute`  
 
-**Purpose:** Hold funds so meetups tied to **paid** plans have a **trust path**. This is distinct from **§5.8** (human “yes” on terms) and from **§5.10** (help tickets).
+**Purpose:** Hold funds so meetups tied to **paid** plans have a **trust path**. This is distinct from **§5.8** (human “yes” on terms) and from **§5.10** (help tickets). For full escrow payment journeys by plan type (1:1, group, mood), see [ESCROW-PAYMENT-USERFLOW.md](./ESCROW-PAYMENT-USERFLOW.md).
 
 **Verification:** **§6.1** — unverified users **cannot** complete escrow / payment hold; **§4.3** hard gate at pay action.
 

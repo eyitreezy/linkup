@@ -20,7 +20,7 @@ export default function NotFound() {
 }
 
 const styles = StyleSheet.create({
-  box: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  box: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.splashBackground },
   t: { fontSize: 16, color: colors.text, marginBottom: 16, fontFamily: fonts.regular, },
   link: { color: colors.primary, fontWeight: '600',
     fontFamily: fonts.medium,},

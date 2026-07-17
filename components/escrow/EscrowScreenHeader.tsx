@@ -1,3 +1,4 @@
+import { goBackOrFallback } from '@/lib/navigation/goBackOrFallback';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
@@ -6,13 +7,19 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 type Props = {
   title?: string;
   helpHref?: Href;
+  /** When true, parent supplies horizontal padding — header row aligns with page content. */
+  contained?: boolean;
 };
 
-export function EscrowScreenHeader({ title = 'Secure payment', helpHref = '/support' }: Props) {
+export function EscrowScreenHeader({
+  title = 'Secure payment',
+  helpHref = '/support',
+  contained = false,
+}: Props) {
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, contained && styles.wrapContained]}>
       <Pressable
-        onPress={() => router.back()}
+        onPress={() => goBackOrFallback()}
         style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
         hitSlop={8}
         accessibilityRole="button"
@@ -45,6 +52,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     marginBottom: spacing.sm,
     gap: spacing.sm,
+  },
+  wrapContained: {
+    paddingHorizontal: 0,
   },
   title: {
     flex: 1,

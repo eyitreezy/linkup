@@ -1,4 +1,5 @@
 import { LocationSearchField } from '@/components/location/LocationSearchField';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import {
   TravelModeFeedbackModal,
   type TravelModeFeedback,
@@ -71,14 +72,7 @@ export default function TravelModeScreen() {
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <TravelModeFeedbackModal feedback={feedback} onClose={() => setFeedback(null)} />
       <View style={styles.flex}>
-        <LinearGradient
-          colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-          locations={[0, 0.32, 0.62, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
+        <AppShellBackground />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           <View style={styles.topNav}>

@@ -45,13 +45,14 @@ function RootNavigator() {
         screenOptions={{
           /** All top-level routes use in-screen or nested stack headers — a default native header adds a second top band (gap under status bar) on plan, chat, etc. */
           headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: colors.splashBackground },
         }}
       >
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="escrow" options={{ headerShown: false }} />
         <Stack.Screen name="wallet" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" />
       </Stack>

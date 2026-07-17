@@ -1,11 +1,7 @@
-import { Platform } from 'react-native';
-
 /**
- * Android release/preview APKs often render a blank Flutterwave page inside WebView
- * (GPU compositing + edge-to-edge). Emulators and iOS use the in-app modal.
+ * Flutterwave OTP/PIN is unreliable inside React Native WebView (resets on OTP step).
+ * Use system browser / Chrome Custom Tab on all mobile platforms.
  */
 export function shouldUseFlutterwaveInAppWebView(): boolean {
-  if (Platform.OS === 'ios') return true;
-  if (Platform.OS === 'android' && __DEV__) return true;
   return false;
 }

@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { OfferRequiredBeforeChatError, openDirectChat } from '@/lib/messaging/openDirectChat';
 import { HostMediaGallery } from '@/components/plans/HostMediaGallery';
+import { PublicUserProfileSkeleton } from '@/components/profile/PublicUserProfileSkeleton';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
 import {
   fetchViewerPrivacyPrefs,
@@ -17,8 +18,10 @@ import {
 import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
 import { buildHostMediaSequence } from '@/lib/profile/media/buildHostMediaSequence';
 import { fetchProfileVideo, type ProfileVideoRecord } from '@/lib/profile/media/profileVideo';
+import { peekPublicProfileSeed, seedPublicProfile } from '@/lib/profile/publicProfileSeed';
 import { fetchUserPresence, subscribeUserPresenceRealtime } from '@/lib/presence/subscribeUserPresenceRealtime';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import type { DbProfile, DbUserPresence } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,18 +37,6 @@ import {
   Text,
   View,
 } from 'react-native';
-
-function InboxGradientBg() {
-  return (
-    <LinearGradient
-      colors={['#D2C9FF', '#FFD1E3', '#B8EDD9', colors.discoveryGradientBottom]}
-      locations={[0, 0.32, 0.62, 1]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={StyleSheet.absoluteFillObject}
-    />
-  );
-}
 
 function SectionHead({ title }: { title: string }) {
   return (
@@ -67,8 +58,10 @@ function SectionHead({ title }: { title: string }) {
 export default function PublicUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile: viewerProfile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<DbProfile | null>(null);
+  const [hydrating, setHydrating] = useState(() => !(id && peekPublicProfileSeed(id)));
+  const [profile, setProfile] = useState<DbProfile | null>(() =>
+    id ? peekPublicProfileSeed(id) : null
+  );
   const [theirPresence, setTheirPresence] = useState<DbUserPresence | null>(null);
   const [profileVideo, setProfileVideo] = useState<ProfileVideoRecord | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
@@ -78,25 +71,37 @@ export default function PublicUserScreen() {
   const load = useCallback(async () => {
     if (!id || !isSupabaseConfigured) {
       setProfile(null);
-      setLoading(false);
+      setHydrating(false);
       return;
     }
-    setLoading(true);
+    const hasSeed = !!peekPublicProfileSeed(id);
+    if (!hasSeed) setHydrating(true);
     const { data: p, error: pe } = await supabase.from('profiles').select('*').eq('user_id', id).maybeSingle();
     if (pe || !p) {
-      setProfile(null);
+      if (!hasSeed) setProfile(null);
     } else {
       const row = p as DbProfile;
       setProfile(row);
+      seedPublicProfile(id, row);
       const video = await fetchProfileVideo(row.user_id);
       setProfileVideo(video);
     }
-    setLoading(false);
+    setHydrating(false);
   }, [id]);
 
   useEffect(() => {
+    if (!id) {
+      setProfile(null);
+      setHydrating(false);
+      return;
+    }
+    const seeded = peekPublicProfileSeed(id);
+    if (seeded) {
+      setProfile(seeded);
+      setHydrating(false);
+    }
     void load();
-  }, [load]);
+  }, [id, load]);
 
   useEffect(() => {
     if (!id || !isSupabaseConfigured || !user?.id || user.id === id || !profile || profile.is_profile_public === false) return;
@@ -181,14 +186,11 @@ export default function PublicUserScreen() {
     ]);
   }
 
-  if (loading) {
+  if (hydrating && !profile) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-        <View style={styles.flex}>
-          <InboxGradientBg />
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} size="large" />
-          </View>
+        <View style={styles.shell}>
+          <PublicUserProfileSkeleton />
         </View>
       </Screen>
     );
@@ -197,9 +199,9 @@ export default function PublicUserScreen() {
   if (!profile || profile.is_profile_public === false) {
     return (
       <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-        <View style={styles.flex}>
-          <InboxGradientBg />
-          <View style={styles.topNav}>
+        <View style={styles.shell}>
+          <AppShellBackground />
+          <View style={styles.topNavOverlay}>
             <Pressable
               onPress={() => router.back()}
               style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
@@ -225,10 +227,10 @@ export default function PublicUserScreen() {
 
   return (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
-      <View style={styles.flex}>
-        <InboxGradientBg />
+      <View style={styles.shell}>
+        <AppShellBackground />
 
-        <View style={styles.topNav}>
+        <View style={styles.topNavOverlay}>
           <Pressable
             onPress={() => router.back()}
             style={({ pressed }) => [styles.iconPill, pressed && styles.pressed]}
@@ -240,13 +242,19 @@ export default function PublicUserScreen() {
           </Pressable>
         </View>
 
-        <HostMediaGallery items={mediaItems} loading={loading} edgeToEdge />
-
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          style={styles.scrollView}
         >
+          <HostMediaGallery
+            items={mediaItems}
+            loading={hydrating && mediaItems.length === 0}
+            edgeToEdge
+          />
+
+          <View style={styles.scrollBody}>
           <View style={styles.leadBlock}>
             <LinearGradient
               colors={[colors.primary, colors.secondary]}
@@ -382,6 +390,7 @@ export default function PublicUserScreen() {
               </Text>
             </>
           ) : null}
+          </View>
         </ScrollView>
       </View>
 
@@ -409,14 +418,19 @@ export default function PublicUserScreen() {
 
 const styles = StyleSheet.create({
   screenRoot: { flex: 1, backgroundColor: 'transparent' },
+  shell: { flex: 1, position: 'relative' },
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  topNav: {
+  topNavOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    marginBottom: spacing.sm,
   },
   iconPill: {
     width: 44,
@@ -438,10 +452,14 @@ const styles = StyleSheet.create({
     }),
   },
   pressed: { opacity: 0.92 },
+  scrollView: { flex: 1 },
   scroll: {
+    flexGrow: 1,
+    paddingBottom: spacing.xl * 2,
+  },
+  scrollBody: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xl * 2,
   },
   leadBlock: {
     flexDirection: 'row',
