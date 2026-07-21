@@ -5,6 +5,7 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
+import { PlanShareSection } from '@/components/plans/PlanShareSection';
 import { PlanReportFlagButton, PlanStackScreenHeader } from '@/components/navigation/PlanStackScreenHeader';
 import { PlanDetailSkeleton } from '@/components/plans/PlanDetailSkeleton';
 import { ActionButtonsSkeleton } from '@/components/plans/ActionButtonsSkeleton';
@@ -1010,6 +1011,11 @@ export default function PlanOverviewScreen() {
           </Text>
         </Pressable>
       ) : null}
+      <PlanShareSection
+        plan={plan}
+        hostProfile={profilesById[plan.creator_id]}
+        currentUserId={user?.id}
+      />
       {isCreator && user?.id ? (
         <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={user.id} />
       ) : null}

@@ -23,6 +23,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.linkup.app',
+      associatedDomains: ['applinks:linkup.app'],
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY ?? '',
       },
@@ -35,6 +36,14 @@ module.exports = {
       },
       package: 'com.linkup.app',
       googleServicesFile: './google-services.json',
+      intentFilters: [
+        {
+          action: 'VIEW',
+          autoVerify: true,
+          data: [{ scheme: 'https', host: 'linkup.app', pathPrefix: '/plan' }],
+          category: ['BROWSABLE', 'DEFAULT'],
+        },
+      ],
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY ?? '',

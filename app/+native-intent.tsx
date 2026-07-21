@@ -4,6 +4,7 @@
  */
 import { captureAuthLinkIfPresent } from '@/lib/auth/pendingAuthUrl';
 import { urlLooksLikeAuthRedirect } from '@/lib/authProviders';
+import { parsePlanIdFromUrl } from '@/lib/plans/planShareUrl';
 
 const AUTH_CALLBACK_ROUTE = '/auth/callback';
 
@@ -14,6 +15,12 @@ function pathLooksLikeAuthCallback(path: string): boolean {
     lower.includes('auth%2fcallback') ||
     urlLooksLikeAuthRedirect(path)
   );
+}
+
+function pathToPlanDetailRoute(path: string): string | null {
+  const planId = parsePlanIdFromUrl(path);
+  if (!planId) return null;
+  return `/plan/${planId}`;
 }
 
 export function redirectSystemPath({
@@ -27,6 +34,10 @@ export function redirectSystemPath({
     if (initial && pathLooksLikeAuthCallback(path)) {
       captureAuthLinkIfPresent(path);
       return AUTH_CALLBACK_ROUTE;
+    }
+    if (initial) {
+      const planRoute = pathToPlanDetailRoute(path);
+      if (planRoute) return planRoute;
     }
     return path;
   } catch {

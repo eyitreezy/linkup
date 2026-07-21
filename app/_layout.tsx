@@ -11,6 +11,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { Poppins_500Medium } from '@expo-google-fonts/poppins';
 import { AuthDeepLinkBootstrap } from '@/components/auth/AuthDeepLinkBootstrap';
+import { PlanDeepLinkBootstrap } from '@/components/plans/PlanDeepLinkBootstrap';
 import { AuthPasswordRecoveryBootstrap } from '@/components/auth/AuthPasswordRecoveryBootstrap';
 import { PushTokenSyncBootstrap } from '@/components/notifications/PushTokenSyncBootstrap';
 import { SplashGate } from '@/components/splash/SplashGate';
@@ -78,6 +79,7 @@ export default function RootLayout() {
         <KeyboardProvider preload={false}>
           <AuthProvider>
           <AuthDeepLinkBootstrap />
+          <PlanDeepLinkBootstrap />
           <AuthPasswordRecoveryBootstrap />
           <PushTokenSyncBootstrap />
           <PresenceProvider>

@@ -4,8 +4,8 @@ export const SPLASH_LOCKUP_MAX_WIDTH = 320;
 /** Matches web `max-w-[86vw]`. */
 export const SPLASH_LOCKUP_VW_RATIO = 0.86;
 
-/** splash-brand-lockup.png intrinsic ratio (894×369). */
-export const SPLASH_LOCKUP_HEIGHT_RATIO = 369 / 894;
+/** splash-brand-lockup.png intrinsic ratio (1024×364). */
+export const SPLASH_LOCKUP_HEIGHT_RATIO = 364 / 1024;
 
 export function resolveSplashLockupWidth(viewportWidth: number): number {
   return Math.min(SPLASH_LOCKUP_MAX_WIDTH, Math.round(viewportWidth * SPLASH_LOCKUP_VW_RATIO));
