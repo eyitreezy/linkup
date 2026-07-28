@@ -15,6 +15,8 @@ import { EscrowTimeline } from '@/components/escrow/EscrowTimeline';
 import { FundingDeadlineUrgencyBanner } from '@/components/escrow/FundingDeadlineUrgencyBanner';
 import { OpenDisputeModal } from '@/components/escrow/OpenDisputeModal';
 import { PaymentMethodSelector } from '@/components/escrow/PaymentMethodSelector';
+import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
+import { SafetyCaveatInterstitial } from '@/components/plans/SafetyCaveatInterstitial';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { PlanFlowScreenSkeleton } from '@/components/ui/PlanFlowScreenSkeleton';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
@@ -70,6 +72,10 @@ import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import { isGroupSplitPlan, isGroupHostCloseEscrowRow, resolveGroupHostShareCents, resolveGroupPlanTotalCents, resolveAcceptedGuestCommitmentCents } from '@/lib/plans/groupSplitDynamic';
 import {
+  hasEscrowPolicySignoff,
+  needsSafetyCaveatGate,
+} from '@/lib/plans/groupPlanAnnexure';
+import {
   deriveEscrowPhase,
   resolveEscrowScreenContent,
 } from '@/lib/escrow/escrowScreenContent';
@@ -120,6 +126,9 @@ export default function EscrowDetailScreen() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
     'card' | 'bank_transfer' | null
   >(null);
+  const [safetyCaveatOpen, setSafetyCaveatOpen] = useState(false);
+  const [escrowPolicyOpen, setEscrowPolicyOpen] = useState(false);
+  const [pendingFundAfterPolicy, setPendingFundAfterPolicy] = useState(false);
   const insets = useSafeAreaInsets();
   const [releaseConfirmOpen, setReleaseConfirmOpen] = useState(false);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
@@ -416,6 +425,20 @@ export default function EscrowDetailScreen() {
   }, [escrow?.plan_id, plan?.is_group_plan]);
 
   useEffect(() => {
+    if (!escrow?.plan_id || !user?.id) return;
+    if (!isEscrowFullyFundedForMeet(escrow)) return;
+    const counterpartyId =
+      user.id === escrow.host_id
+        ? escrow.guest_id
+        : user.id === escrow.guest_id
+          ? escrow.host_id
+          : null;
+    void needsSafetyCaveatGate(escrow.plan_id, user.id, counterpartyId).then((needs) => {
+      if (needs) setSafetyCaveatOpen(true);
+    });
+  }, [escrow, user?.id]);
+
+  useEffect(() => {
     if (!escrow || escrow.status !== 'pending_funding' || confirmingPayment || !user?.id) return;
     if (!escrowAwaitingFulfillment(escrow)) return;
     const ref = pendingCheckoutRef.current ?? escrowCheckoutReference(escrow);
@@ -664,8 +687,30 @@ export default function EscrowDetailScreen() {
   }
 
   function handleFundEscrow() {
-    setSelectedPaymentMethod(null);
-    setShowMethodSelector(true);
+    void (async () => {
+      if (!escrow?.plan_id || !user?.id) {
+        setSelectedPaymentMethod(null);
+        setShowMethodSelector(true);
+        return;
+      }
+      const signed = await hasEscrowPolicySignoff(escrow.plan_id, user.id);
+      if (!signed) {
+        setPendingFundAfterPolicy(true);
+        setEscrowPolicyOpen(true);
+        return;
+      }
+      setSelectedPaymentMethod(null);
+      setShowMethodSelector(true);
+    })();
+  }
+
+  function continueAfterEscrowPolicy() {
+    setEscrowPolicyOpen(false);
+    if (pendingFundAfterPolicy) {
+      setPendingFundAfterPolicy(false);
+      setSelectedPaymentMethod(null);
+      setShowMethodSelector(true);
+    }
   }
 
   async function handleMethodConfirmed() {
@@ -1059,6 +1104,22 @@ export default function EscrowDetailScreen() {
         onConfirm={() => void onConfirmFund()}
         confirmVariant="primary"
       />
+      {escrowPolicyOpen && escrow?.plan_id && user?.id ? (
+        <EscrowPolicySignOffModal
+          visible={escrowPolicyOpen}
+          planId={escrow.plan_id}
+          userId={user.id}
+          escrowPattern={escrow.escrow_pattern}
+          onSigned={continueAfterEscrowPolicy}
+        />
+      ) : null}
+      {safetyCaveatOpen && escrow?.plan_id && user?.id ? (
+        <SafetyCaveatInterstitial
+          planId={escrow.plan_id}
+          userId={user.id}
+          onAcknowledged={() => setSafetyCaveatOpen(false)}
+        />
+      ) : null}
       <EscrowConfirmModal
         visible={completeConfirmOpen}
         title="Mark meetup complete?"

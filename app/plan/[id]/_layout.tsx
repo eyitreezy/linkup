@@ -17,6 +17,8 @@ export default function PlanIdLayout() {
       <Stack.Screen name="interest" />
       <Stack.Screen name="negotiate" />
       <Stack.Screen name="agreement" options={{ headerShown: false }} />
+      <Stack.Screen name="confirm" />
+      <Stack.Screen name="minimum-action" />
     </Stack>
   );
 }

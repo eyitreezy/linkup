@@ -74,6 +74,49 @@ export function notificationIcon(type: string): IonName {
       return 'close-circle-outline';
     case 'plan_invitation_expired':
       return 'time-outline';
+    case 'meetup_confirm_requested':
+    case 'meetup_confirm_request':
+    case 'meetup_confirm_12h':
+    case 'meetup_confirm_23h':
+    case 'meetup_confirm_t0':
+      return 'people-outline';
+    case 'partner_arrived':
+    case 'live_location_started':
+      return 'location-outline';
+    case 'group_countdown_7day':
+    case 'group_countdown_48h':
+    case 'group_countdown_24h':
+    case 'group_countdown_6h':
+    case 'group_countdown_1h':
+    case 'group_meetup_started':
+      return 'timer-outline';
+    case 'group_minimum_not_met':
+      return 'people-outline';
+    case 'group_plan_cancelled_minimum':
+    case 'group_plan_host_cancelled':
+      return 'wallet-outline';
+    case 'group_member_opted_out':
+      return 'person-remove-outline';
+    case 'exigency_auto_triggered':
+    case 'exigency_submitted':
+    case 'exigency_outcome_applied':
+      return 'document-text-outline';
+    case 'meetup_auto_confirmed':
+      return 'checkmark-circle-outline';
+    case 'disbursement_reminder':
+      return 'wallet-outline';
+    case 'disbursement_reminder_urgent':
+      return 'time-outline';
+    case 'disbursement_final_warning':
+      return 'warning-outline';
+    case 'disbursement_escalated':
+      return 'alert-circle-outline';
+    case 'withdrawal_initiated':
+      return 'arrow-down-circle-outline';
+    case 'withdrawal_completed':
+      return 'checkmark-done-outline';
+    case 'withdrawal_failed':
+      return 'close-circle-outline';
     default:
       return 'notifications-outline';
   }

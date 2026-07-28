@@ -265,11 +265,14 @@ export interface DbPlan {
   spotlight_enabled?: boolean;
   duration_minutes: number | null;
   is_group_plan?: boolean;
+  completion_status?: 'pending' | 'awaiting_confirm' | 'confirmed' | 'disputed' | null;
+  host_confirmed_completion_at?: string | null;
   max_free_guests?: number | null;
   max_premium_guests?: number | null;
   max_guests?: number | null;
   /** Group plans — count of accepted slot offers (host + guests capacity). */
   accepted_guest_count?: number;
+  minimum_member_count?: number;
   /** Group split B — sum of accepted guest negotiated amounts. */
   accepted_guest_amounts_sum_cents?: number;
   /** Group split B — formula suggested share for next offer. */

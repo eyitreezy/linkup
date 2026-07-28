@@ -14,7 +14,10 @@ import {
   type MessageDeleteKind,
 } from '@/components/messages/MessageDeleteConfirmModal';
 import { ChatComposer } from '@/components/messages/ChatComposer';
+import { LiveLocationButton } from '@/components/plans/LiveLocationButton';
+import { LiveLocationViewer } from '@/components/plans/LiveLocationViewer';
 import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
+import { usePartnerLiveLocationSession } from '@/hooks/usePartnerLiveLocationSession';
 import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
 import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
 import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
@@ -255,6 +258,12 @@ export default function ChatThreadScreen() {
       !!linkedMeetup &&
       ['agreed', 'awaiting_payment', 'active', 'completed'].includes(linkedMeetup.status),
     [linkedMeetup]
+  );
+
+  const showLiveLocation = canOpenPlanDispute && !!linkedMeetup?.id && !!user?.id;
+  const partnerLiveSessionId = usePartnerLiveLocationSession(
+    showLiveLocation ? linkedMeetup!.id : null,
+    user?.id
   );
 
   const showTypingIndicator = peerTyping && typingVisibleToViewer(profile, peer?.preferences);
@@ -1579,6 +1588,9 @@ export default function ChatThreadScreen() {
                     onUnpin={() => void runUnpinMessage()}
                   />
                 ) : null}
+                {partnerLiveSessionId ? (
+                  <LiveLocationViewer partnerSessionId={partnerLiveSessionId} />
+                ) : null}
               </>
             }
             renderItem={({ item }) => {
@@ -1659,6 +1671,9 @@ export default function ChatThreadScreen() {
             borderColor={chatPreset.composerBorder}
             onSelect={setText}
           />
+          {showLiveLocation && linkedMeetup?.id && user?.id ? (
+            <LiveLocationButton planId={linkedMeetup.id} currentUserId={user.id} />
+          ) : null}
           <ChatComposer
             preset={chatPreset}
             threadLook={messageInputLook}

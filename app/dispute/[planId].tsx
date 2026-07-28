@@ -2,6 +2,8 @@
  * Plan dispute flow D1–D6 — structured steps, trust copy, video evidence (Expo Camera).
  */
 import { Button } from '@/components/Button';
+import { ChatLogConsentStep } from '@/components/disputes/ChatLogConsentStep';
+import { VideoEvidenceCapture } from '@/components/disputes/VideoEvidenceCapture';
 import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { Input } from '@/components/Input';
 import { Screen } from '@/components/Screen';
@@ -64,9 +66,17 @@ function DisputeVideoPreview({ uri }: { uri: string }) {
 }
 
 export default function PlanDisputeScreen() {
-  const { planId } = useLocalSearchParams<{ planId: string }>();
+  const { planId, flow, reportedUserId: reportedUserIdParam } = useLocalSearchParams<{
+    planId: string;
+    flow?: string;
+    reportedUserId?: string;
+  }>();
+  const isNoShowFlow = flow === 'noshow';
   const { user } = useAuth();
   const [step, setStep] = useState<Step>(1);
+  const [noShowVideoDone, setNoShowVideoDone] = useState(false);
+  const [noShowDisputeId, setNoShowDisputeId] = useState<string | null>(null);
+  const [chatLogConsentDone, setChatLogConsentDone] = useState(false);
   const [plan, setPlan] = useState<DbPlan | null>(null);
   const [bidderId, setBidderId] = useState<string | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
@@ -85,9 +95,17 @@ export default function PlanDisputeScreen() {
   const [gpsMeta, setGpsMeta] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const reportedUserId = useMemo(() => {
+    if (reportedUserIdParam?.trim()) return reportedUserIdParam.trim();
     if (!user?.id || !plan || !bidderId) return null;
     return plan.creator_id === user.id ? bidderId : plan.creator_id;
-  }, [user?.id, plan, bidderId]);
+  }, [reportedUserIdParam, user?.id, plan, bidderId]);
+
+  useEffect(() => {
+    if (isNoShowFlow) {
+      setCategory('no_show');
+      setStep(3);
+    }
+  }, [isNoShowFlow]);
 
   useEffect(() => {
     if (!planId || !isSupabaseConfigured) {
@@ -296,6 +314,29 @@ export default function PlanDisputeScreen() {
       ) : null}
 
       {step === 3 ? (
+        isNoShowFlow && !noShowVideoDone && reportedUserId ? (
+          <View style={styles.pad}>
+            <Text style={styles.title}>Report no-show</Text>
+            <VideoEvidenceCapture
+              planId={planId}
+              reportedUserId={reportedUserId}
+              onVideoSubmitted={(disputeId) => {
+                setNoShowDisputeId(disputeId);
+                setNoShowVideoDone(true);
+              }}
+            />
+          </View>
+        ) : isNoShowFlow && noShowVideoDone && !chatLogConsentDone && noShowDisputeId ? (
+          <View style={styles.pad}>
+            <ChatLogConsentStep
+              disputeId={noShowDisputeId}
+              onConsentSubmitted={() => {
+                setChatLogConsentDone(true);
+                setStep(6);
+              }}
+            />
+          </View>
+        ) : (
         <View style={styles.cameraShell}>
           <Text style={styles.overlayHint}>
             Briefly explain what happened — {VIDEO_MIN_S} to {VIDEO_MAX_S} seconds.
@@ -334,11 +375,12 @@ export default function PlanDisputeScreen() {
               </View>
             </View>
           )}
-          <Pressable style={styles.camClose} onPress={() => setStep(2)}>
+          <Pressable style={styles.camClose} onPress={() => setStep(isNoShowFlow ? 3 : 2)}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
             <Text style={styles.camCloseTxt}>Back</Text>
           </Pressable>
         </View>
+        )
       ) : null}
 
       {step === 4 ? (

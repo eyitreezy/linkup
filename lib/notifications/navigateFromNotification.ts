@@ -148,6 +148,86 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     router.push('/wallet' as Href);
     return;
   }
+  if (t === 'meetup_confirm_requested' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/confirm` as Href);
+    return;
+  }
+  if (
+    (t === 'meetup_confirm_request' ||
+      t === 'meetup_confirm_12h' ||
+      t === 'meetup_confirm_23h' ||
+      t === 'meetup_confirm_t0') &&
+    data?.planId
+  ) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/confirm` as Href);
+    return;
+  }
+  if (t === 'partner_arrived' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}` as Href);
+    return;
+  }
+  if (t === 'live_location_started' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}` as Href);
+    return;
+  }
+  if (
+    (t === 'group_countdown_7day' ||
+      t === 'group_countdown_48h' ||
+      t === 'group_countdown_24h' ||
+      t === 'group_countdown_6h' ||
+      t === 'group_countdown_1h' ||
+      t === 'group_meetup_started') &&
+    data?.planId
+  ) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}` as Href);
+    return;
+  }
+  if (t === 'group_minimum_not_met' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/minimum-action` as Href);
+    return;
+  }
+  if (
+    (t === 'group_plan_cancelled_minimum' || t === 'group_plan_host_cancelled') &&
+    data?.planId
+  ) {
+    router.push('/wallet' as Href);
+    return;
+  }
+  if (t === 'group_member_opted_out' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}` as Href);
+    return;
+  }
+  if (
+    t === 'exigency_auto_triggered' ||
+    t === 'exigency_submitted' ||
+    t === 'exigency_outcome_applied'
+  ) {
+    router.push('/wallet' as Href);
+    return;
+  }
+  if (t === 'meetup_auto_confirmed') {
+    router.push('/wallet' as Href);
+    return;
+  }
+  if (
+    t === 'disbursement_reminder' ||
+    t === 'disbursement_reminder_urgent' ||
+    t === 'disbursement_final_warning' ||
+    t === 'disbursement_escalated' ||
+    t === 'withdrawal_initiated' ||
+    t === 'withdrawal_completed' ||
+    t === 'withdrawal_failed'
+  ) {
+    router.push('/wallet' as Href);
+    return;
+  }
   if (t === 'trial_started' || t === 'trial_expiring' || t === 'trial_expired') {
     router.push('/subscription' as Href);
     return;

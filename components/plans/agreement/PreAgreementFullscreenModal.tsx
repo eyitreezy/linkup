@@ -2,15 +2,16 @@
  * Bumble-style fullscreen legal gate before escrow / activation — no swipe-to-dismiss.
  */
 import { Button } from '@/components/Button';
-import { CancellationPolicyRowGroups } from '@/components/plans/CancellationPolicyRows';
+import { CancellationMatrixPolicy } from '@/components/plans/CancellationMatrixPolicy';
 import { APP_CTA_GRADIENT } from '@/constants/gradients';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { formatEscrowMoney } from '@/lib/escrow/escrowPaymentPreview';
-import { AGREEMENT_CANCELLATION_POLICY_GROUPS } from '@/lib/plans/cancellationPolicy';
+import type { CancellationMatrixPlanType } from '@/lib/plans/cancellationMatrixDisplay';
 import {
   budgetFromGrossAmountCents,
   feeFromGrossAmountCents,
 } from '@/lib/plans/planFinancialConfig';
+import type { EscrowPattern } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ComponentProps, ReactNode } from 'react';
@@ -39,6 +40,8 @@ export type PreAgreementModalProps = {
   onConfirm: () => void;
   /** Fired when user taps confirm before checking the terms checkbox. */
   onTermsRequired?: () => void;
+  planType?: CancellationMatrixPlanType;
+  escrowPattern?: EscrowPattern | null;
 };
 
 export function PreAgreementFullscreenModal({
@@ -52,6 +55,8 @@ export function PreAgreementFullscreenModal({
   busy,
   onConfirm,
   onTermsRequired,
+  planType = 'standard',
+  escrowPattern = 'A',
 }: PreAgreementModalProps) {
   const insets = useSafeAreaInsets();
   const [read, setRead] = useState(false);
@@ -145,7 +150,11 @@ export function PreAgreementFullscreenModal({
             <Text style={[styles.muted, styles.policyIntro]}>
               Role- and timing-based rules, calculated from meetup time vs when someone cancels in-app.
             </Text>
-            <CancellationPolicyRowGroups groups={AGREEMENT_CANCELLATION_POLICY_GROUPS} dense />
+            <CancellationMatrixPolicy
+              planType={planType}
+              escrowPattern={escrowPattern}
+              dense
+            />
             <View style={styles.policyCallout}>
               <Ionicons name="server-outline" size={16} color={colors.primary} />
               <Text style={styles.policyCalloutTxt}>

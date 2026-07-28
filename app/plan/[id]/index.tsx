@@ -26,6 +26,7 @@ import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngag
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
+import { GroupMeetupHostConfirmCard } from '@/components/plans/GroupMeetupHostConfirmCard';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { peekPlanDetailSeed, prefetchPlanDetail, setPlanDetailSeed } from '@/lib/plans/planDetailSeed';
 import { warmPublicProfileNavigation } from '@/lib/profile/publicProfileSeed';
@@ -54,6 +55,7 @@ import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { createGroupChat } from '@/lib/messaging/createGroupChat';
 import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
+import { PLATFORM_FEE_REFUND_OPT_OUT_MESSAGE } from '@/lib/plans/platformFeeRefundCopy';
 import { isSupabaseConfigured, removeSupabaseChannel, supabase } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import type { DbPlan, DbPlanOffer, JoinRequestStatus, OfferStatus } from '@/types/database';
@@ -203,6 +205,8 @@ export default function PlanOverviewScreen() {
   const [calendarBusy, setCalendarBusy] = useState(false);
   const [reportPlanOpen, setReportPlanOpen] = useState(false);
   const [completionSelfAcked, setCompletionSelfAcked] = useState(false);
+  const [groupGuestConfirmCount, setGroupGuestConfirmCount] = useState(0);
+  const [groupGuestTotal, setGroupGuestTotal] = useState(0);
   const [myJoinRequest, setMyJoinRequest] = useState<{
     id: string;
     status: JoinRequestStatus;
@@ -225,6 +229,10 @@ export default function PlanOverviewScreen() {
   const [availableSlots, setAvailableSlots] = useState(0);
   const [pendingInvitationCount, setPendingInvitationCount] = useState(0);
   const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
+  const [groupMemberCount, setGroupMemberCount] = useState(0);
+  const [groupMinimumCount, setGroupMinimumCount] = useState(5);
+  const [hasOptedOut, setHasOptedOut] = useState(false);
+  const [isOptingOut, setIsOptingOut] = useState(false);
 
   const offersLoadedRef = useRef(offersLoaded);
   offersLoadedRef.current = offersLoaded;
@@ -296,6 +304,27 @@ export default function PlanOverviewScreen() {
         map[r.user_id] = r;
       }
       setProfilesById(map);
+
+      if (pl.is_group_plan) {
+        const acceptedGuestIds = offerList
+          .filter((o) => o.status === 'accepted')
+          .map((o) => o.bidder_id);
+        setGroupGuestTotal(acceptedGuestIds.length);
+        if (acceptedGuestIds.length) {
+          const { count } = await supabase
+            .from('group_plan_confirmations')
+            .select('id', { count: 'exact', head: true })
+            .eq('plan_id', id)
+            .in('user_id', acceptedGuestIds)
+            .eq('is_host', false);
+          setGroupGuestConfirmCount(count ?? 0);
+        } else {
+          setGroupGuestConfirmCount(0);
+        }
+      } else {
+        setGroupGuestConfirmCount(0);
+        setGroupGuestTotal(0);
+      }
 
       if (user?.id) {
         const s = await isPlanSaved(supabase, id, user.id);
@@ -524,6 +553,56 @@ export default function PlanOverviewScreen() {
   );
 
   useEffect(() => {
+    if (!plan?.id || !plan.is_group_plan) return;
+
+    setGroupMemberCount((plan.accepted_guest_count ?? 0) + 1);
+    setGroupMinimumCount(plan.minimum_member_count ?? 5);
+
+    const channel = supabase
+      .channel(`plan-members-${plan.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'plans',
+          filter: `id=eq.${plan.id}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            accepted_guest_count?: number;
+            minimum_member_count?: number;
+          };
+          if (typeof row.accepted_guest_count === 'number') {
+            setGroupMemberCount(row.accepted_guest_count + 1);
+          }
+          if (typeof row.minimum_member_count === 'number') {
+            setGroupMinimumCount(row.minimum_member_count);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      removeSupabaseChannel(channel);
+    };
+  }, [plan?.id, plan?.is_group_plan, plan?.accepted_guest_count, plan?.minimum_member_count]);
+
+  useEffect(() => {
+    if (!plan?.id || !user?.id || !plan.is_group_plan || plan.creator_id === user.id) {
+      setHasOptedOut(false);
+      return;
+    }
+    void supabase
+      .from('group_plan_opt_outs')
+      .select('id')
+      .eq('plan_id', plan.id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setHasOptedOut(!!data));
+  }, [plan?.id, plan?.is_group_plan, plan?.creator_id, user?.id]);
+
+  useEffect(() => {
     if (!plan?.id || !plan.is_group_plan) {
       setGroupChatConvId(null);
       return;
@@ -591,6 +670,14 @@ export default function PlanOverviewScreen() {
   }
 
   const isCreator = plan.creator_id === user?.id;
+  const isAcceptedGuest =
+    !isCreator &&
+    !!user?.id &&
+    offers.some((o) => o.bidder_id === user.id && o.status === 'accepted');
+  const meetupIso = plan.agreed_scheduled_at ?? plan.scheduled_at ?? null;
+  const hoursUntilMeetup = meetupIso
+    ? (new Date(meetupIso).getTime() - Date.now()) / (1000 * 60 * 60)
+    : -1;
   const showInviteEligible = isCreator && plan.is_group_plan;
   const showPromoteCard =
     isCreator &&
@@ -604,6 +691,36 @@ export default function PlanOverviewScreen() {
   const boosted =
     plan.boosted_until != null && new Date(plan.boosted_until).getTime() > Date.now();
   const canCalendar = planCanAddToCalendar(plan);
+
+  async function handleGuestOptOut() {
+    if (!id || isOptingOut) return;
+    setIsOptingOut(true);
+    const { data, error } = await supabase.rpc('submit_guest_opt_out', { p_plan_id: id });
+    setIsOptingOut(false);
+
+    if (error) {
+      Alert.alert(
+        'Cannot opt out',
+        error.message.includes('opt_out_window_closed')
+          ? 'The opt-out window has closed. You can no longer opt out of this plan.'
+          : error.message
+      );
+      return;
+    }
+
+    setHasOptedOut(true);
+    const payload = data as { triggered_minimum_cancel?: boolean };
+
+    if (payload?.triggered_minimum_cancel) {
+      Alert.alert(
+        'Plan cancelled',
+        'Your opt-out caused the group to fall below the minimum of 5 members. The plan has been cancelled and all contributions have been refunded to each member, including the platform fee.',
+        [{ text: 'OK', onPress: () => router.replace('/(tabs)' as Href) }]
+      );
+    } else {
+      Alert.alert('Opted out', PLATFORM_FEE_REFUND_OPT_OUT_MESSAGE);
+    }
+  }
 
   function goViewOffer() {
     if (!id || !ctx?.myOffer) return;
@@ -998,6 +1115,49 @@ export default function PlanOverviewScreen() {
         inviteDisabled={moodClosed}
         onInvitePress={() => setInviteSheetOpen(true)}
       />
+      {plan.is_group_plan ? (
+        <View style={styles.memberCountRow}>
+          <Text style={styles.memberCountText}>
+            {groupMemberCount} of {groupMinimumCount} members confirmed
+          </Text>
+          {groupMemberCount < groupMinimumCount ? (
+            <Text style={styles.memberCountWarning}>Minimum not yet reached</Text>
+          ) : null}
+        </View>
+      ) : null}
+      {isAcceptedGuest &&
+      plan.is_group_plan &&
+      hoursUntilMeetup >= 48 &&
+      !hasOptedOut &&
+      plan.status !== 'cancelled' ? (
+        <View style={styles.optOutSection}>
+          <Text style={styles.optOutBody}>
+            You may opt out of this Group Plan up to 48 hours before the meetup. Your contribution
+            will be refunded in full including the platform fee.
+          </Text>
+          <Pressable
+            style={[styles.optOutButton, isOptingOut && styles.optOutButtonDisabled]}
+            onPress={() => void handleGuestOptOut()}
+            disabled={isOptingOut}
+          >
+            {isOptingOut ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Text style={styles.optOutButtonLabel}>Opt out of this plan</Text>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+      {plan.is_group_plan &&
+      isCreator &&
+      plan.completion_status === 'awaiting_confirm' ? (
+        <GroupMeetupHostConfirmCard
+          planId={plan.id}
+          confirmedGuestCount={groupGuestConfirmCount}
+          totalGuests={groupGuestTotal}
+          onConfirmed={() => void load()}
+        />
+      ) : null}
       {plan.is_group_plan && (plan.status === 'active' || plan.status === 'agreed') &&
       (isCreator || groupChatConvId) ? (
         <Pressable
@@ -2481,5 +2641,57 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     color: colors.text,
     lineHeight: 20,
+  },
+  memberCountRow: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(94,82,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(94,82,255,0.15)',
+    gap: 4,
+  },
+  memberCountText: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+  memberCountWarning: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: '#B45309',
+  },
+  optOutSection: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.2)',
+    backgroundColor: 'rgba(239,68,68,0.05)',
+    gap: spacing.sm,
+  },
+  optOutBody: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 20,
+    fontFamily: fonts.regular,
+  },
+  optOutButton: {
+    borderRadius: radius.button,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.danger,
+  },
+  optOutButtonDisabled: { opacity: 0.6 },
+  optOutButtonLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.danger,
   },
 });

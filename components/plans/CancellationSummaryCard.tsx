@@ -1,14 +1,17 @@
 /**
  * Trust-focused cancellation summary (Hinge-style clarity).
  */
-import { CancellationPolicyRows } from '@/components/plans/CancellationPolicyRows';
+import { CancellationMatrixPolicy } from '@/components/plans/CancellationMatrixPolicy';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
-import { CANCELLATION_POLICY_TABLE_ROWS } from '@/lib/plans/cancellationPolicy';
+import type { CancellationMatrixPlanType } from '@/lib/plans/cancellationMatrixDisplay';
+import type { EscrowPattern } from '@/types/database';
 import { StyleSheet, Text, View } from 'react-native';
 
 export type CancellationBandSummary = 'early' | 'late' | 'no_show' | 'mutual';
 
 type Props = {
+  planType?: CancellationMatrixPlanType;
+  escrowPattern?: EscrowPattern | null;
   /** Optional outcome after server RPC (single-party cancel). */
   outcome?: {
     band: CancellationBandSummary;
@@ -19,14 +22,18 @@ type Props = {
   } | null;
 };
 
-export function CancellationSummaryCard({ outcome }: Props) {
+export function CancellationSummaryCard({
+  outcome,
+  planType = 'standard',
+  escrowPattern = 'A',
+}: Props) {
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Cancellation policy</Text>
       <Text style={styles.lead}>
         LinkUp applies role and timing based rules on the server so outcomes stay fair and predictable.
       </Text>
-      <CancellationPolicyRows rows={CANCELLATION_POLICY_TABLE_ROWS} />
+      <CancellationMatrixPolicy planType={planType} escrowPattern={escrowPattern} />
       {outcome ? (
         <View style={styles.outcome}>
           <Text style={styles.outcomeTitle}>Cancellation processed</Text>

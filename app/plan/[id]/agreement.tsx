@@ -2,10 +2,14 @@
  * PL6a — Agreement & confirmation after offer accept (trust + structured summary + CTAs).
  */
 import { CancellationSummaryCard, type CancellationBandSummary } from '@/components/plans/CancellationSummaryCard';
+import { GroupHostCancellationModal } from '@/components/plans/GroupHostCancellationModal';
 import { PlanAgreementCTAButton } from '@/components/plans/agreement/PlanAgreementCTAButton';
 import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgreementStatusBadge';
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
 import { PreAgreementFullscreenModal } from '@/components/plans/agreement/PreAgreementFullscreenModal';
+import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
+import { GroupPlanPolicyGate } from '@/components/plans/GroupPlanPolicyGate';
+import { SafetyCaveatInterstitial } from '@/components/plans/SafetyCaveatInterstitial';
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
 import { GroupSplitAgreementPanel } from '@/components/plans/agreement/GroupSplitAgreementPanel';
 import { GroupEscrowStatusCard } from '@/components/plans/agreement/GroupEscrowStatusCard';
@@ -41,6 +45,10 @@ import { MAX_ESCROW_TIER1_CENTS, patternBLegGrossCents } from '@/lib/plans/planF
 import { confirmFreePlan, proceedToSecurePayment } from '@/lib/plans/planAgreementActions';
 import { bothAgreementPartiesConfirmed } from '@/lib/plans/agreementConfirmations';
 import { fetchPlanAgreementBundle } from '@/lib/plans/fetchPlanAgreementBundle';
+import {
+  hasEscrowPolicySignoff,
+  needsSafetyCaveatGate,
+} from '@/lib/plans/groupPlanAnnexure';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { goToDiscoveryFeed } from '@/lib/navigation/goToDiscoveryFeed';
 import { goBackOrFallback } from '@/lib/navigation/goBackOrFallback';
@@ -285,6 +293,9 @@ export default function PlanAgreementScreen() {
   const [myEscrow, setMyEscrow] = useState<DbEscrowTransaction | null>(null);
   const [guestEscrowRows, setGuestEscrowRows] = useState<DbEscrowTransaction[]>([]);
   const [showTermsWarning, setShowTermsWarning] = useState(false);
+  const [escrowPolicyOpen, setEscrowPolicyOpen] = useState(false);
+  const [safetyGateOpen, setSafetyGateOpen] = useState(false);
+  const [groupHostCancelOpen, setGroupHostCancelOpen] = useState(false);
 
   function showFeedback(variant: AppFeedbackVariant, title: string, message: string) {
     setFeedback({ variant, title, message });
@@ -631,13 +642,33 @@ export default function PlanAgreementScreen() {
     if (res.escrowId) router.replace(`/escrow/${res.escrowId}` as Href);
   }
 
+  async function proceedToLegalGate(action: 'free' | 'pay' | 'ack') {
+    if (!user?.id) return;
+    const hasEscrow = await hasEscrowPolicySignoff(planRow.id, user.id);
+    if (!hasEscrow) {
+      setPendingLegal(action);
+      setEscrowPolicyOpen(true);
+      return;
+    }
+    const counterpartyId = isHost ? offerRow.bidder_id : planRow.creator_id;
+    if (action === 'pay') {
+      const needsSafety = await needsSafetyCaveatGate(planRow.id, user.id, counterpartyId);
+      if (needsSafety) {
+        setPendingLegal(action);
+        setSafetyGateOpen(true);
+        return;
+      }
+    }
+    setPendingLegal(action);
+    setLegalGateOpen(true);
+  }
+
   function openLegalGate(action: 'free' | 'pay' | 'ack') {
     if (requiresVerificationGate(dbUser?.verification_status)) {
       setGateOpen(true);
       return;
     }
-    setPendingLegal(action);
-    setLegalGateOpen(true);
+    void proceedToLegalGate(action);
   }
 
   async function onLegalGateConfirm() {
@@ -714,6 +745,10 @@ export default function PlanAgreementScreen() {
   }
 
   function onCancelSecondaryPress() {
+    if (isHost && planRow.is_group_plan) {
+      setGroupHostCancelOpen(true);
+      return;
+    }
     if (isBidder) setCancelOptionsOpen(true);
     else setCancelOpen(true);
   }
@@ -984,7 +1019,13 @@ export default function PlanAgreementScreen() {
       }
     : null;
 
-  return (
+  const cancellationPlanType = planRow.is_group_plan
+    ? 'group'
+    : planRow.is_mood_plan
+      ? 'mood'
+      : 'standard';
+
+  const agreementScreen = (
     <Screen safeAreaEdges={['top', 'left', 'right']} safeAreaStyle={styles.screenRoot}>
       <View style={styles.flex}>
         <DiscoveryGradientBg />
@@ -1100,7 +1141,11 @@ export default function PlanAgreementScreen() {
         <Modal visible={outcomeOpen} animationType="slide" transparent onRequestClose={dismissOutcome}>
           <View style={styles.sheetBackdrop}>
             <View style={styles.outcomeModalCard}>
-              <CancellationSummaryCard outcome={outcomeCardProps} />
+              <CancellationSummaryCard
+                outcome={outcomeCardProps}
+                planType={cancellationPlanType}
+                escrowPattern={planRow.escrow_pattern}
+              />
               <Pressable style={styles.outcomeDoneBtn} onPress={dismissOutcome}>
                 <LinearGradient
                   colors={[colors.primary, colors.secondary]}
@@ -1126,7 +1171,40 @@ export default function PlanAgreementScreen() {
           busy={legalBusy}
           onConfirm={() => void onLegalGateConfirm()}
           onTermsRequired={() => setShowTermsWarning(true)}
+          planType={cancellationPlanType}
+          escrowPattern={planRow.escrow_pattern}
         />
+        <GroupHostCancellationModal
+          planId={planRow.id}
+          visible={groupHostCancelOpen}
+          onCancelled={() => {
+            setGroupHostCancelOpen(false);
+            goToDiscoveryFeed();
+          }}
+          onDismiss={() => setGroupHostCancelOpen(false)}
+        />
+        {user?.id ? (
+          <EscrowPolicySignOffModal
+            visible={escrowPolicyOpen}
+            planId={planRow.id}
+            userId={user.id}
+            escrowPattern={planRow.escrow_pattern ?? undefined}
+            onSigned={() => {
+              setEscrowPolicyOpen(false);
+              if (pendingLegal) void proceedToLegalGate(pendingLegal);
+            }}
+          />
+        ) : null}
+        {user?.id && safetyGateOpen ? (
+          <SafetyCaveatInterstitial
+            planId={planRow.id}
+            userId={user.id}
+            onAcknowledged={() => {
+              setSafetyGateOpen(false);
+              if (pendingLegal) setLegalGateOpen(true);
+            }}
+          />
+        ) : null}
         <Modal
           visible={showTermsWarning}
           animationType="fade"
@@ -1315,7 +1393,10 @@ export default function PlanAgreementScreen() {
             />
           ) : null}
 
-          <CancellationSummaryCard />
+          <CancellationSummaryCard
+            planType={cancellationPlanType}
+            escrowPattern={planRow.escrow_pattern}
+          />
 
           <View style={styles.trustCard}>
             <View style={styles.trustSectionRow}>
@@ -1455,6 +1536,11 @@ export default function PlanAgreementScreen() {
       </View>
     </Screen>
   );
+
+  if (planRow.is_group_plan && user?.id) {
+    return <GroupPlanPolicyGate userId={user.id}>{agreementScreen}</GroupPlanPolicyGate>;
+  }
+  return agreementScreen;
 }
 
 const styles = StyleSheet.create({

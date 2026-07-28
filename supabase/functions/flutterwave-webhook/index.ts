@@ -304,6 +304,81 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (event === 'transfer.completed' || event === 'transfer.failed') {
+      const transferRef =
+        (typeof data.reference === 'string' ? data.reference : undefined) ??
+        (typeof data.tx_ref === 'string' ? data.tx_ref : undefined);
+      if (!transferRef || !transferRef.startsWith('linkup-disburse-')) {
+        return new Response(JSON.stringify({ ok: true, ignored: 'not_disburse_ref' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: request } = await supabase
+        .from('disbursement_requests')
+        .select('id, user_id, amount_cents, wallet_ledger_debit_id, bank_name')
+        .eq('flutterwave_transfer_ref', transferRef)
+        .maybeSingle();
+
+      if (!request) {
+        console.error('[flutterwave-webhook] No disbursement request for ref:', transferRef);
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (event === 'transfer.completed') {
+        await supabase
+          .from('disbursement_requests')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', request.id);
+
+        await supabase.rpc('create_notification', {
+          p_user_id: request.user_id,
+          p_type: 'withdrawal_completed',
+          p_title: 'Funds received',
+          p_body: `Your withdrawal of NGN ${Math.round(request.amount_cents / 100).toLocaleString('en-NG')} has been received by your bank.`,
+          p_data: { href: '/wallet' },
+          p_priority: 'high',
+          p_dedupe_key: `withdrawal_done:${request.id}`,
+        });
+      } else {
+        if (request.wallet_ledger_debit_id) {
+          await supabase.from('wallet_ledger').delete().eq('id', request.wallet_ledger_debit_id);
+        }
+
+        await supabase
+          .from('disbursement_requests')
+          .update({
+            status: 'failed',
+            failure_reason:
+              (typeof data.complete_message === 'string' ? data.complete_message : null) ??
+              'transfer_failed',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', request.id);
+
+        await supabase.rpc('create_notification', {
+          p_user_id: request.user_id,
+          p_type: 'withdrawal_failed',
+          p_title: 'Withdrawal failed',
+          p_body:
+            'Your withdrawal could not be processed. Your funds have been returned to your wallet. Please try again or contact support.',
+          p_data: { href: '/wallet' },
+          p_priority: 'high',
+          p_dedupe_key: `withdrawal_failed:${request.id}`,
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ ok: true, ignored: event }), {
       headers: { 'Content-Type': 'application/json' },
     });

@@ -1,9 +1,8 @@
 /**
  * Hinge-style clarity card for escrow — plan creation step 2.
  */
-import { CancellationPolicyRows } from '@/components/plans/CancellationPolicyRows';
+import { CancellationMatrixPolicy } from '@/components/plans/CancellationMatrixPolicy';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
-import { COMMITMENT_CANCELLATION_POLICY_ROWS } from '@/lib/plans/cancellationPolicy';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -23,7 +22,7 @@ export function EscrowTrustExplainerCard() {
         Funds stay in escrow until the meetup completes. Cancellation rules are fixed at agreement and enforced on
         our servers, not negotiated in chat.
       </Text>
-      <CancellationPolicyRows rows={COMMITMENT_CANCELLATION_POLICY_ROWS} dense />
+      <CancellationMatrixPolicy planType="standard" escrowPattern="A" dense />
       <View style={styles.footnote}>
         <Ionicons name="server-outline" size={14} color={colors.primary} />
         <Text style={styles.footnoteTxt}>Full policy shown again before both parties confirm and pay.</Text>

@@ -16,6 +16,10 @@ import {
 import { ChatComposer } from '@/components/messages/ChatComposer';
 import { GroupMentionPicker } from '@/components/messages/GroupMentionPicker';
 import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
+import { ArrivalNudgeButton } from '@/components/plans/ArrivalNudgeButton';
+import { LiveLocationButton } from '@/components/plans/LiveLocationButton';
+import { LiveLocationViewer } from '@/components/plans/LiveLocationViewer';
+import { usePartnerLiveLocationSession } from '@/hooks/usePartnerLiveLocationSession';
 import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
 import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
 import { ChatSafetyEntrySheet } from '@/components/trust/ChatSafetyEntrySheet';
@@ -88,6 +92,7 @@ import {
 import { setConversationLastRead } from '@/lib/messaging/inboxCache';
 import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { subscribeThreadMessagesRealtime } from '@/lib/messaging/subscribeThreadMessagesRealtime';
+import { isPlanActiveForArrivalNudge } from '@/lib/plans/groupPlanAnnexure';
 import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
 import {
   isMessagingFullyVerified,
@@ -190,6 +195,10 @@ export default function GroupChatThreadScreen() {
   const [safetySheetOpen, setSafetySheetOpen] = useState(false);
   const [selectedReportUserId, setSelectedReportUserId] = useState<string | null>(null);
   const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
+  const [myNudgedAt, setMyNudgedAt] = useState<string | null>(null);
+  const [partnerNudgedAt, setPartnerNudgedAt] = useState<string | null>(null);
+  const [partnerUserId, setPartnerUserId] = useState<string | null>(null);
+  const [showArrivalNudge, setShowArrivalNudge] = useState(false);
   const contactBlockFromSendRef = useRef(false);
   const listRef = useRef<FlatList<UiMessage>>(null);
   const {
@@ -201,6 +210,12 @@ export default function GroupChatThreadScreen() {
     onListScroll,
   } = useChatThreadKeyboard({ listRef });
   const verifiedUser = isMessagingFullyVerified(dbUser?.verification_status);
+
+  const partnerLiveSessionId = usePartnerLiveLocationSession(
+    showArrivalNudge ? (groupMeta?.planId ?? null) : null,
+    user?.id
+  );
+  const showLiveLocation = showArrivalNudge && !!groupMeta?.planId && !!user?.id;
 
   const [appearance, setAppearance] = useState<ChatAppearanceState>(DEFAULT_CHAT_APPEARANCE);
   const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
@@ -351,7 +366,9 @@ export default function GroupChatThreadScreen() {
       if (conv.plan_id) {
         const { data: plan } = await supabase
           .from('plans')
-          .select('title, status, scheduled_at, agreed_scheduled_at, meet_type_id, creator_id')
+          .select(
+            'title, status, scheduled_at, agreed_scheduled_at, meet_type_id, creator_id, is_group_plan'
+          )
           .eq('id', conv.plan_id)
           .maybeSingle();
         planTitle = plan?.title ?? null;
@@ -362,6 +379,12 @@ export default function GroupChatThreadScreen() {
             meet_type_id: plan.meet_type_id ?? null,
             creator_id: plan.creator_id,
           };
+          setShowArrivalNudge(
+            isPlanActiveForArrivalNudge(
+              plan.status,
+              plan.agreed_scheduled_at ?? plan.scheduled_at ?? null
+            )
+          );
         }
       }
       setGroupMeta({
@@ -373,6 +396,52 @@ export default function GroupChatThreadScreen() {
       });
     })();
   }, [conversationId, user]);
+
+  const refreshArrivalNudges = useCallback(
+    async (planId: string, uid: string) => {
+      const { data } = await supabase
+        .from('plan_arrival_nudges')
+        .select('user_id, nudged_at')
+        .eq('plan_id', planId);
+      const rows = data ?? [];
+      const mine = rows.find((r) => r.user_id === uid);
+      setMyNudgedAt(mine?.nudged_at ?? null);
+      const partner = rows.find((r) => r.user_id !== uid);
+      setPartnerNudgedAt(partner?.nudged_at ?? null);
+      setPartnerUserId(partner?.user_id ?? null);
+    },
+    []
+  );
+
+  useEffect(() => {
+    const planId = groupMeta?.planId;
+    if (!planId || !user?.id || !isSupabaseConfigured) return;
+    void refreshArrivalNudges(planId, user.id);
+    const channel = supabase
+      .channel(`arrival-nudges-${planId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'plan_arrival_nudges',
+          filter: `plan_id=eq.${planId}`,
+        },
+        (payload) => {
+          const row = payload.new as { user_id?: string; nudged_at?: string };
+          if (row.user_id === user.id) {
+            setMyNudgedAt(row.nudged_at ?? null);
+          } else {
+            setPartnerNudgedAt(row.nudged_at ?? null);
+            setPartnerUserId(row.user_id ?? null);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [groupMeta?.planId, user?.id, refreshArrivalNudges]);
 
   useEffect(() => {
     if (!conversationId || !isSupabaseConfigured) return;
@@ -1467,6 +1536,9 @@ export default function GroupChatThreadScreen() {
                     onUnpin={() => void runUnpinMessage()}
                   />
                 ) : null}
+                {partnerLiveSessionId ? (
+                  <LiveLocationViewer partnerSessionId={partnerLiveSessionId} />
+                ) : null}
               </>
             }
             renderItem={({ item }) => {
@@ -1558,6 +1630,19 @@ export default function GroupChatThreadScreen() {
             borderColor={chatPreset.composerBorder}
             onSelect={setText}
           />
+          {showArrivalNudge && groupMeta?.planId && user?.id ? (
+            <ArrivalNudgeButton
+              planId={groupMeta.planId}
+              currentUserId={user.id}
+              myNudgedAt={myNudgedAt}
+              partnerNudgedAt={partnerNudgedAt}
+              partnerUserId={partnerUserId}
+              onNudged={() => void refreshArrivalNudges(groupMeta.planId!, user.id)}
+            />
+          ) : null}
+          {showLiveLocation && groupMeta?.planId && user?.id ? (
+            <LiveLocationButton planId={groupMeta.planId} currentUserId={user.id} />
+          ) : null}
           <ChatComposer
             preset={chatPreset}
             threadLook={messageInputLook}
