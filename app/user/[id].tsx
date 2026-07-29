@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { OfferRequiredBeforeChatError, openDirectChat } from '@/lib/messaging/openDirectChat';
 import { HostMediaGallery } from '@/components/plans/HostMediaGallery';
-import { PublicUserProfileSkeleton } from '@/components/profile/PublicUserProfileSkeleton';
+import { ProfileRatingsSection } from '@/components/profile/ProfileRatingsSection';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
 import {
   fetchViewerPrivacyPrefs,
@@ -341,6 +341,8 @@ export default function PublicUserScreen() {
               )}
             </View>
           </View>
+
+          <ProfileRatingsSection profile={profile} />
 
           {canInteract ? (
             <>

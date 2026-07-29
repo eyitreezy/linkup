@@ -204,6 +204,11 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     router.push(`/plan/${data.planId}` as Href);
     return;
   }
+  if (t === 'review_request' && data?.planId) {
+    warmPlanFromPayload(data);
+    router.push(`/plan/${data.planId}/review` as Href);
+    return;
+  }
   if (
     t === 'exigency_auto_triggered' ||
     t === 'exigency_submitted' ||

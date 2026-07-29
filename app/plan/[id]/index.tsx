@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { addPlanToDeviceCalendar, planCanAddToCalendar } from '@/lib/plans/addPlanToDeviceCalendar';
 import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanner';
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
+import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { formatPlanAppFee, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
@@ -82,6 +83,9 @@ type ProfileMini = {
   latitude: number | null;
   longitude: number | null;
   location_label: string | null;
+  host_rating_score?: number | null;
+  host_rating_count?: number | null;
+  completed_meetup_count?: number | null;
 };
 
 function planningPartnerContext(
@@ -294,7 +298,7 @@ export default function PlanOverviewScreen() {
       const { data: profs } = await supabase
         .from('profiles')
         .select(
-          'user_id, display_name, avatar_url, verified_badge, latitude, longitude, location_label'
+          'user_id, display_name, avatar_url, verified_badge, latitude, longitude, location_label, host_rating_score, host_rating_count, completed_meetup_count'
         )
         .in('user_id', [...idSet]);
 
@@ -1512,6 +1516,14 @@ export default function PlanOverviewScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.personRole}>{partnerCtx.roleLabel}</Text>
+                {partnerCtx.otherUserId === plan.creator_id ? (
+                  <HostRatingBadge
+                    hostRatingScore={partnerCtx.profile?.host_rating_score}
+                    hostRatingCount={partnerCtx.profile?.host_rating_count}
+                    completedMeetupCount={partnerCtx.profile?.completed_meetup_count}
+                    variant="detail"
+                  />
+                ) : null}
                 {partnerLocationLabel ? (
                   <PlanningTogetherLocationChip
                     prefix={

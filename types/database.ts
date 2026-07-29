@@ -180,6 +180,16 @@ export interface DbProfile {
   spotlight_until?: string | null;
   created_at: string;
   updated_at: string;
+  host_rating_score?: number | null;
+  host_rating_count?: number;
+  host_score_punctuality?: number | null;
+  host_score_conduct?: number | null;
+  host_score_plan_quality?: number | null;
+  guest_rating_score?: number | null;
+  guest_rating_count?: number;
+  guest_score_punctuality?: number | null;
+  guest_score_conduct?: number | null;
+  completed_meetup_count?: number;
 }
 
 export type EscrowPattern = 'A' | 'B' | 'C';
@@ -291,6 +301,8 @@ export interface DbPlan {
   host_tier?: string | null;
   host_tier_rank?: number;
   completed_at?: string | null;
+  /** When set, bilateral review window is open for this plan. */
+  review_unlock_at?: string | null;
   created_at: string;
   updated_at: string;
 }

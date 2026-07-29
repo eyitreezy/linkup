@@ -19,6 +19,7 @@ export default function PlanIdLayout() {
       <Stack.Screen name="agreement" options={{ headerShown: false }} />
       <Stack.Screen name="confirm" />
       <Stack.Screen name="minimum-action" />
+      <Stack.Screen name="review" />
     </Stack>
   );
 }

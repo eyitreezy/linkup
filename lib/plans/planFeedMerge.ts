@@ -19,7 +19,7 @@ import type { DbMeetType, DbPlan, DbProfile, SubscriptionTier } from '@/types/da
 export type PlanRowFromDb = DbPlan & { meet_types?: DbMeetType | null };
 
 const PROFILE_FIELDS =
-  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, subscription_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences, spotlight_until, masked_activity_enabled';
+  'user_id, display_name, avatar_url, primary_photo_url, birth_date, verified_badge, subscription_badge, ai_trust_score, photo_urls, bio, onboarding_status, preferences, spotlight_until, masked_activity_enabled, host_rating_score, host_rating_count, completed_meetup_count';
 
 type ProfileRow = Pick<
   DbProfile,
@@ -37,6 +37,9 @@ type ProfileRow = Pick<
   | 'preferences'
   | 'spotlight_until'
   | 'masked_activity_enabled'
+  | 'host_rating_score'
+  | 'host_rating_count'
+  | 'completed_meetup_count'
 >;
 
 /** Defence-in-depth for visibility='premium' — tier-relative audience vs viewer. */

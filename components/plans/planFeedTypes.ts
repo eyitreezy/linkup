@@ -21,6 +21,9 @@ export type PlanFeedRow = DbPlan & {
     | 'preferences'
     | 'spotlight_until'
     | 'masked_activity_enabled'
+    | 'host_rating_score'
+    | 'host_rating_count'
+    | 'completed_meetup_count'
   > | null;
   /** Always null in client feed — `users.verification_status` is not readable for other users under RLS. Use `verified_badge` on profile. */
   creatorVerification: UserVerification | null;

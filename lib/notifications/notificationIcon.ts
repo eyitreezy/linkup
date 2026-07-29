@@ -97,6 +97,8 @@ export function notificationIcon(type: string): IonName {
       return 'wallet-outline';
     case 'group_member_opted_out':
       return 'person-remove-outline';
+    case 'review_request':
+      return 'star-outline';
     case 'exigency_auto_triggered':
     case 'exigency_submitted':
     case 'exigency_outcome_applied':

@@ -1,6 +1,7 @@
 /**
  * Hybrid plan card — media-forward header, trust signals, quick actions.
  */
+import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { CreatorSpotlightChip } from '@/components/plans/CreatorSpotlightChip';
 import { TierBadge } from '@/components/TierBadge';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
@@ -440,6 +441,12 @@ function PlanCardInner({
             {!boosted && creatorSpotlighted ? <CreatorSpotlightChip /> : null}
             {hostTier === 'PLATINUM' ? <TierBadge tier="PLATINUM" compact /> : null}
           </View>
+          <HostRatingBadge
+            hostRatingScore={row.creatorProfile?.host_rating_score}
+            hostRatingCount={row.creatorProfile?.host_rating_count}
+            completedMeetupCount={row.creatorProfile?.completed_meetup_count}
+            variant="compact"
+          />
           <Text style={styles.dist}>{distLineLabel}</Text>
           <HostPresenceChip presence={presenceUi} />
         </View>

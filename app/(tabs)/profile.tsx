@@ -5,6 +5,7 @@ import { LogoutConfirmModal } from '@/components/profile/LogoutConfirmModal';
 import { PremiumCard } from '@/components/profile/PremiumCard';
 import { ProfileIdentityCard } from '@/components/profile/ProfileIdentityCard';
 import { ProfilePromptShowcase } from '@/components/profile/ProfilePromptShowcase';
+import { ProfileRatingsSection } from '@/components/profile/ProfileRatingsSection';
 import { ProfileSettingsRow } from '@/components/profile/ProfileSettingsRow';
 import { ProfileSpotlightCard } from '@/components/profile/ProfileSpotlightCard';
 import { ProfileVerificationCard } from '@/components/profile/ProfileVerificationCard';
@@ -146,7 +147,15 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.stat}>
-                  <Text style={[styles.statNum, styles.statMuted]}>—</Text>
+                  <Text style={styles.statNum}>
+                    {profile?.completed_meetup_count != null &&
+                    profile.completed_meetup_count >= 3 &&
+                    profile.host_rating_score != null
+                      ? profile.host_rating_score.toFixed(1)
+                      : profile?.completed_meetup_count
+                        ? 'New'
+                        : '—'}
+                  </Text>
                   <Text style={styles.statLabel}>Rating</Text>
                 </View>
               </View>
@@ -168,6 +177,8 @@ export default function ProfileScreen() {
           ) : null}
 
           <ProfilePromptShowcase preferences={profile?.preferences} />
+
+          {profile ? <ProfileRatingsSection profile={profile} /> : null}
 
           <PremiumCard
             dbUser={dbUser}
