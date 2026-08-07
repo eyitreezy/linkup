@@ -27,6 +27,27 @@ export function formatPlanPrice(plan: DbPlan): string | null {
   return `${v} ${plan.currency}`;
 }
 
+/** Plan creation date for Meetup details meta card. */
+export function formatPlanCreated(plan: DbPlan): string {
+  const iso = plan.created_at;
+  if (!iso) return 'Recently';
+  const created = new Date(iso);
+  if (Number.isNaN(created.getTime())) return 'Recently';
+
+  const diffMs = Date.now() - created.getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days < 1) return 'Created today';
+  if (days === 1) return 'Created yesterday';
+  if (days < 14) return `Created ${days} days ago`;
+
+  const formatted = created.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: created.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+  });
+  return `Created • ${formatted}`;
+}
+
 export function formatPlanAppFee(plan: DbPlan): string | null {
   if (plan.starting_price_cents == null || plan.starting_price_cents <= 0) return null;
   const feeCents = platformFeeCentsForAmount(plan.starting_price_cents);

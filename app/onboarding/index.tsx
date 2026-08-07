@@ -49,6 +49,12 @@ import {
   persistOnboardingResumeStep,
   saveOnboardingStep,
 } from '@/lib/onboarding/persist';
+import {
+  getOnboardingFinishBlocker,
+  getOnboardingFinishBlockerStep,
+  getOnboardingValidationFocus,
+  type OnboardingValidationFocus,
+} from '@/lib/onboarding/validation';
 import { userFacingOnboardingSaveError } from '@/lib/onboarding/userFacingError';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
@@ -102,6 +108,8 @@ export default function OnboardingScreen() {
     variant: AppFeedbackVariant;
   } | null>(null);
   const [contactsImportStatus, setContactsImportStatus] = useState<'idle' | 'imported' | 'denied'>('idle');
+  const [validationFocus, setValidationFocus] = useState<OnboardingValidationFocus | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const hydratedUserRef = useRef<string | null>(null);
   const skipDraftHydrateRef = useRef(false);
   const stepRestoredRef = useRef(false);
@@ -285,7 +293,26 @@ export default function OnboardingScreen() {
   const finish = useCallback(
     async (mode: 'publish' | 'draft') => {
       if (!user?.id) return;
+
+      if (mode === 'publish') {
+        const blocker = getOnboardingFinishBlocker(draft);
+        if (blocker) {
+          const targetStep = getOnboardingFinishBlockerStep(draft);
+          setValidationFocus(getOnboardingValidationFocus(draft));
+          setValidationMessage(blocker);
+          setStep(targetStep);
+          setFeedback({
+            variant: 'warning',
+            title: 'Almost there',
+            message: blocker,
+          });
+          return;
+        }
+      }
+
       setSaving(true);
+      setValidationFocus(null);
+      setValidationMessage(null);
       const { error, uploadedPhotoUrls } = await finalizeOnboarding({
         userId: user.id,
         draft,
@@ -295,9 +322,13 @@ export default function OnboardingScreen() {
       if (error) {
         setSaving(false);
         setShowSaveDraftModal(false);
+        const targetStep = getOnboardingFinishBlockerStep(draft);
+        setValidationFocus(getOnboardingValidationFocus(draft));
+        setValidationMessage(error.message);
+        if (mode === 'publish') setStep(targetStep);
         setFeedback({
           variant: 'error',
-          title: mode === 'draft' ? 'Could not save draft' : 'Could not publish',
+          title: mode === 'draft' ? 'Could not save draft' : 'Could not finish',
           message: userFacingOnboardingSaveError(error.message),
         });
         return;
@@ -500,7 +531,7 @@ export default function OnboardingScreen() {
                   style={styles.previewFooterMid}
                 />
                 <Button
-                  title="Publish and go to Home"
+                  title="Finish & Go to Discover"
                   onPress={() => finish('publish')}
                   loading={saving}
                   gradient
@@ -519,14 +550,29 @@ export default function OnboardingScreen() {
               transition={{ type: 'timing', duration: 280 }}
             >
               <View style={styles.stepCard}>
+          {validationMessage && step < 4 ? (
+            <View style={styles.validationBanner}>
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
+              <Text style={styles.validationBannerText}>{validationMessage}</Text>
+            </View>
+          ) : null}
           {step === 0 && (
             <View>
               <Input
                 label="Display name"
                 variant="onboarding"
                 value={draft.displayName}
-                onChangeText={(t) => setDraft((d) => ({ ...d, displayName: t }))}
+                onChangeText={(t) => {
+                  setValidationFocus(null);
+                  setValidationMessage(null);
+                  setDraft((d) => ({ ...d, displayName: t }));
+                }}
                 placeholder="How should we call you?"
+                error={
+                  validationFocus === 'displayName' && validationMessage
+                    ? validationMessage
+                    : undefined
+                }
               />
               <Text style={authSoftLabelStyle}>Birthday</Text>
               <Pressable
@@ -567,6 +613,7 @@ export default function OnboardingScreen() {
                 localUris={draft.localPhotoUris}
                 remoteUrls={draft.remotePhotoUrls}
                 primaryRef={draft.primaryPhotoRef}
+                highlightError={validationFocus === 'photos' ? validationMessage : null}
                 onChangeLocal={(uris) =>
                   setDraft((d) => ({
                     ...d,
@@ -592,6 +639,7 @@ export default function OnboardingScreen() {
                 localUri={draft.localVideoUri}
                 remoteUrl={draft.remoteVideoUrl}
                 required
+                highlightError={validationFocus === 'video' ? validationMessage : null}
                 onPickLocal={(uri) => setDraft((d) => ({ ...d, localVideoUri: uri }))}
                 onRemove={() =>
                   setDraft((d) => ({
@@ -681,7 +729,12 @@ export default function OnboardingScreen() {
                     locationLongitude: patch.locationLongitude,
                   }))
                 }
-                showRequiredHint={!canContinue3}
+                showRequiredHint={
+                  validationFocus === 'location' ? true : !canContinue3
+                }
+                validationMessage={
+                  validationFocus === 'location' ? validationMessage : null
+                }
               />
               <Text style={[authSoftLabelStyle, styles.fieldLabelSpacing]}>I am</Text>
               <View style={styles.intentRow}>
@@ -1096,4 +1149,23 @@ const styles = StyleSheet.create({
   },
   previewFooterMid: { marginTop: 0 },
   previewFooterPrimary: { marginTop: 0 },
+  validationBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.28)',
+  },
+  validationBannerText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.danger,
+  },
 });

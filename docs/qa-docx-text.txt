@@ -1,0 +1,1601 @@
+﻿
+LinkUp - User Test Cases
+Quality Assurance Â· Manual User Acceptance Testing
+Document version: 1.2    Generated: 2026-07-11    Product: LinkUp Mobile (iOS / Android)
+1. Purpose & Scope
+This document defines manual user test cases for LinkUp, a social meetup app with discovery, plans, negotiation, escrow (Flutterwave), messaging, verification (KYC), membership tiers, and admin tooling. Cases are written for QA testers, UAT participants, and release sign-off.
+2. Test Environment
+Staging or production Supabase project with Auth SMTP configured (signup/reset emails deliver).
+Physical device recommended for push notifications, deep links (linkup://auth/callback), and KYC camera flows.
+Test accounts: unverified member, verified member, Silver/Gold/Platinum member, admin (admins table row).
+Flutterwave test keys for escrow and membership checkout; bank transfer virtual account function deployed.
+Edge functions deployed for QA: create-escrow-payment, generate-virtual-account, verify-bank-account, list-nigerian-banks, verify-flutterwave-payment, flutterwave-webhook.
+Nigerian banks seed/migration applied (nigerian_banks table populated; bank codes aligned).
+Optional second device/account for messaging, offer negotiation, and split escrow funding.
+3. Priority Definitions
+Priority
+Definition
+Critical
+Blocks release; core auth, onboarding, discover, plan pay flow, or data loss risk.
+High
+Major feature broken; workaround difficult.
+Medium
+Secondary feature or UX issue with workaround.
+Low
+Cosmetic or edge case.
+4. How to Execute
+For each test case record: Tester name, Date, Environment (OS/build), Result (Pass/Fail/Blocked), Actual result, Screenshot/reference, Defect ID if failed.
+5. Test Cases
+Authentication
+TC-AUTH-001: Cold start splash displays brand
+Test ID
+Module
+Priority
+Result
+TC-AUTH-001
+Authentication
+Critical
+Pass / Fail / Blocked
+Preconditions:
+App not running; user logged out or first install.
+Test Steps:
+1. Launch LinkUp on device.
+2. Observe splash overlay.
+Expected Result:
+Pastel splash shows LinkUp logo lockup and 'Meet With Confidence'; fades into login or app within ~5s after auth bootstrap.
+TC-AUTH-002: Email signup with confirmation
+Test ID
+Module
+Priority
+Result
+TC-AUTH-002
+Authentication
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Valid unused email; Supabase confirm-email ON; SMTP configured.
+Test Steps:
+1. Open Sign up.
+2. Enter name, email, password.
+3. Accept privacy consent.
+4. Tap Sign up.
+Expected Result:
+Success message to check email; verification email received with tappable confirm link; no session until confirmed.
+TC-AUTH-003: Email confirmation deep link
+Test ID
+Module
+Priority
+Result
+TC-AUTH-003
+Authentication
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Signup completed; confirmation email received on same device with app installed.
+Test Steps:
+1. Tap Confirm link in email.
+2. Observe app opens via linkup://auth/callback.
+Expected Result:
+App opens; session established; user routed to onboarding (new) or main tabs (returning).
+TC-AUTH-004: Resend verification email cooldown
+Test ID
+Module
+Priority
+Result
+TC-AUTH-004
+Authentication
+High
+Pass / Fail / Blocked
+Preconditions:
+Signup awaiting confirmation.
+Test Steps:
+1. Tap Resend verification.
+2. Immediately tap Resend again.
+Expected Result:
+First resend succeeds or shows check email; second attempt blocked with cooldown message (~60s).
+TC-AUTH-005: Email/password login
+Test ID
+Module
+Priority
+Result
+TC-AUTH-005
+Authentication
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Confirmed account exists.
+Test Steps:
+1. Open Log in.
+2. Enter valid credentials.
+3. Tap Log in.
+Expected Result:
+User enters app; routed per onboarding_status (onboarding or Discover tab).
+TC-AUTH-006: Google OAuth sign-in
+Test ID
+Module
+Priority
+Result
+TC-AUTH-006
+Authentication
+High
+Pass / Fail / Blocked
+Preconditions:
+Google provider enabled in Supabase; device has Google account.
+Test Steps:
+1. Tap Continue with Google.
+2. Complete Google consent.
+Expected Result:
+Session established; user routed to onboarding or main tabs.
+TC-AUTH-007: Forgot password flow
+Test ID
+Module
+Priority
+Result
+TC-AUTH-007
+Authentication
+High
+Pass / Fail / Blocked
+Preconditions:
+Registered email; reset email configured.
+Test Steps:
+1. Tap Forgot password.
+2. Enter email.
+3. Submit.
+4. Open reset link on same device.
+5. Set new password.
+Expected Result:
+Reset email received; new password works on next login.
+TC-AUTH-008: Show/hide password toggle
+Test ID
+Module
+Priority
+Result
+TC-AUTH-008
+Authentication
+Low
+Pass / Fail / Blocked
+Preconditions:
+On login or signup screen.
+Test Steps:
+1. Enter password.
+2. Tap eye icon to show.
+3. Tap again to hide.
+Expected Result:
+Password visibility toggles without clearing field.
+TC-AUTH-009: Invalid login credentials
+Test ID
+Module
+Priority
+Result
+TC-AUTH-009
+Authentication
+High
+Pass / Fail / Blocked
+Preconditions:
+Confirmed account exists.
+Test Steps:
+1. Enter wrong password.
+2. Tap Log in.
+Expected Result:
+Clear error shown; no session created.
+TC-AUTH-010: Signup without privacy consent
+Test ID
+Module
+Priority
+Result
+TC-AUTH-010
+Authentication
+High
+Pass / Fail / Blocked
+Preconditions:
+On signup screen.
+Test Steps:
+1. Fill fields.
+2. Do not check privacy consent.
+3. Tap Sign up.
+Expected Result:
+Signup blocked with consent required message.
+Onboarding
+TC-ONB-001: Complete 5-step onboarding wizard
+Test ID
+Module
+Priority
+Result
+TC-ONB-001
+Onboarding
+Critical
+Pass / Fail / Blocked
+Preconditions:
+New user post-signup.
+Test Steps:
+1. Complete P1 Basics (name, DOB 18+, photos, intro video).
+2. Complete P2 Story.
+3. Complete P3 Location and prefs.
+4. Complete P4 Safety acknowledgment.
+5. Publish on P5 Preview.
+Expected Result:
+Onboarding marked complete; user lands on Discover tab.
+TC-ONB-002: Resume onboarding mid-wizard
+Test ID
+Module
+Priority
+Result
+TC-ONB-002
+Onboarding
+High
+Pass / Fail / Blocked
+Preconditions:
+User partially completed onboarding.
+Test Steps:
+1. Relaunch app.
+2. Continue from saved step.
+Expected Result:
+Wizard resumes at last saved step with draft intact.
+TC-ONB-003: 18+ age gate
+Test ID
+Module
+Priority
+Result
+TC-ONB-003
+Onboarding
+Critical
+Pass / Fail / Blocked
+Preconditions:
+On P1 Basics.
+Test Steps:
+1. Enter birth date under 18.
+2. Attempt continue.
+Expected Result:
+Blocked with age requirement message.
+TC-ONB-004: Primary photo selection
+Test ID
+Module
+Priority
+Result
+TC-ONB-004
+Onboarding
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Multiple photos uploaded.
+Test Steps:
+1. Set one photo as primary.
+2. Complete onboarding.
+3. View profile preview.
+Expected Result:
+Primary photo shown on profile and discovery card.
+Discover
+TC-DIS-001: Discover tab loads swipe deck
+Test ID
+Module
+Priority
+Result
+TC-DIS-001
+Discover
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Logged in; plans exist in feed.
+Test Steps:
+1. Open app (default Discover tab).
+2. Wait for feed load.
+Expected Result:
+Plan cards load with host media, title, and actions.
+TC-DIS-002: Swipe right (interest) on plan
+Test ID
+Module
+Priority
+Result
+TC-DIS-002
+Discover
+High
+Pass / Fail / Blocked
+Preconditions:
+Plan in feed.
+Test Steps:
+1. Swipe right or tap like on a plan card.
+Expected Result:
+Interest recorded; card advances.
+TC-DIS-003: Swipe left (hide) plan
+Test ID
+Module
+Priority
+Result
+TC-DIS-003
+Discover
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Plan in feed.
+Test Steps:
+1. Swipe left to hide plan.
+2. Tap Undo in header.
+Expected Result:
+Plan hidden then restored on undo.
+TC-DIS-004: Switch list display mode
+Test ID
+Module
+Priority
+Result
+TC-DIS-004
+Discover
+Medium
+Pass / Fail / Blocked
+Preconditions:
+On Discover.
+Test Steps:
+1. Open Filters.
+2. Select List display.
+3. Apply.
+Expected Result:
+Feed switches to list layout.
+TC-DIS-005: Apply feed filters
+Test ID
+Module
+Priority
+Result
+TC-DIS-005
+Discover
+High
+Pass / Fail / Blocked
+Preconditions:
+On Discover.
+Test Steps:
+1. Open Filters.
+2. Set distance, price, mood, verified hosts.
+3. Apply.
+Expected Result:
+Feed respects filters.
+TC-DIS-006: Open plan detail from card
+Test ID
+Module
+Priority
+Result
+TC-DIS-006
+Discover
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Plan in feed.
+Test Steps:
+1. Tap plan card (or info action).
+Expected Result:
+Plan detail opens with host media gallery and CTAs.
+TC-DIS-007: Open host member profile
+Test ID
+Module
+Priority
+Result
+TC-DIS-007
+Discover
+High
+Pass / Fail / Blocked
+Preconditions:
+Plan in feed.
+Test Steps:
+1. Tap host avatar.
+Expected Result:
+Public member profile opens.
+TC-DIS-008: Unverified user sees KYC banner
+Test ID
+Module
+Priority
+Result
+TC-DIS-008
+Discover
+High
+Pass / Fail / Blocked
+Preconditions:
+Unverified user logged in.
+Test Steps:
+1. Open Discover.
+Expected Result:
+KYC prompt/banner visible with path to verification.
+TC-DIS-009: Create plan hard gate (unverified)
+Test ID
+Module
+Priority
+Result
+TC-DIS-009
+Discover
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Unverified user.
+Test Steps:
+1. Tap + Create FAB or create entry.
+Expected Result:
+Verification hard gate shown; create blocked.
+TC-DIS-010: Group plan stays in Discover during host payment
+Test ID
+Module
+Priority
+Result
+TC-DIS-010
+Discover
+High
+Pass / Fail / Blocked
+Preconditions:
+Group plan in awaiting_payment while host funds; standard/mood paid plans in same status hidden.
+Test Steps:
+1. Open Discover as guest or third party.
+2. Locate group plan host is paying for.
+3. Confirm standard paid plan in awaiting_payment is not shown.
+Expected Result:
+Group plan remains visible in feed during host payment; non-group awaiting_payment plans are hidden.
+Meetr
+TC-MET-001: Meetr grid loads meet types
+Test ID
+Module
+Priority
+Result
+TC-MET-001
+Meetr
+High
+Pass / Fail / Blocked
+Preconditions:
+Logged in.
+Test Steps:
+1. Navigate to Meetr tab.
+2. Observe category tiles.
+Expected Result:
+Meet type grid loads with icons and labels.
+TC-MET-002: Browse plans by meet type
+Test ID
+Module
+Priority
+Result
+TC-MET-002
+Meetr
+High
+Pass / Fail / Blocked
+Preconditions:
+Meet types available.
+Test Steps:
+1. Tap a meet type tile.
+Expected Result:
+Discover or filtered view shows plans for that meet type.
+TC-MET-003: Custom meet type pending state
+Test ID
+Module
+Priority
+Result
+TC-MET-003
+Meetr
+Medium
+Pass / Fail / Blocked
+Preconditions:
+User submitted custom meet type awaiting approval.
+Test Steps:
+1. Open Meetr.
+2. Tap pending tile.
+Expected Result:
+Pending state shown; type not selectable for create until approved.
+TC-MET-004: Press/hold reveals meet type description
+Test ID
+Module
+Priority
+Result
+TC-MET-004
+Meetr
+Low
+Pass / Fail / Blocked
+Preconditions:
+On Meetr grid.
+Test Steps:
+1. Press and hold tile.
+2. Release.
+Expected Result:
+Description tooltip or overlay appears.
+Plans
+TC-PLN-001: Verified user creates paid plan
+Test ID
+Module
+Priority
+Result
+TC-PLN-001
+Plans
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Verified user.
+Test Steps:
+1. Start Create plan.
+2. Complete meet/schedule, commitment, details.
+3. Publish.
+Expected Result:
+Plan published to feed with paid escrow configuration.
+TC-PLN-002: Create mood plan
+Test ID
+Module
+Priority
+Result
+TC-PLN-002
+Plans
+High
+Pass / Fail / Blocked
+Preconditions:
+Verified user.
+Test Steps:
+1. Create plan with mood/vibe fields.
+2. Publish.
+Expected Result:
+Mood plan published with countdown/window behavior.
+TC-PLN-003: Guest sends negotiation offer
+Test ID
+Module
+Priority
+Result
+TC-PLN-003
+Plans
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Verified guest; open plan.
+Test Steps:
+1. Open plan detail.
+2. Open negotiate.
+3. Submit offer amount/message.
+Expected Result:
+Offer created; host notified.
+TC-PLN-004: Unverified guest blocked from offer
+Test ID
+Module
+Priority
+Result
+TC-PLN-004
+Plans
+High
+Pass / Fail / Blocked
+Preconditions:
+Guest not verified.
+Test Steps:
+1. Open plan.
+2. Attempt send offer.
+Expected Result:
+Verification gate shown; offer not sent.
+TC-PLN-005: Host accepts offer to agreement
+Test ID
+Module
+Priority
+Result
+TC-PLN-005
+Plans
+High
+Pass / Fail / Blocked
+Preconditions:
+Host has pending acceptable offer.
+Test Steps:
+1. Open Offers or plan.
+2. Accept offer.
+3. Review agreement screen.
+Expected Result:
+Agreement summary shown with gross payment preview for paid plans; path to confirm and fund.
+TC-PLN-006: Edit published plan
+Test ID
+Module
+Priority
+Result
+TC-PLN-006
+Plans
+Medium
+Pass / Fail / Blocked
+Preconditions:
+User is plan host.
+Test Steps:
+1. Open own plan.
+2. Open edit sheet.
+3. Change title/schedule.
+4. Save.
+Expected Result:
+Changes persist; feed reflects updates.
+TC-PLN-007: Group plan host closes group and pays
+Test ID
+Module
+Priority
+Result
+TC-PLN-007
+Plans
+High
+Pass / Fail / Blocked
+Preconditions:
+Group split plan with funded guests; host not yet paid.
+Test Steps:
+1. Open agreement as host.
+2. Follow close group / manage offers path.
+3. Fund host share.
+Expected Result:
+Host escrow created; projected host share matches guest commitments; plan can reach active when all funded.
+Agreement
+TC-AGR-001: Agreement shows gross payment amounts
+Test ID
+Module
+Priority
+Result
+TC-AGR-001
+Agreement
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Paid plan; both parties on agreement screen; escrow row exists.
+Test Steps:
+1. Open agreement as payer.
+2. Review payment preview card and pre-confirm modal.
+3. Compare displayed total to Flutterwave checkout amount.
+Expected Result:
+UI shows gross amount (budget + platform fee) consistently on preview card, modal, and checkout; no budget-only mismatch.
+TC-AGR-002: Meetup confirmed Go to chat
+Test ID
+Module
+Priority
+Result
+TC-AGR-002
+Agreement
+High
+Pass / Fail / Blocked
+Preconditions:
+Paid plan active; user funded and plan status active.
+Test Steps:
+1. Open agreement screen.
+2. Tap Go to chat on Meetup confirmed card.
+Expected Result:
+Routes to plan-related chat: 1:1 DM for standard plans or plan group thread for group plans (not a random DM).
+TC-AGR-003: Both parties must confirm before payer funds
+Test ID
+Module
+Priority
+Result
+TC-AGR-003
+Agreement
+High
+Pass / Fail / Blocked
+Preconditions:
+Paid plan in agreed/awaiting_payment; only one party confirmed.
+Test Steps:
+1. Attempt pay before both confirm.
+2. Complete second confirmation.
+3. Proceed to payment.
+Expected Result:
+Payment blocked until both confirm; payer can proceed after both confirm.
+TC-AGR-004: Agreement to escrow payment method flow
+Test ID
+Module
+Priority
+Result
+TC-AGR-004
+Agreement
+High
+Pass / Fail / Blocked
+Preconditions:
+Paid plan; payer confirmed; escrow pending_funding.
+Test Steps:
+1. From agreement, tap proceed to secure payment / pay CTA.
+2. Land on escrow detail with gross Your share amount.
+3. Tap fund CTA and choose bank transfer.
+Expected Result:
+Agreement routes to escrow with gross amounts; bank transfer path available via payment method selector.
+Offers
+TC-OFR-001: Offers tab sent/received lists
+Test ID
+Module
+Priority
+Result
+TC-OFR-001
+Offers
+High
+Pass / Fail / Blocked
+Preconditions:
+User has sent and received offers.
+Test Steps:
+1. Open Offers tab.
+2. Switch sent/received segments.
+Expected Result:
+Correct offers listed with status (pending, countered, accepted).
+TC-OFR-002: Counter-offer flow
+Test ID
+Module
+Priority
+Result
+TC-OFR-002
+Offers
+High
+Pass / Fail / Blocked
+Preconditions:
+Pending offer exists.
+Test Steps:
+1. Open negotiation thread.
+2. Submit counter offer.
+Expected Result:
+Counter recorded; other party sees updated status.
+Escrow
+TC-ESC-001: Fund escrow via Flutterwave card (paid plan)
+Test ID
+Module
+Priority
+Result
+TC-ESC-001
+Escrow
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Agreement reached on paid plan; Flutterwave configured.
+Test Steps:
+1. Proceed to payment from agreement or escrow.
+2. Choose card payment.
+3. Complete Flutterwave checkout.
+Expected Result:
+Escrow leg marked funded; plan moves toward active when all legs funded; both parties notified.
+TC-ESC-002: View escrow status
+Test ID
+Module
+Priority
+Result
+TC-ESC-002
+Escrow
+High
+Pass / Fail / Blocked
+Preconditions:
+Active or pending escrow exists.
+Test Steps:
+1. Open escrow detail from plan or wallet path.
+Expected Result:
+Status, gross amounts, counterparty, split breakdown, and next actions visible.
+TC-ESC-003: Open dispute on escrow
+Test ID
+Module
+Priority
+Result
+TC-ESC-003
+Escrow
+High
+Pass / Fail / Blocked
+Preconditions:
+Eligible active escrow.
+Test Steps:
+1. Open dispute flow.
+2. Submit reason and evidence.
+Expected Result:
+Dispute created; funds flagged; admins notified.
+TC-ESC-004: Payment method selector on escrow
+Test ID
+Module
+Priority
+Result
+TC-ESC-004
+Escrow
+High
+Pass / Fail / Blocked
+Preconditions:
+User is payer on escrow screen.
+Test Steps:
+1. Tap Pay your share or fund CTA.
+2. Observe payment method modal.
+Expected Result:
+Modal offers card vs bank transfer; card continues Flutterwave flow; bank transfer routes to virtual account screen.
+TC-ESC-005: Bank transfer virtual account screen
+Test ID
+Module
+Priority
+Result
+TC-ESC-005
+Escrow
+High
+Pass / Fail / Blocked
+Preconditions:
+Bank transfer path selected; generate-virtual-account deployed; refund account step completed.
+Test Steps:
+1. Choose bank transfer from payment method selector.
+2. Complete refund account step (saved or new verified account).
+3. Review virtual account screen: bank, account number, exact gross amount, countdown.
+Expected Result:
+Virtual account details shown with correct gross amount; content aligned with header padding; copy account works.
+TC-ESC-006: Split escrow Pattern B gross per leg
+Test ID
+Module
+Priority
+Result
+TC-ESC-006
+Escrow
+High
+Pass / Fail / Blocked
+Preconditions:
+Pattern B plan; host and guest each fund separate legs.
+Test Steps:
+1. Open escrow as host and guest.
+2. Review Your share / pay amounts on footer and cards.
+Expected Result:
+Each leg shows gross cents for that leg; Flutterwave charge matches displayed gross.
+Bank Transfer & Refund Account
+TC-BNK-001: Payment method selector on escrow fund
+Test ID
+Module
+Priority
+Result
+TC-BNK-001
+Bank Transfer
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Payer on escrow detail with pending_funding status.
+Test Steps:
+1. Tap Pay your share (or equivalent fund CTA).
+2. Review How would you like to pay modal.
+3. Select Pay by card and Continue (smoke).
+4. Repeat flow; select Pay by bank transfer and Continue.
+Expected Result:
+Modal shows card and bank transfer options with copy; card opens Flutterwave; bank transfer routes to /escrow/bank-transfer/[id].
+TC-BNK-002: Refund account step uses saved account
+Test ID
+Module
+Priority
+Result
+TC-BNK-002
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+User has default saved payment account in user_payment_accounts.
+Test Steps:
+1. Open bank transfer flow for eligible escrow.
+2. On Refund account step, review saved account card.
+3. Tap Use this account.
+Expected Result:
+Saved bank name, masked account number, and verified badge shown; virtual account generates without re-entering details.
+TC-BNK-003: Verify new refund account (10-digit NUBAN)
+Test ID
+Module
+Priority
+Result
+TC-BNK-003
+Bank Transfer
+Critical
+Pass / Fail / Blocked
+Preconditions:
+No saved account or user chose Use a different account.
+Test Steps:
+1. Tap Select a bank and pick a Nigerian bank.
+2. Enter 10-digit account number.
+3. Wait for account name resolution.
+Expected Result:
+verify-bank-account returns account holder name; errors shown for invalid bank/account combo.
+TC-BNK-004: Bank search in selector modal
+Test ID
+Module
+Priority
+Result
+TC-BNK-004
+Bank Transfer
+Medium
+Pass / Fail / Blocked
+Preconditions:
+On refund account form; banks loaded.
+Test Steps:
+1. Open bank selector modal.
+2. Search for partial bank name (e.g. GTB, Access).
+3. Select a result.
+Expected Result:
+Filtered list updates; selection closes modal and fills bank field.
+TC-BNK-005: Save account for future refunds
+Test ID
+Module
+Priority
+Result
+TC-BNK-005
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+New verified account; consent checked.
+Test Steps:
+1. Complete bank verification.
+2. Check NDPR consent checkbox.
+3. Leave Save for future refunds on.
+4. Tap Generate payment account.
+Expected Result:
+Account upserted to user_payment_accounts as default; virtual account session created with refund_account_id.
+TC-BNK-006: Use once without saving
+Test ID
+Module
+Priority
+Result
+TC-BNK-006
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+New verified account; consent checked.
+Test Steps:
+1. Complete bank verification and consent.
+2. Tap Use once (do not save).
+Expected Result:
+Virtual account generated with one-time refund fields; no new default row in user_payment_accounts.
+TC-BNK-007: NDPR consent required
+Test ID
+Module
+Priority
+Result
+TC-BNK-007
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+New account verified; consent unchecked.
+Test Steps:
+1. Attempt Generate payment account without consent.
+2. Check consent and retry.
+Expected Result:
+Primary CTA disabled until consent checked; proceeds after consent.
+TC-BNK-008: Copy virtual account number
+Test ID
+Module
+Priority
+Result
+TC-BNK-008
+Bank Transfer
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Virtual account step active.
+Test Steps:
+1. Tap copy icon beside account number.
+Expected Result:
+Copied confirmation shown; clipboard contains full account number.
+TC-BNK-009: Virtual account expiry and regenerate
+Test ID
+Module
+Priority
+Result
+TC-BNK-009
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+Virtual account session near or past expires_at (test env or wait).
+Test Steps:
+1. Observe countdown reaches Account expired.
+2. Tap Generate new account.
+Expected Result:
+User returned to refund account step; new session can be generated.
+TC-BNK-010: Auto-confirm after bank transfer received
+Test ID
+Module
+Priority
+Result
+TC-BNK-010
+Bank Transfer
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Virtual account issued; Flutterwave webhook or test transfer available.
+Test Steps:
+1. Transfer exact gross amount from registered refund account.
+2. Keep app on virtual account screen or background and return.
+Expected Result:
+Escrow leg or row moves to funded; user routed to plan agreement screen; plan progresses when all legs funded.
+TC-BNK-011: Non-payer blocked from bank transfer route
+Test ID
+Module
+Priority
+Result
+TC-BNK-011
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+User is not the payer / cannot fund this escrow leg.
+Test Steps:
+1. Attempt to open /escrow/bank-transfer/[id] directly or via ineligible CTA.
+Expected Result:
+Redirected to escrow detail or blocked; no virtual account issued.
+TC-BNK-012: Nigerian banks list loads
+Test ID
+Module
+Priority
+Result
+TC-BNK-012
+Bank Transfer
+High
+Pass / Fail / Blocked
+Preconditions:
+list-nigerian-banks deployed; nigerian_banks table seeded.
+Test Steps:
+1. Open refund account form.
+2. Open bank selector.
+Expected Result:
+Banks list populates from API or DB fallback; no empty list in production-like env.
+Messages
+TC-MSG-001: Messages inbox loads
+Test ID
+Module
+Priority
+Result
+TC-MSG-001
+Messages
+Critical
+Pass / Fail / Blocked
+Preconditions:
+User has at least one conversation.
+Test Steps:
+1. Open Messages tab.
+Expected Result:
+Conversation list with preview, time, unread state.
+TC-MSG-002: Send text message in DM
+Test ID
+Module
+Priority
+Result
+TC-MSG-002
+Messages
+High
+Pass / Fail / Blocked
+Preconditions:
+DM thread open.
+Test Steps:
+1. Type message.
+2. Send.
+Expected Result:
+Message appears in thread; delivered to recipient inbox (second device/account).
+TC-MSG-003: Open chat from plan negotiation
+Test ID
+Module
+Priority
+Result
+TC-MSG-003
+Messages
+High
+Pass / Fail / Blocked
+Preconditions:
+Active negotiation thread.
+Test Steps:
+1. Tap Open chat from negotiate screen.
+Expected Result:
+Chat opens with correct counterparty; group plans route to plan group thread when available.
+TC-MSG-004: Smart suggestions bar
+Test ID
+Module
+Priority
+Result
+TC-MSG-004
+Messages
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Chat with plan/meetup context.
+Test Steps:
+1. Open chat thread.
+2. Observe suggestion chips.
+3. Tap a suggestion.
+Expected Result:
+Contextual suggestions shown; tap inserts/sends suggested text.
+TC-MSG-005: Group chat
+Test ID
+Module
+Priority
+Result
+TC-MSG-005
+Messages
+High
+Pass / Fail / Blocked
+Preconditions:
+User member of group conversation.
+Test Steps:
+1. Open group thread.
+2. Send message.
+3. Open group info.
+Expected Result:
+Group messages deliver; member list accessible.
+TC-MSG-006: Push notification tap opens chat
+Test ID
+Module
+Priority
+Result
+TC-MSG-006
+Messages
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Push enabled; message received while app backgrounded.
+Test Steps:
+1. Receive push for new message.
+2. Tap notification.
+Expected Result:
+App opens correct chat thread.
+TC-MSG-007: Video message tap-to-play
+Test ID
+Module
+Priority
+Result
+TC-MSG-007
+Messages
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Chat thread with video attachment.
+Test Steps:
+1. Open chat with video bubble.
+2. Observe poster.
+3. Tap to play.
+Expected Result:
+Video shows play poster first; player mounts on tap without crash.
+Verification
+TC-KYC-001: Start KYC from hard gate
+Test ID
+Module
+Priority
+Result
+TC-KYC-001
+Verification
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Unverified user triggered gate (e.g. create plan).
+Test Steps:
+1. Tap Start verification.
+2. Begin K1 intro.
+Expected Result:
+KYC wizard opens; user can progress or exit with Not now.
+TC-KYC-002: Complete KYC document + video steps
+Test ID
+Module
+Priority
+Result
+TC-KYC-002
+Verification
+High
+Pass / Fail / Blocked
+Preconditions:
+User in KYC wizard.
+Test Steps:
+1. Select ID type.
+2. Capture/upload documents.
+3. Record liveness clip.
+4. Submit.
+Expected Result:
+Submission queued; status pending.
+TC-KYC-003: Verified user creates plan after approval
+Test ID
+Module
+Priority
+Result
+TC-KYC-003
+Verification
+High
+Pass / Fail / Blocked
+Preconditions:
+KYC approved.
+Test Steps:
+1. Create plan after approval.
+Expected Result:
+Hard gate no longer blocks; plan publish succeeds.
+TC-KYC-004: Soft KYC prompt dismiss
+Test ID
+Module
+Priority
+Result
+TC-KYC-004
+Verification
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Post-onboarding soft prompt shown.
+Test Steps:
+1. Dismiss soft prompt.
+2. Continue browsing.
+Expected Result:
+App usable; prompt can reappear per policy.
+Notifications
+TC-NOT-001: Notification inbox loads
+Test ID
+Module
+Priority
+Result
+TC-NOT-001
+Notifications
+High
+Pass / Fail / Blocked
+Preconditions:
+User has notifications.
+Test Steps:
+1. Open notification inbox from header/bell.
+Expected Result:
+Notifications listed with read/unread state.
+TC-NOT-002: Tap notification deep link
+Test ID
+Module
+Priority
+Result
+TC-NOT-002
+Notifications
+High
+Pass / Fail / Blocked
+Preconditions:
+Actionable notification exists.
+Test Steps:
+1. Tap notification row.
+Expected Result:
+Routes to relevant plan, chat, escrow, or settings screen.
+TC-NOT-003: Admin-only notification hidden from members
+Test ID
+Module
+Priority
+Result
+TC-NOT-003
+Notifications
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Admin-only notification type exists.
+Test Steps:
+1. Open inbox as regular member.
+Expected Result:
+Admin-only types (e.g. meet type pending approval) not visible.
+TC-NOT-004: Admin sees meet type pending notification
+Test ID
+Module
+Priority
+Result
+TC-NOT-004
+Notifications
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Admin account; member submitted custom meet type.
+Test Steps:
+1. Open inbox as admin.
+2. Tap meet type notification.
+Expected Result:
+Notification visible; opens Admin Meet types tab.
+Profile & Settings
+TC-SET-001: Edit profile
+Test ID
+Module
+Priority
+Result
+TC-SET-001
+Profile & Settings
+High
+Pass / Fail / Blocked
+Preconditions:
+Logged in.
+Test Steps:
+1. Profile tab -> Edit profile.
+2. Change bio/photos.
+3. Save.
+Expected Result:
+Changes visible on profile and discovery card; form content uses same horizontal padding as account screen.
+TC-SET-002: Notification and visibility preferences
+Test ID
+Module
+Priority
+Result
+TC-SET-002
+Profile & Settings
+High
+Pass / Fail / Blocked
+Preconditions:
+On Settings -> Notifications and visibility.
+Test Steps:
+1. Toggle Push off/on.
+2. Toggle Email off/on.
+3. Toggle visibility options.
+4. Relaunch app.
+Expected Result:
+Preferences persist; screen uses inline back button aligned with header row; content padding matches account screen.
+TC-SET-003: Travel mode (Premium)
+Test ID
+Module
+Priority
+Result
+TC-SET-003
+Profile & Settings
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Premium user.
+Test Steps:
+1. Settings -> Travel.
+2. Set travel location.
+3. Open Discover header.
+Expected Result:
+Travel label shown; feed ranking uses travel location.
+TC-SET-004: Delete account flow
+Test ID
+Module
+Priority
+Result
+TC-SET-004
+Profile & Settings
+High
+Pass / Fail / Blocked
+Preconditions:
+Logged in; no blocking legal hold.
+Test Steps:
+1. Settings -> Delete account.
+2. Confirm deletion.
+Expected Result:
+Account deletion initiated/completed per policy; user signed out.
+TC-SET-005: Privacy policy re-consent
+Test ID
+Module
+Priority
+Result
+TC-SET-005
+Profile & Settings
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Policy update required flag set.
+Test Steps:
+1. Launch app.
+2. Complete re-consent screen.
+Expected Result:
+Access restored after accept; decline blocks or limits per policy.
+Premium / Membership
+TC-PRM-001: Membership subscription checkout
+Test ID
+Module
+Priority
+Result
+TC-PRM-001
+Premium
+High
+Pass / Fail / Blocked
+Preconditions:
+Flutterwave membership checkout configured.
+Test Steps:
+1. Profile -> Membership.
+2. Select tier and billing cycle.
+3. Complete checkout.
+Expected Result:
+Subscription active; badge/perks visible; membership screen background extends behind status bar.
+TC-PRM-002: Saved plans tab (Premium)
+Test ID
+Module
+Priority
+Result
+TC-PRM-002
+Premium
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Premium user; saved plans exist.
+Test Steps:
+1. Open Saved tab.
+Expected Result:
+Saved plans listed.
+TC-PRM-003: Gold trial from Silver subscriber
+Test ID
+Module
+Priority
+Result
+TC-PRM-003
+Premium
+High
+Pass / Fail / Blocked
+Preconditions:
+Eligible Silver subscriber; gold trial not yet used.
+Test Steps:
+1. Open Membership.
+2. Activate Gold trial.
+Expected Result:
+Gold trial active for 7 days; perks unlock.
+Wallet
+TC-WAL-001: Wallet balance and ledger
+Test ID
+Module
+Priority
+Result
+TC-WAL-001
+Wallet
+High
+Pass / Fail / Blocked
+Preconditions:
+User with ledger activity.
+Test Steps:
+1. Open Wallet from profile.
+2. Review balance, goodwill, and recent activity.
+Expected Result:
+Balance, goodwill credits, goodwill history, withdrawals card, and ledger rows render correctly.
+TC-WAL-002: Goodwill history spacing
+Test ID
+Module
+Priority
+Result
+TC-WAL-002
+Wallet
+Low
+Pass / Fail / Blocked
+Preconditions:
+Wallet open; goodwill history empty or populated.
+Test Steps:
+1. Scroll to Goodwill history section.
+2. Observe spacing to Withdrawals card below.
+Expected Result:
+Clear vertical gap between goodwill history block and Withdrawals card matches other card spacing.
+Support
+TC-SUP-001: Create support ticket
+Test ID
+Module
+Priority
+Result
+TC-SUP-001
+Support
+High
+Pass / Fail / Blocked
+Preconditions:
+Logged in.
+Test Steps:
+1. Open Support.
+2. Submit ticket with category and message.
+Expected Result:
+Ticket created; confirmation shown.
+TC-SUP-002: Reply on existing ticket
+Test ID
+Module
+Priority
+Result
+TC-SUP-002
+Support
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Open ticket exists.
+Test Steps:
+1. Open ticket.
+2. Send reply.
+Expected Result:
+Reply appended; status updated.
+Disputes
+TC-DSP-001: View disputes list
+Test ID
+Module
+Priority
+Result
+TC-DSP-001
+Disputes
+High
+Pass / Fail / Blocked
+Preconditions:
+User has plan disputes.
+Test Steps:
+1. Open disputes from support or plan path.
+2. Open disputes list.
+Expected Result:
+Disputes listed with status and plan reference.
+Admin
+TC-ADM-001: Admin dashboard access control
+Test ID
+Module
+Priority
+Result
+TC-ADM-001
+Admin
+Critical
+Pass / Fail / Blocked
+Preconditions:
+Admin and non-admin accounts.
+Test Steps:
+1. Open Admin as non-admin.
+2. Open Admin as admin.
+Expected Result:
+Non-admin blocked; admin sees queues (KYC, reports, meet types, etc.); background extends behind status bar.
+TC-ADM-002: Approve custom meet type
+Test ID
+Module
+Priority
+Result
+TC-ADM-002
+Admin
+High
+Pass / Fail / Blocked
+Preconditions:
+Pending user meet type in queue.
+Test Steps:
+1. Admin -> Meet types.
+2. Approve type.
+Expected Result:
+Type active for users; submitter notified.
+TC-ADM-003: KYC approval grants Silver trial
+Test ID
+Module
+Priority
+Result
+TC-ADM-003
+Admin
+High
+Pass / Fail / Blocked
+Preconditions:
+Pending KYC submission.
+Test Steps:
+1. Admin -> Verification.
+2. Approve submission.
+Expected Result:
+User verified; Silver trial activated per policy.
+TC-ADM-004: Admin copy uses plain punctuation
+Test ID
+Module
+Priority
+Result
+TC-ADM-004
+Admin
+Low
+Pass / Fail / Blocked
+Preconditions:
+Admin account.
+Test Steps:
+1. Browse admin tabs and modals.
+Expected Result:
+No em dash characters in user-visible admin strings; sentences use periods or colons.
+Non-functional
+TC-NFR-001: App background and resume
+Test ID
+Module
+Priority
+Result
+TC-NFR-001
+Non-functional
+Medium
+Pass / Fail / Blocked
+Preconditions:
+Logged in on device.
+Test Steps:
+1. Background app 30s.
+2. Resume.
+Expected Result:
+Session intact; screen restores without crash.
+TC-NFR-002: Pull to refresh on Meetr/Discover
+Test ID
+Module
+Priority
+Result
+TC-NFR-002
+Non-functional
+Medium
+Pass / Fail / Blocked
+Preconditions:
+On Discover or Meetr.
+Test Steps:
+1. Pull to refresh.
+Expected Result:
+Feed reloads; spinner dismisses.
+TC-NFR-003: Offline graceful error
+Test ID
+Module
+Priority
+Result
+TC-NFR-003
+Non-functional
+High
+Pass / Fail / Blocked
+Preconditions:
+Enable airplane mode.
+Test Steps:
+1. Open Discover or Messages.
+Expected Result:
+Friendly error/empty state; no white screen crash.
+6. Test Execution Summary
+Total Cases
+Passed
+Failed
+Blocked
+Not Run
+Pass Rate %
+92
+7. Sign-off
+Role
+Name
+Signature
+Date
+QA Lead
+
+
+
+Product Owner
+
+
+
+Engineering Lead
+
+
+
+

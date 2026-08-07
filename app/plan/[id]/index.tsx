@@ -20,7 +20,7 @@ import { addPlanToDeviceCalendar, planCanAddToCalendar } from '@/lib/plans/addPl
 import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanner';
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
 import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
-import { formatPlanAppFee, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { formatPlanAppFee, formatPlanCreated, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngagement';
@@ -690,6 +690,7 @@ export default function PlanOverviewScreen() {
   const moodClosed = isPlanMoodWindowClosed(plan);
   const moodShelfCopy = planExpiryReason(plan);
   const when = formatPlanWhen(plan);
+  const created = formatPlanCreated(plan);
   const price = formatPlanPrice(plan);
   const appFee = formatPlanAppFee(plan);
   const boosted =
@@ -1073,6 +1074,15 @@ export default function PlanOverviewScreen() {
                 </View>
               </View>
             ) : null}
+            <View style={styles.metaRow}>
+              <View style={[styles.metaIcon, { backgroundColor: 'rgba(148, 163, 184, 0.16)' }]}>
+                <Ionicons name="time-outline" size={18} color="#64748B" />
+              </View>
+              <View style={styles.metaTextCol}>
+                <Text style={styles.metaLabel}>Created</Text>
+                <Text style={styles.metaVal}>{created}</Text>
+              </View>
+            </View>
           </View>
 
           <LinearGradient

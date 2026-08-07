@@ -119,6 +119,8 @@ export function notificationIcon(type: string): IonName {
       return 'checkmark-done-outline';
     case 'withdrawal_failed':
       return 'close-circle-outline';
+    case 'mood_plan_nearby':
+      return 'flash-outline';
     default:
       return 'notifications-outline';
   }

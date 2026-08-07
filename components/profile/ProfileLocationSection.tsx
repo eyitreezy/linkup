@@ -29,6 +29,7 @@ type Props = {
   autoFillOnMount?: boolean;
   /** Shown when user typed but did not pick a suggestion. */
   showRequiredHint?: boolean;
+  validationMessage?: string | null;
 };
 
 export function ProfileLocationSection({
@@ -37,6 +38,7 @@ export function ProfileLocationSection({
   onApply,
   autoFillOnMount = false,
   showRequiredHint,
+  validationMessage,
 }: Props) {
   const [locating, setLocating] = useState(false);
   const autoFillAttempted = useRef(false);
@@ -110,8 +112,9 @@ export function ProfileLocationSection({
       </Pressable>
 
       {showRequiredHint ? (
-        <Text style={styles.requiredHint}>
-          Pick a place from the list or use current location — required for nearby plans.
+        <Text style={[styles.requiredHint, validationMessage ? styles.requiredHintError : null]}>
+          {validationMessage ??
+            'Pick a place from the list or use current location — required for nearby plans.'}
         </Text>
       ) : null}
     </View>
@@ -153,5 +156,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.secondary,
     lineHeight: 18,
+  },
+  requiredHintError: {
+    color: colors.danger,
+    fontWeight: '700',
   },
 });

@@ -13,9 +13,10 @@ type Props = {
   onPickLocal: (uri: string) => void;
   onRemove: () => void;
   required?: boolean;
+  highlightError?: string | null;
 };
 
-export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemove, required }: Props) {
+export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemove, required, highlightError }: Props) {
   const previewUri = localUri ?? remoteUrl;
 
   async function pickVideo() {
@@ -34,9 +35,10 @@ export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemov
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, highlightError ? styles.wrapError : null]}>
       <Text style={[authSoftLabelStyle, styles.labelSpacing]}>Profile video{required ? ' *' : ''}</Text>
       <Text style={styles.hint}>One short intro clip (5–30 sec). MP4, MOV, or WebM.</Text>
+      {highlightError ? <Text style={styles.errorText}>{highlightError}</Text> : null}
 
       {previewUri ? (
         <View style={styles.previewCard}>
@@ -70,6 +72,21 @@ export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemov
 
 const styles = StyleSheet.create({
   wrap: { marginTop: onboarding.spacing.lg },
+  wrapError: {
+    borderRadius: onboarding.radius2xl,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    padding: onboarding.spacing.sm,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.bold,
+    color: colors.danger,
+    marginBottom: onboarding.spacing.sm,
+    lineHeight: 18,
+  },
   labelSpacing: { marginBottom: 4 },
   hint: { fontSize: 12,
     fontFamily: fonts.regular, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18 },

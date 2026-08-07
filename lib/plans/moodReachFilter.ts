@@ -4,18 +4,21 @@ import type { DbPlan } from '@/types/database';
 
 export type MoodReach = 'city' | 'city_adjacent' | 'city_widest' | 'all_cities';
 
-/** Flat absolute km from plan meetup location, stamped at publish from creator tier. */
+/**
+ * Flat absolute km from plan meetup location, stamped at publish from creator tier.
+ * Keep in sync with linkup-web/src/lib/plans/moodReachFilter.ts and public.mood_reach_km().
+ */
 export const MOOD_REACH_KM: Record<MoodReach, number | null> = {
   city: 25,
   city_adjacent: 50,
-  city_widest: 100,
+  city_widest: 20,
   all_cities: null,
 };
 
 export const MOOD_REACH_LABELS: Record<MoodReach, string> = {
   city: 'City-wide · 25km',
   city_adjacent: 'City + nearby · 50km',
-  city_widest: 'Widest reach · 100km',
+  city_widest: 'Widest reach · 20km',
   all_cities: 'All cities',
 };
 

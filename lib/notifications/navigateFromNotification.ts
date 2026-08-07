@@ -21,6 +21,9 @@ export function hrefFromNotificationPayload(data: NotificationPayload | null | u
     if (data.href === '/admin' && adminTab) {
       return `/admin?tab=${adminTab}` as Href;
     }
+    if (data.href === '/discover') {
+      return '/(tabs)' as Href;
+    }
     if (
       data.href.includes('/negotiate') &&
       typeof data.offerId === 'string' &&
@@ -114,6 +117,11 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     }
   }
   if (t === 'join_request_declined') {
+    router.push('/(tabs)' as Href);
+    return;
+  }
+  if (t === 'mood_plan_nearby') {
+    if (data?.planId) warmPlanFromPayload(data);
     router.push('/(tabs)' as Href);
     return;
   }

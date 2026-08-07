@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent
 DOCX_PATH = ROOT / "LinkUp-QA-User-Test-Cases.docx"
 DOC_PATH = ROOT / "LinkUp-QA-User-Test-Cases.doc"
 GENERATED = date.today().isoformat()
-VERSION = "1.2"
-TOTAL_CASES = 92
+VERSION = "1.3"
+TOTAL_CASES = 170
 
 
 def add_heading(doc: Document, text: str, level: int = 1) -> None:
@@ -74,16 +74,24 @@ def build_document() -> Document:
     sub = doc.add_paragraph("Quality Assurance · Manual User Acceptance Testing")
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     meta = doc.add_paragraph(
-        f"Document version: {VERSION}    Generated: {GENERATED}    Product: LinkUp Mobile (iOS / Android)"
+        f"Document version: {VERSION}    Generated: {GENERATED}    Product: LinkUp Mobile + LinkUp Web"
     )
     meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     add_heading(doc, "1. Purpose & Scope", 1)
     add_para(
         doc,
-        "This document defines manual user test cases for LinkUp, a social meetup app with discovery, plans, "
-        "negotiation, escrow (Flutterwave), messaging, verification (KYC), membership tiers, and admin tooling. "
-        "Cases are written for QA testers, UAT participants, and release sign-off.",
+        "This document defines manual user test cases for LinkUp (mobile iOS/Android and web browser), a social "
+        "meetup platform with discovery, plans, negotiation, escrow (Flutterwave), wallet disbursement, group "
+        "plans (Annexure B), meetup confirmation, exigency reports, live location sharing, reviews and ratings, "
+        "disputes (video evidence and chat log consent), messaging, verification (KYC), membership tiers, and "
+        "admin tooling. Cases are written for QA testers, UAT participants, and release sign-off.",
+    )
+    add_para(
+        doc,
+        "Platform tags in preconditions: Mobile = iOS/Android app only; Web = linkup-web browser app only; "
+        "Both = execute on mobile and web unless marked otherwise. Section 'LinkUp Web' covers web-specific "
+        "routes, layout, and smoke checks aligned with docs/PAYMENT_FLOW_CONTENT_MATRIX.md in linkup-web.",
     )
 
     add_heading(doc, "2. Test Environment", 1)
@@ -92,9 +100,11 @@ def build_document() -> Document:
         "Physical device recommended for push notifications, deep links (linkup://auth/callback), and KYC camera flows.",
         "Test accounts: unverified member, verified member, Silver/Gold/Platinum member, admin (admins table row).",
         "Flutterwave test keys for escrow and membership checkout; bank transfer virtual account function deployed.",
-        "Edge functions deployed for QA: create-escrow-payment, generate-virtual-account, verify-bank-account, list-nigerian-banks, verify-flutterwave-payment, flutterwave-webhook.",
+        "Edge functions deployed for QA: create-escrow-payment, generate-virtual-account, verify-bank-account, list-nigerian-banks, verify-flutterwave-payment, flutterwave-webhook, disburse-wallet, disbursement-sweep, submit-arrival-nudge, submit-dispute-video, submit-exigency-report.",
+        "Migrations applied: group_plan_annexure_b, meetup_confirmation_disbursement, rating_review_system, annexure_b_missing_features.",
         "Nigerian banks seed/migration applied (nigerian_banks table populated; bank codes aligned).",
-        "Optional second device/account for messaging, offer negotiation, and split escrow funding.",
+        "Web: linkup-web deployed against same Supabase project; desktop Chrome/Safari recommended for web-only cases.",
+        "Optional second device/account for messaging, offer negotiation, split escrow funding, live location, and meetup confirmation.",
     ]:
         doc.add_paragraph(line, style="List Bullet")
 
@@ -472,6 +482,175 @@ def build_document() -> Document:
     ]:
         add_test_case(doc, *c)
 
+    # Group Plans (Annexure B)
+    add_heading(doc, "Group Plans (Annexure B)", 2)
+    for c in [
+        (
+            "TC-GRP-001",
+            "Group plan policy gate on first create",
+            "Group Plans",
+            "Critical",
+            "Platform: Both. User has never signed group plan policy.",
+            [
+                "Start Create plan as verified host.",
+                "Enable group plan toggle.",
+                "Observe GroupPlanPolicyModal.",
+                "Scroll to bottom and sign.",
+            ],
+            "Modal blocks create until scrolled and signed; policy sections match Annexure B content; after sign, group settings available.",
+        ),
+        (
+            "TC-GRP-002",
+            "Group plan policy gate skipped after prior sign",
+            "Group Plans",
+            "High",
+            "Platform: Both. User already signed group plan policy.",
+            ["Start Create plan.", "Enable group plan toggle."],
+            "Policy modal does not reappear; user proceeds directly to group settings.",
+        ),
+        (
+            "TC-GRP-003",
+            "Create group plan with minimum membership",
+            "Group Plans",
+            "Critical",
+            "Platform: Both. Verified host; policy signed.",
+            [
+                "Create group plan with minimum members (e.g. 5).",
+                "Set split/pattern and publish.",
+                "Open plan detail as host.",
+            ],
+            "Plan published as group type; member count badge shows current vs minimum; guests can request/join slots.",
+        ),
+        (
+            "TC-GRP-004",
+            "Group member count badge and guest panel",
+            "Group Plans",
+            "High",
+            "Platform: Both. Active group plan with partial membership.",
+            ["Open plan detail.", "Review member count badge and guest list panel."],
+            "Badge shows funded/joined count vs minimum; guest panel lists members and funding status.",
+        ),
+        (
+            "TC-GRP-005",
+            "Host confirms group meetup completed",
+            "Group Plans",
+            "Critical",
+            "Platform: Both. Group plan active; meetup datetime passed.",
+            [
+                "Open plan detail as host.",
+                "Tap Confirm Group Meetup Completed.",
+                "Confirm action.",
+            ],
+            "Host confirmation recorded; guests receive meetup confirm notifications; guest confirm window opens.",
+        ),
+        (
+            "TC-GRP-006",
+            "Group guest meetup confirm Yes attended",
+            "Group Plans",
+            "Critical",
+            "Platform: Both. Host confirmed group meetup; guest notified.",
+            [
+                "Open notification or navigate to plan confirm screen as guest.",
+                "Tap Yes, I attended.",
+            ],
+            "Guest confirmation recorded; disbursement queued; guest can navigate to wallet.",
+        ),
+        (
+            "TC-GRP-007",
+            "Minimum not met notification and minimum-action screen",
+            "Group Plans",
+            "Critical",
+            "Platform: Both. Group plan T-48h before meetup; count below minimum.",
+            [
+                "As host, receive group_minimum_not_met notification.",
+                "Tap notification.",
+            ],
+            "Routes to /plan/[id]/minimum-action; three host options visible: extend deadline, proceed smaller, cancel plan.",
+        ),
+        (
+            "TC-GRP-008",
+            "Host extends deadline on minimum-action",
+            "Group Plans",
+            "High",
+            "Platform: Both. On minimum-action screen; eligible to extend.",
+            ["Select extend deadline.", "Confirm new deadline."],
+            "Deadline extended; members notified; plan remains active.",
+        ),
+        (
+            "TC-GRP-009",
+            "Host proceeds with smaller group",
+            "Group Plans",
+            "High",
+            "Platform: Both. On minimum-action; enough funded guests to proceed.",
+            ["Select proceed with current members.", "Confirm."],
+            "Plan proceeds with reduced headcount; meetup can continue per policy.",
+        ),
+        (
+            "TC-GRP-010",
+            "Host cancels due to minimum not met",
+            "Group Plans",
+            "High",
+            "Platform: Both. On minimum-action screen.",
+            ["Select cancel plan.", "Confirm cancellation."],
+            "Plan cancelled; all guests refunded per cancellation matrix; host penalty applied if applicable.",
+        ),
+        (
+            "TC-GRP-011",
+            "Guest opt-out more than 48h before meetup",
+            "Group Plans",
+            "High",
+            "Platform: Both. Guest on group plan; meetup >48h away.",
+            [
+                "Open plan detail as guest (not host).",
+                "Tap opt out of group plan.",
+                "Confirm opt-out.",
+            ],
+            "Guest removed; wallet credited per refund policy; group_member_opted_out notification to host.",
+        ),
+        (
+            "TC-GRP-012",
+            "Guest opt-out drops below minimum triggers cancel",
+            "Group Plans",
+            "High",
+            "Platform: Both. Group near minimum; one opt-out would drop below minimum.",
+            ["Guest opts out.", "Observe plan status and refunds."],
+            "Plan auto-cancelled (triggered_minimum_cancel); all remaining members refunded.",
+        ),
+        (
+            "TC-GRP-013",
+            "Host group cancellation modal with penalty terms",
+            "Group Plans",
+            "Critical",
+            "Platform: Both. User is group plan host; plan active.",
+            [
+                "Open plan detail as host.",
+                "Open Cancel group plan.",
+                "Select reason; review penalty/refund terms (platform fee refund copy).",
+                "Confirm cancellation.",
+            ],
+            "Modal shows reason picker, terms, and confirm; on confirm guests refunded and group_plan_host_cancelled notifications sent.",
+        ),
+        (
+            "TC-GRP-014",
+            "Group plan countdown banners on plan detail",
+            "Group Plans",
+            "Medium",
+            "Platform: Both. Group plan approaching key deadlines (minimum check, meetup, confirm window).",
+            ["Open plan detail at T-48h, meetup day, and post-meetup windows."],
+            "Contextual countdown banners appear with correct messaging per Annexure B timeline.",
+        ),
+        (
+            "TC-GRP-015",
+            "Platform fee refund messaging on host cancel",
+            "Group Plans",
+            "Medium",
+            "Platform: Both. Host cancellation or minimum cancel flow.",
+            ["Review cancellation modal and confirmation copy for platform fee refund eligibility."],
+            "Copy matches platformFeeRefundCopy rules (eligible vs non-eligible scenarios clearly stated).",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
     # Agreement
     add_heading(doc, "Agreement", 2)
     for c in [
@@ -514,6 +693,118 @@ def build_document() -> Document:
                 "Tap fund CTA and choose bank transfer.",
             ],
             "Agreement routes to escrow with gross amounts; bank transfer path available via payment method selector.",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
+    # Meetup Confirmation & Disbursement
+    add_heading(doc, "Meetup Confirmation & Disbursement", 2)
+    for c in [
+        (
+            "TC-CNF-001",
+            "1:1 meetup confirm Yes attended",
+            "Meetup Confirmation",
+            "Critical",
+            "Platform: Both. Paid 1:1 plan active; meetup datetime passed; T+12h confirm window.",
+            [
+                "Open meetup confirm notification or /plan/[id]/confirm.",
+                "Tap Yes, it happened / I attended.",
+            ],
+            "Confirmation recorded; escrow release initiated; disbursement appears in wallet pending queue.",
+        ),
+        (
+            "TC-CNF-002",
+            "1:1 meetup confirm No report problem",
+            "Meetup Confirmation",
+            "Critical",
+            "Platform: Both. On meetup confirm screen.",
+            [
+                "Tap No, report a problem.",
+                "Observe routed screen.",
+            ],
+            "Routes to plan dispute flow (video report) on mobile; on web verify route to dispute detail or report flow per product spec.",
+        ),
+        (
+            "TC-CNF-003",
+            "Meetup confirm push notification deep link",
+            "Meetup Confirmation",
+            "High",
+            "Platform: Mobile. Push enabled; meetup_confirm_requested or meetup_confirm_reminder received.",
+            ["Tap push notification."],
+            "App opens /plan/[id]/confirm for correct plan.",
+        ),
+        (
+            "TC-CNF-004",
+            "Auto-confirm after 24h no dispute",
+            "Meetup Confirmation",
+            "High",
+            "Platform: Both. Meetup confirm window open; user takes no action for 24h; no dispute filed.",
+            ["Wait for auto-confirm job (or simulate in staging).", "Check wallet and plan status."],
+            "Meetup auto-confirmed; funds disbursed per policy; wallet ledger updated.",
+        ),
+        (
+            "TC-CNF-005",
+            "Go to wallet after confirm disbursement",
+            "Meetup Confirmation",
+            "High",
+            "Platform: Both. User just confirmed attendance.",
+            ["Tap Go to wallet from confirm success state."],
+            "Wallet opens showing updated balance and pending/completed disbursement entry.",
+        ),
+        (
+            "TC-CNF-006",
+            "Group guest exigency path from confirm screen",
+            "Meetup Confirmation",
+            "High",
+            "Platform: Both. Group guest on confirm screen after host confirmed meetup.",
+            ["Tap Submit Exigency Report instead of Yes attended."],
+            "Routes to /plan/[id]/exigency with group plan context.",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
+    # Policy Modals & Cancellation Matrix
+    add_heading(doc, "Policy Modals & Cancellation Matrix", 2)
+    for c in [
+        (
+            "TC-POL-001",
+            "Escrow policy sign-off before checkout",
+            "Policy",
+            "Critical",
+            "Platform: Both. User on agreement screen before first escrow payment for plan.",
+            [
+                "Tap proceed to secure payment.",
+                "Observe EscrowPolicySignOffModal.",
+                "Scroll and sign.",
+            ],
+            "Modal shows pattern-specific Annexure B escrow policy; blocks payment until signed.",
+        ),
+        (
+            "TC-POL-002",
+            "Pattern-specific cancellation matrix on agreement",
+            "Policy",
+            "High",
+            "Platform: Both. Plans with escrow patterns A, B, and C.",
+            ["Open agreement for each pattern.", "Review cancellation matrix section."],
+            "Matrix rows match DB cancellation_matrix for plan pattern; amounts and timing correct.",
+        ),
+        (
+            "TC-POL-003",
+            "Safety caveat interstitial after first funded meetup",
+            "Policy",
+            "High",
+            "Platform: Both. First funded meetup with new counterparty pair.",
+            ["Open /escrow/[id] after funding.", "Observe SafetyCaveatInterstitial."],
+            "Interstitial shown once per pair; acknowledge required; not shown again for same pair.",
+        ),
+        (
+            "TC-POL-004",
+            "Section 7.4 cancellation matrix from database",
+            "Policy",
+            "High",
+            "Platform: Both. Plan create or agreement with CancellationMatrixPolicy component.",
+            ["Review Section 7.4 display on create/agreement.", "Compare to admin DB cancellation_matrix rows."],
+            "UI renders live DB matrix (not hardcoded placeholder); updates if DB rows change.",
         ),
     ]:
         add_test_case(doc, *c)
@@ -816,6 +1107,77 @@ def build_document() -> Document:
     ]:
         add_test_case(doc, *c)
 
+    # Live Location Sharing
+    add_heading(doc, "Live Location Sharing", 2)
+    for c in [
+        (
+            "TC-LOC-001",
+            "Start live location with NDPR consent",
+            "Live Location",
+            "High",
+            "Platform: Both. Active plan chat (1:1 or group); meetup upcoming or in progress.",
+            [
+                "Open plan chat thread.",
+                "Tap Share live location.",
+                "Read NDPR consent in LiveLocationConsentModal.",
+                "Select duration and confirm share.",
+            ],
+            "Consent modal blocks until acknowledged; session starts; partner notified (live_location_started).",
+        ),
+        (
+            "TC-LOC-002",
+            "Partner views live location map",
+            "Live Location",
+            "High",
+            "Platform: Both. Partner sharing live location in chat.",
+            [
+                "Open same chat as counterparty.",
+                "Observe LiveLocationViewer map.",
+            ],
+            "Map shows partner pin updating; ETA/distance if applicable.",
+        ),
+        (
+            "TC-LOC-003",
+            "Stop live location sharing",
+            "Live Location",
+            "High",
+            "Platform: Both. User currently sharing location.",
+            ["Tap Stop sharing live location."],
+            "Session ends; map removed for partner; no further location updates.",
+        ),
+        (
+            "TC-LOC-004",
+            "Live location session expiry",
+            "Live Location",
+            "Medium",
+            "Platform: Both. Short duration selected (e.g. 15 min) or wait for expiry.",
+            ["Share location with short duration.", "Wait for expiry."],
+            "Sharing stops automatically at duration end; UI reflects expired state.",
+        ),
+        (
+            "TC-LOC-005",
+            "live_location_started notification routing",
+            "Live Location",
+            "Medium",
+            "Platform: Both. Partner receives live_location_started notification.",
+            ["Tap notification."],
+            "Routes to plan detail or chat per notification handler.",
+        ),
+        (
+            "TC-LOC-006",
+            "Arrival nudge from chat",
+            "Live Location",
+            "Medium",
+            "Platform: Both. Plan chat open; meetup day.",
+            [
+                "Tap Arrival nudge button.",
+                "As partner, receive nudge notification.",
+            ],
+            "Partner notified; optional link to dispute with ?reported= param if used.",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
     # Verification
     add_heading(doc, "Verification", 2)
     for c in [
@@ -896,6 +1258,159 @@ def build_document() -> Document:
             "Admin account; member submitted custom meet type.",
             ["Open inbox as admin.", "Tap meet type notification."],
             "Notification visible; opens Admin Meet types tab.",
+        ),
+        (
+            "TC-NOT-005",
+            "meetup_confirm notification types routing",
+            "Notifications",
+            "High",
+            "Platform: Both. Notifications: meetup_confirm_requested, meetup_confirm_reminder, meetup_confirm_final.",
+            ["Tap each notification type from inbox."],
+            "Each routes to /plan/[id]/confirm.",
+        ),
+        (
+            "TC-NOT-006",
+            "group_minimum_not_met routing",
+            "Notifications",
+            "Critical",
+            "Platform: Both. Host receives group_minimum_not_met.",
+            ["Tap notification."],
+            "Routes to /plan/[id]/minimum-action.",
+        ),
+        (
+            "TC-NOT-007",
+            "group_plan_host_cancelled routing",
+            "Notifications",
+            "High",
+            "Platform: Both. Guest receives group_plan_host_cancelled.",
+            ["Tap notification."],
+            "Routes to /wallet (refund/disbursement context).",
+        ),
+        (
+            "TC-NOT-008",
+            "Exigency outcome notifications",
+            "Notifications",
+            "High",
+            "Platform: Both. exigency resolved notifications (guest/host outcomes).",
+            ["Tap exigency outcome notification."],
+            "Routes to /wallet with ledger explanation.",
+        ),
+        (
+            "TC-NOT-009",
+            "Disbursement and withdrawal notifications",
+            "Notifications",
+            "High",
+            "Platform: Both. disbursement_*, withdrawal_initiated, withdrawal_completed, withdrawal_failed.",
+            ["Tap each notification type."],
+            "Routes to /wallet.",
+        ),
+        (
+            "TC-NOT-010",
+            "group_member_opted_out routing",
+            "Notifications",
+            "Medium",
+            "Platform: Both. Host receives group_member_opted_out.",
+            ["Tap notification."],
+            "Routes to /plan/[id] plan detail.",
+        ),
+        (
+            "TC-NOT-011",
+            "review_request notification routing",
+            "Notifications",
+            "High",
+            "Platform: Both. review_unlock_at passed; review_request notification sent.",
+            ["Tap review_request notification."],
+            "Routes to /plan/[id]/review.",
+        ),
+        (
+            "TC-NOT-012",
+            "new_exigency_report admin routing",
+            "Notifications",
+            "Medium",
+            "Platform: Both. Admin account; new exigency submitted.",
+            ["Tap new_exigency_report as admin."],
+            "Routes to admin plan disputes / exigency queue.",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
+    # Reviews & Ratings
+    add_heading(doc, "Reviews & Ratings", 2)
+    for c in [
+        (
+            "TC-REV-001",
+            "Submit review after review_unlock_at",
+            "Reviews",
+            "Critical",
+            "Platform: Both. Completed meetup; review_unlock_at in past; user has not reviewed.",
+            [
+                "Open /plan/[id]/review via notification or plan path.",
+                "Rate punctuality and conduct (and plan quality if host reviewing guest).",
+                "Submit review.",
+            ],
+            "Review saved; success confirmation; duplicate path blocked on revisit.",
+        ),
+        (
+            "TC-REV-002",
+            "Duplicate review submit blocked",
+            "Reviews",
+            "High",
+            "Platform: Both. User already submitted review for plan.",
+            ["Navigate to /plan/[id]/review again."],
+            "UI shows already reviewed state; submit disabled or redirects.",
+        ),
+        (
+            "TC-REV-003",
+            "Host rating badge on discover",
+            "Reviews",
+            "Medium",
+            "Platform: Both. Host with aggregated ratings on published plan.",
+            ["Open Discover feed.", "Locate host plan card."],
+            "HostRatingBadge shows average rating and review count.",
+        ),
+        (
+            "TC-REV-004",
+            "Profile ratings section on own profile",
+            "Reviews",
+            "High",
+            "Platform: Both. User with at least one received review.",
+            ["Open Profile tab (mobile) or /user/[id] (web).", "Review ProfileRatingsSection / ratings summary."],
+            "Aggregated scores and review list visible on own profile.",
+        ),
+        (
+            "TC-REV-005",
+            "Report review",
+            "Reviews",
+            "High",
+            "Platform: Both. Public profile with reviews from another user.",
+            [
+                "Open another user's profile.",
+                "Tap Report on a review.",
+                "Submit report reason.",
+            ],
+            "Report recorded; confirmation shown; review flagged for admin moderation.",
+        ),
+        (
+            "TC-REV-006",
+            "View reviews on member profile",
+            "Reviews",
+            "Medium",
+            "Platform: Both. Member with multiple reviews.",
+            ["Open /user/[id] or member profile from plan.", "Scroll review list."],
+            "Reviews show rating, text, reviewer anonymization per policy, and date.",
+        ),
+        (
+            "TC-REV-007",
+            "Admin review reports moderation",
+            "Reviews",
+            "High",
+            "Platform: Both. Admin account; reported review in queue.",
+            [
+                "Open Admin -> review_reports tab.",
+                "Review report details.",
+                "Take moderation action (dismiss or remove review).",
+            ],
+            "Queue loads; actions persist; reporter/reviewee state updated per policy.",
         ),
     ]:
         add_test_case(doc, *c)
@@ -1005,6 +1520,127 @@ def build_document() -> Document:
             ["Scroll to Goodwill history section.", "Observe spacing to Withdrawals card below."],
             "Clear vertical gap between goodwill history block and Withdrawals card matches other card spacing.",
         ),
+        (
+            "TC-WAL-003",
+            "Pending disbursement queue display",
+            "Wallet",
+            "High",
+            "Platform: Both. User with meetup confirm disbursement pending processing.",
+            ["Open Wallet.", "Review pending disbursements section."],
+            "Pending items listed with amount, plan reference, and countdown or status.",
+        ),
+        (
+            "TC-WAL-004",
+            "Withdraw to bank account",
+            "Wallet",
+            "Critical",
+            "Platform: Both. Withdrawable balance; verified refund bank account on file.",
+            [
+                "Open Wallet.",
+                "Tap Withdraw.",
+                "Enter amount within limits.",
+                "Confirm withdrawal.",
+            ],
+            "disburse-wallet invoked; withdrawal_initiated notification; balance updates when completed.",
+        ),
+        (
+            "TC-WAL-005",
+            "Withdraw validation min/max and insufficient balance",
+            "Wallet",
+            "High",
+            "Platform: Both. Wallet with known balance.",
+            [
+                "Attempt withdraw below minimum.",
+                "Attempt withdraw above balance.",
+                "Attempt valid partial withdraw.",
+            ],
+            "Validation errors for invalid amounts; valid amount proceeds.",
+        ),
+        (
+            "TC-WAL-006",
+            "Refund account settings",
+            "Wallet",
+            "High",
+            "Platform: Both. User without saved refund account.",
+            [
+                "Open refund account settings (web: /settings/refund-account; mobile: wallet/escrow path).",
+                "Add and verify Nigerian bank account.",
+            ],
+            "Account saved and available for withdrawals and escrow refunds.",
+        ),
+        (
+            "TC-WAL-007",
+            "Goodwill credits non-withdrawable",
+            "Wallet",
+            "Medium",
+            "Platform: Both. User with goodwill balance.",
+            ["Review wallet balance breakdown.", "Attempt to withdraw full displayed total including goodwill."],
+            "Withdrawable amount excludes goodwill; goodwill history separate from withdrawable balance.",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
+    # Exigency Reports
+    add_heading(doc, "Exigency Reports", 2)
+    for c in [
+        (
+            "TC-EXG-001",
+            "Submit exigency report on group plan",
+            "Exigency",
+            "Critical",
+            "Platform: Both. Group guest in confirm window; did not attend or safety issue.",
+            [
+                "Navigate to /plan/[id]/exigency.",
+                "Select reason category.",
+                "Enter narrative.",
+                "Submit report.",
+            ],
+            "Report created; confirmation shown; admin notified (new_exigency_report).",
+        ),
+        (
+            "TC-EXG-002",
+            "Exigency optional evidence with NDPR consent",
+            "Exigency",
+            "High",
+            "Platform: Both. On exigency form step 3.",
+            [
+                "Attach optional photo/video evidence.",
+                "Review EXIGENCY_EVIDENCE_NDPR copy.",
+                "Accept consent and submit.",
+            ],
+            "Evidence uploaded; NDPR consent recorded; report complete.",
+        ),
+        (
+            "TC-EXG-003",
+            "Exigency blocked on non-group plan",
+            "Exigency",
+            "High",
+            "Platform: Both. Standard 1:1 plan (not group).",
+            ["Attempt to open /plan/[id]/exigency directly."],
+            "Route blocked or 404; user directed to plan dispute flow instead.",
+        ),
+        (
+            "TC-EXG-004",
+            "Exigency auto-outcome after 24h no guest report",
+            "Exigency",
+            "High",
+            "Platform: Both. Host confirmed group meetup; guest takes no action 24h.",
+            ["Wait for auto-outcome job.", "Check guest wallet."],
+            "50% floor (or policy amount) credited to guest wallet; notification sent.",
+        ),
+        (
+            "TC-EXG-005",
+            "Admin exigency queue review",
+            "Exigency",
+            "High",
+            "Platform: Both. Admin account; pending exigency report.",
+            [
+                "Open Admin -> plan_disputes / exigency section.",
+                "Review report details and evidence.",
+                "Resolve with outcome.",
+            ],
+            "Admin can view narrative and evidence; resolution triggers wallet updates and notifications.",
+        ),
     ]:
         add_test_case(doc, *c)
 
@@ -1034,16 +1670,250 @@ def build_document() -> Document:
 
     # Disputes
     add_heading(doc, "Disputes", 2)
-    add_test_case(
+    for c in [
+        (
+            "TC-DSP-001",
+            "View disputes list",
+            "Disputes",
+            "High",
+            "Platform: Both. User has plan and escrow disputes.",
+            ["Open /disputes from support or navigation.", "Review list filters."],
+            "Disputes listed with status, type (plan vs escrow), and plan reference.",
+        ),
+        (
+            "TC-DSP-002",
+            "Plan no-show dispute video capture with NDPR",
+            "Disputes",
+            "Critical",
+            "Platform: Both. Eligible plan no-show; entry via confirm No or /dispute/[planId]?reported=.",
+            [
+                "Open plan dispute report flow.",
+                "Record video evidence.",
+                "Review NDPR consent copy in VideoEvidenceCapture.",
+                "Accept and submit.",
+            ],
+            "Video uploaded; NDPR consent recorded; dispute created.",
+        ),
+        (
+            "TC-DSP-003",
+            "Chat log consent step grant access",
+            "Disputes",
+            "High",
+            "Platform: Both. Plan dispute after video step.",
+            [
+                "Proceed to ChatLogConsentStep.",
+                "Grant chat log access.",
+                "Complete dispute submission.",
+            ],
+            "Consent recorded; dispute status reflects chat evidence available for admin.",
+        ),
+        (
+            "TC-DSP-004",
+            "Chat log consent step deny access",
+            "Disputes",
+            "High",
+            "Platform: Both. Plan dispute after video step.",
+            [
+                "Proceed to ChatLogConsentStep.",
+                "Decline chat log access.",
+                "Complete submission.",
+            ],
+            "Dispute submitted without chat logs; status reflects consent declined.",
+        ),
+        (
+            "TC-DSP-005",
+            "Escrow payment dispute separate from plan dispute",
+            "Disputes",
+            "Critical",
+            "Platform: Both. Active funded escrow with payment issue.",
+            [
+                "Open /escrow/[id].",
+                "Open dispute modal (not plan video flow).",
+                "Submit payment dispute reason.",
+            ],
+            "Escrow dispute created; funds on hold; support ticket path; distinct from plan no-show dispute.",
+        ),
+        (
+            "TC-DSP-006",
+            "Dispute detail view status and evidence",
+            "Disputes",
+            "High",
+            "Platform: Both. Existing plan dispute with video submitted.",
+            ["Open /dispute/[planId]/detail."],
+            "Status, video evidence state, chat consent state, and next steps visible.",
+        ),
+    ]:
+        add_test_case(doc, *c)
+
+    # LinkUp Web
+    add_heading(doc, "LinkUp Web", 2)
+    add_para(
         doc,
-        "TC-DSP-001",
-        "View disputes list",
-        "Disputes",
-        "High",
-        "User has plan disputes.",
-        ["Open disputes from support or plan path.", "Open disputes list."],
-        "Disputes listed with status and plan reference.",
+        "Execute these cases in linkup-web (desktop or mobile browser). Shared backend with mobile; "
+        "reference linkup-web/docs/PAYMENT_FLOW_CONTENT_MATRIX.md Section 10 for payment smoke matrix.",
     )
+    for c in [
+        (
+            "TC-WEB-001",
+            "Web auth login and session",
+            "LinkUp Web",
+            "Critical",
+            "Platform: Web. Staging linkup-web URL; test account.",
+            ["Open web app.", "Log in with email/password or OAuth.", "Refresh page."],
+            "Session persists; user lands on Discover or onboarding.",
+        ),
+        (
+            "TC-WEB-002",
+            "Web create group plan end-to-end",
+            "LinkUp Web",
+            "Critical",
+            "Platform: Web. Verified host.",
+            [
+                "Navigate to /plan/create.",
+                "Enable group plan; complete policy gate.",
+                "Publish group plan with minimum members.",
+            ],
+            "Plan created; visible on /plan/[id] with group settings and member badge.",
+        ),
+        (
+            "TC-WEB-003",
+            "Web meetup confirm page",
+            "LinkUp Web",
+            "Critical",
+            "Platform: Web. User in meetup confirm window.",
+            ["Open /plan/[id]/confirm.", "Complete Yes attended flow."],
+            "ConfirmMeetupClient (1:1) or GroupGuestConfirmClient (group) works; wallet link available.",
+        ),
+        (
+            "TC-WEB-004",
+            "Web wallet withdraw dialog",
+            "LinkUp Web",
+            "Critical",
+            "Platform: Web. Withdrawable wallet balance; bank account on file.",
+            [
+                "Open /wallet.",
+                "Click Withdraw.",
+                "Complete WalletWithdrawDialog.",
+            ],
+            "Withdrawal submitted via disburse-wallet; pending/completed state shown on wallet.",
+        ),
+        (
+            "TC-WEB-005",
+            "Web plan dispute video flow",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. Browser with camera permission.",
+            ["Open /dispute/[planId]?reported=[userId].", "Complete video and chat consent steps."],
+            "DisputeReportClient completes full flow in browser.",
+        ),
+        (
+            "TC-WEB-006",
+            "Web chat live location",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. Two accounts; plan chat at /chat/[id] or /chat/group/[id].",
+            ["Share live location with consent.", "Partner views map in thread."],
+            "LiveLocationConsentModal, sharing, and LiveLocationViewer work in web chat.",
+        ),
+        (
+            "TC-WEB-007",
+            "Web review submission page",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. review_unlock_at passed.",
+            ["Open /plan/[id]/review.", "Submit ratings and optional text."],
+            "ReviewMeetupClient saves review; success state shown.",
+        ),
+        (
+            "TC-WEB-008",
+            "Web public plan preview OG card",
+            "LinkUp Web",
+            "Medium",
+            "Platform: Web. Published plan with share link.",
+            [
+                "Open /plan/[id]/preview (logged out or incognito).",
+                "Verify OG metadata and plan card render.",
+            ],
+            "Public preview loads without auth; share card API /api/plan/[id]/card returns image metadata.",
+        ),
+        (
+            "TC-WEB-009",
+            "Web admin exigency and review reports tabs",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. Admin account.",
+            [
+                "Open /admin?tab=plan_disputes.",
+                "Open /admin?tab=review_reports.",
+            ],
+            "AdminExigencySection and AdminReviewReportsPanel load and are actionable.",
+        ),
+        (
+            "TC-WEB-010",
+            "Web refund account settings page",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. User logged in.",
+            ["Navigate to /settings/refund-account.", "Add or update bank account."],
+            "RefundAccountSettingsScreen saves verified account for withdrawals.",
+        ),
+        (
+            "TC-WEB-011",
+            "Web minimum-action host decision page",
+            "LinkUp Web",
+            "Critical",
+            "Platform: Web. Host with group_minimum_not_met state.",
+            ["Open /plan/[id]/minimum-action.", "Execute one host decision."],
+            "MinimumActionClient shows three options; selected action persists.",
+        ),
+        (
+            "TC-WEB-012",
+            "Web payment flow matrix smoke",
+            "LinkUp Web",
+            "Critical",
+            "Platform: Web. Reference PAYMENT_FLOW_CONTENT_MATRIX.md Section 10.",
+            [
+                "Pick one cell: plan kind (Standard/Mood/Group) x pattern (A/B/C) x role x paid/free.",
+                "Walk Review and confirm -> Confirm plan -> Secure payment (or free confirm).",
+            ],
+            "Each step shows correct copy and CTAs for selected matrix cell; gross amounts consistent.",
+        ),
+        (
+            "TC-WEB-013",
+            "Web agreement escrow policy and group split",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. Group plan with pending guest funding.",
+            [
+                "Open /plan/[id]/agreement?offerId=....",
+                "Review GroupSplitAgreementSection and EscrowPolicySignOffModal.",
+                "Fund via /escrow/[id].",
+            ],
+            "Group agreement and escrow policy modals match mobile; payment completes.",
+        ),
+        (
+            "TC-WEB-014",
+            "Web exigency route group-only guard",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. Standard 1:1 plan ID.",
+            ["Navigate to /plan/[id]/exigency for non-group plan."],
+            "404 or redirect; no broken exigency form for 1:1 plans.",
+        ),
+        (
+            "TC-WEB-015",
+            "Web notification inbox deep links",
+            "LinkUp Web",
+            "High",
+            "Platform: Web. User with mixed notification types.",
+            [
+                "Open /notifications.",
+                "Tap meetup_confirm, review_request, disbursement, and group_minimum_not_met rows.",
+            ],
+            "Each routes to correct web path (/plan/.../confirm, /review, /wallet, /minimum-action).",
+        ),
+    ]:
+        add_test_case(doc, *c)
 
     # Admin
     add_heading(doc, "Admin", 2)

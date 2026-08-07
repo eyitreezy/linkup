@@ -3,12 +3,12 @@
  */
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
 import { runInitialProfileScreening } from '@/lib/onboarding/profileScreening';
-import { PROFILE_MIN_PHOTOS_ONBOARDING } from '@/lib/profile/media/constants';
 import { persistProfileMediaFromDraft } from '@/lib/profile/media/persist';
 import { supabase } from '@/lib/supabase';
 import type { OnboardingDraft } from '@/types/onboarding';
 import { preferencesFromDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
+import { getOnboardingFinishBlocker } from '@/lib/onboarding/validation';
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import type { ProfilePreferences } from '@/types/database';
 
@@ -137,11 +137,11 @@ export async function finalizeOnboarding(args: {
 }): Promise<{ error: Error | null; uploadedPhotoUrls: string[] }> {
   const { userId, draft, existingPreferences, mode } = args;
 
-  if (mode === 'publish' && !hasValidProfileLocation(draft)) {
-    return {
-      error: new Error('Add your current location before finishing — search or use current location.'),
-      uploadedPhotoUrls: [],
-    };
+  if (mode === 'publish') {
+    const blocker = getOnboardingFinishBlocker(draft);
+    if (blocker) {
+      return { error: new Error(blocker), uploadedPhotoUrls: [] };
+    }
   }
 
   if (mode === 'skip') {
@@ -164,15 +164,6 @@ export async function finalizeOnboarding(args: {
     return {
       error: error ? new Error(error.message) : null,
       uploadedPhotoUrls: saved.uploadedPhotoUrls,
-    };
-  }
-
-  const photoCount = draft.localPhotoUris.length + draft.remotePhotoUrls.length;
-  const hasVideo = !!(draft.localVideoUri || draft.remoteVideoUrl);
-  if (mode === 'publish' && (photoCount < PROFILE_MIN_PHOTOS_ONBOARDING || !hasVideo)) {
-    return {
-      error: new Error(`Add at least ${PROFILE_MIN_PHOTOS_ONBOARDING} photos and one intro video to publish.`),
-      uploadedPhotoUrls: [],
     };
   }
 
@@ -219,7 +210,7 @@ export async function finalizeOnboarding(args: {
   const preferencesOut =
     mode === 'publish' ? stripOnboardingResumeStep(mergedPrefs) : mergedPrefs;
 
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from('profiles')
     .update({
       display_name: draft.displayName.trim(),
@@ -238,7 +229,23 @@ export async function finalizeOnboarding(args: {
       ...(typeof finalizeTrust === 'number' ? { ai_trust_score: finalizeTrust } : {}),
       preferences: preferencesOut,
     })
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select('onboarding_status')
+    .single();
 
-  return { error: error ? new Error(error.message) : null, uploadedPhotoUrls };
+  if (error) {
+    const msg = error.message.includes('onboarding_incomplete:')
+      ? error.message.replace('onboarding_incomplete:', '').trim()
+      : error.message;
+    return { error: new Error(msg), uploadedPhotoUrls };
+  }
+
+  if (mode === 'publish' && data?.onboarding_status !== 'complete') {
+    return {
+      error: new Error('Could not complete onboarding. Please review your profile and try again.'),
+      uploadedPhotoUrls,
+    };
+  }
+
+  return { error: null, uploadedPhotoUrls };
 }

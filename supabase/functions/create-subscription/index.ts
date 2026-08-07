@@ -4,6 +4,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { resolveFlutterwaveRedirectUrl } from '../_shared/flutterwaveRedirect.ts';
+import { resolveFlutterwaveCustomer } from '../_shared/flutterwaveCustomer.ts';
 import { corsHeaders, handleCors, jsonError, jsonResponse } from '../_shared/http.ts';
 import { type BillingCycle, type PaidTier, tierPriceNgn } from '../_shared/pricing.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
@@ -90,6 +91,18 @@ Deno.serve(async (req) => {
 
   const amount = tierPriceNgn(tier, billingCycle);
   const txRef = `linkup_sub_${userId}_${Date.now()}`;
+  const customer = resolveFlutterwaveCustomer({
+    email,
+    displayName: (profile?.display_name as string | null) ?? null,
+    authMetadata: authData.user.user_metadata as Record<string, unknown>,
+  });
+
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('subscription_tier')
+    .eq('id', userId)
+    .maybeSingle();
+
   const redirectResolved = resolveFlutterwaveRedirectUrl(
     body.redirect_url,
     `${deepLinkScheme}://subscription/callback`
@@ -110,10 +123,7 @@ Deno.serve(async (req) => {
       amount,
       currency: 'NGN',
       redirect_url: redirectUrl,
-      customer: {
-        email,
-        name: (profile?.display_name as string | null) ?? email.split('@')[0],
-      },
+      customer,
       meta: {
         user_id: userId,
         tier,
@@ -144,6 +154,17 @@ Deno.serve(async (req) => {
     console.error('Flutterwave returned invalid payment link', paymentLink);
     return jsonError('Payment provider returned an invalid checkout link', 502);
   }
+
+  await supabase.from('subscription_events').insert({
+    user_id: userId,
+    event_type: 'checkout_started',
+    from_tier: (userRow?.subscription_tier as string | undefined) ?? 'FREE',
+    to_tier: tier,
+    billing_cycle: billingCycle,
+    amount_ngn: amount,
+    flutterwave_reference: txRef,
+    metadata: { redirect_url: redirectUrl },
+  });
 
   return jsonResponse({
     payment_link: paymentLink,

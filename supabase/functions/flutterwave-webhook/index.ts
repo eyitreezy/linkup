@@ -6,11 +6,14 @@
 import { processEscrowCharge } from '../_shared/flutterwaveEscrow.ts';
 import { processVirtualAccountBankTransfer } from '../_shared/flutterwaveVirtualAccount.ts';
 import {
+  fulfillSubscriptionFromVerifiedPayment,
+  isSubscriptionFlutterwaveReference,
+} from '../_shared/flutterwaveSubscription.ts';
+import {
   isEscrowFlutterwaveReference,
   normalizeFlutterwaveMeta,
   parseFlutterwaveAmountNgn,
 } from '../_shared/flutterwaveMeta.ts';
-import { calculateExpiry, type BillingCycle, type PaidTier } from '../_shared/pricing.ts';
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 type FlwMeta = Record<string, unknown>;
@@ -197,70 +200,42 @@ Deno.serve(async (req) => {
         });
       }
 
-    const userId = metaString(meta, 'user_id');
-    const tier = metaString(meta, 'tier') as PaidTier | undefined;
-    const billingCycle = metaString(meta, 'billing_cycle') as BillingCycle | undefined;
+    const isSubscriptionPayment =
+      !isVirtualAccountRef &&
+      !isEscrowPayment &&
+      (linkup === 'subscription' || isSubscriptionFlutterwaveReference(reference));
 
-    if (!userId || !tier || !billingCycle || !['SILVER', 'GOLD', 'PLATINUM'].includes(tier)) {
-      return new Response('Bad metadata', { status: 400 });
-    }
+    if (isSubscriptionPayment) {
+      const subResult = await fulfillSubscriptionFromVerifiedPayment(supabase, {
+        reference,
+        meta,
+        amountNgn,
+        txId,
+        customerId:
+          verifyJson.data?.customer?.id != null
+            ? String(verifyJson.data.customer.id)
+            : undefined,
+      });
 
-    const { data: existing } = await supabase
-      .from('users')
-      .select('subscription_tier, subscription_expires_at, has_been_silver_subscriber')
-      .eq('id', userId)
-      .maybeSingle();
+      if (!subResult.ok) {
+        console.error('[flutterwave-webhook] subscription fulfillment failed', {
+          reference,
+          error: subResult.error,
+        });
+        return new Response(JSON.stringify({ ok: false, error: subResult.error }), {
+          status: subResult.status >= 500 ? 500 : 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
 
-    const fromTier = (existing?.subscription_tier as string | undefined) ?? 'FREE';
-    const hadActive =
-      existing?.subscription_expires_at &&
-      new Date(existing.subscription_expires_at).getTime() > Date.now() &&
-      fromTier !== 'FREE';
-    const expiresAt = calculateExpiry(billingCycle);
-
-    const patch: Record<string, unknown> = {
-      subscription_tier: tier,
-      billing_cycle: billingCycle,
-      subscription_expires_at: expiresAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (tier === 'SILVER') {
-      patch.has_been_silver_subscriber = true;
-    }
-    if (verifyJson.data?.customer?.id) {
-      patch.flutterwave_customer_id = String(verifyJson.data.customer.id);
-    }
-
-    const { error: upErr } = await supabase.from('users').update(patch).eq('id', userId);
-    if (upErr) {
-      console.error('users update', upErr.message);
-      return new Response(upErr.message, { status: 500 });
-    }
-
-    await supabase.from('subscription_events').insert({
-      user_id: userId,
-      event_type: 'payment_succeeded',
-      from_tier: fromTier,
-      to_tier: tier,
-      billing_cycle: billingCycle,
-      amount_ngn: amountNgn,
-      flutterwave_reference: reference,
-      metadata: { tx_id: txId },
-    });
-
-    await supabase.from('subscription_events').insert({
-      user_id: userId,
-      event_type: hadActive ? 'subscription_renewed' : 'subscription_created',
-      from_tier: fromTier,
-      to_tier: tier,
-      billing_cycle: billingCycle,
-      amount_ngn: amountNgn,
-      flutterwave_reference: reference,
-    });
-
-      return new Response(JSON.stringify({ ok: true }), {
+      return new Response(JSON.stringify({ ok: true, subscription: true, already: subResult.already === true }), {
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+
+    return new Response(JSON.stringify({ ok: true, ignored: 'unhandled_charge' }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
     }
 
     if (event === 'subscription.cancelled') {

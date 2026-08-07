@@ -3,6 +3,8 @@
  */
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
+import { isCoordinateInAfrica } from '@/lib/location/africaCountries';
+import { searchNominatimSuggestions } from '@/lib/location/nominatimSearch';
 
 export type LocationSuggestion = {
   label: string;
@@ -24,7 +26,19 @@ export function formatGeocodedAddress(a: Location.LocationGeocodedAddress | null
   return uniq.slice(0, 3).join(', ');
 }
 
-/** Geocode a free-text query into labeled suggestions (deduped by label). */
+function dedupeSuggestions(items: LocationSuggestion[]): LocationSuggestion[] {
+  const seen = new Set<string>();
+  const out: LocationSuggestion[] = [];
+  for (const item of items) {
+    const key = item.placeId ?? `${item.label.toLowerCase()}|${item.latitude}|${item.longitude}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+/** Geocode a free-text query into labeled suggestions (deduped by label). Africa-only. */
 export async function searchLocationSuggestions(
   query: string,
   limit = 8
@@ -40,6 +54,11 @@ export async function searchLocationSuggestions(
     if (__DEV__) console.warn('[location] Google Places:', e instanceof Error ? e.message : e);
   }
 
+  const fromNominatim = await searchNominatimSuggestions(trimmed, limit);
+  if (fromNominatim.length > 0) {
+    return dedupeSuggestions(fromNominatim).slice(0, limit);
+  }
+
   let results: Location.LocationGeocodedLocation[] = [];
   try {
     results = await Location.geocodeAsync(trimmed);
@@ -48,7 +67,8 @@ export async function searchLocationSuggestions(
     return [];
   }
 
-  const top = results.slice(0, limit);
+  const africaResults = results.filter((r) => isCoordinateInAfrica(r.latitude, r.longitude));
+  const top = africaResults.slice(0, limit);
   const seen = new Set<string>();
 
   const labeled = await Promise.all(

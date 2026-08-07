@@ -30,6 +30,7 @@ type Props = {
   onPrimaryChange: (ref: PrimaryPhotoRef | null) => void;
   maxPhotos?: number;
   minPhotosHint?: number;
+  highlightError?: string | null;
 };
 
 function isPrimary(
@@ -54,6 +55,7 @@ export function ProfilePhotoGallery({
   onPrimaryChange,
   maxPhotos = 6,
   minPhotosHint = PROFILE_MIN_PHOTOS_ONBOARDING,
+  highlightError,
 }: Props) {
   const allCount = localUris.length + remoteUrls.length;
   const photoTiles = useMemo(
@@ -88,11 +90,12 @@ export function ProfilePhotoGallery({
   }
 
   return (
-    <View>
+    <View style={highlightError ? styles.wrapError : undefined}>
       <Text style={[authSoftLabelStyle, styles.labelSpacing]}>Photos</Text>
       <Text style={styles.hint}>
         Add at least {minPhotosHint} — tap to set Primary, double-tap to preview full size.
       </Text>
+      {highlightError ? <Text style={styles.errorText}>{highlightError}</Text> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         <Pressable
           style={({ pressed }) => [
@@ -204,6 +207,21 @@ function PhotoTile({
 
 const styles = StyleSheet.create({
   labelSpacing: { marginBottom: 4 },
+  wrapError: {
+    borderRadius: onboarding.radius2xl,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    padding: onboarding.spacing.sm,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.danger,
+    marginBottom: onboarding.spacing.sm,
+    lineHeight: 18,
+  },
   hint: { fontSize: 12, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18, fontFamily: fonts.regular, },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   addTileOuter: { borderRadius: onboarding.radius2xl, overflow: 'hidden' },
