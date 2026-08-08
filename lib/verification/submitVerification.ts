@@ -6,8 +6,12 @@ import type { KycDocumentType } from '@/types/kyc';
 
 const BUCKET = 'verification';
 
-export async function uploadIdImage(userId: string, localUri: string): Promise<{ path: string; error: Error | null }> {
-  const path = `${userId}/id-${Date.now()}.jpg`;
+export async function uploadIdImage(
+  userId: string,
+  localUri: string,
+  prefix = 'id'
+): Promise<{ path: string; error: Error | null }> {
+  const path = `${userId}/${prefix}-${Date.now()}.jpg`;
   try {
     const bytes = await readLocalAssetAsUint8Array(localUri);
     const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
@@ -51,6 +55,7 @@ export async function fetchLatestVerificationRequest(userId: string): Promise<Db
 export async function submitVerificationBundle(args: {
   userId: string;
   idLocalUri: string;
+  idBackLocalUri?: string | null;
   videoLocalUri: string;
   countryCode: string | null;
   documentType: KycDocumentType;
@@ -60,6 +65,13 @@ export async function submitVerificationBundle(args: {
 
   const upId = await uploadIdImage(userId, idLocalUri);
   if (upId.error) return { error: upId.error };
+
+  let idBackPath: string | null = null;
+  if (args.idBackLocalUri) {
+    const upBack = await uploadIdImage(userId, args.idBackLocalUri, 'id-back');
+    if (upBack.error) return { error: upBack.error };
+    idBackPath = upBack.path;
+  }
 
   const upVid = await uploadLivenessVideo(userId, videoLocalUri);
   if (upVid.error) return { error: upVid.error };
@@ -76,6 +88,7 @@ export async function submitVerificationBundle(args: {
       pipeline: 'vendor_pending',
       submitted_at: new Date().toISOString(),
       note: 'Awaiting automated and manual identity checks. You will be notified when the review completes.',
+      ...(idBackPath ? { id_back_document_path: idBackPath } : {}),
     },
   });
 

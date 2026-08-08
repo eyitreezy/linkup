@@ -8,6 +8,7 @@ import { Input } from '@/components/Input';
 import { colors, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { updatePassword } from '@/lib/auth/passwordReset';
+import { formatRecoveryAuthError, PASSWORD_RESET_EXPIRED_MESSAGE } from '@/lib/auth/recoveryErrors';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
@@ -31,6 +32,18 @@ export default function ResetPasswordScreen() {
       setHasSession(!!session?.user);
       setReady(true);
     })();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setHasSession(!!session?.user);
+        setReady(true);
+        if (event === 'PASSWORD_RECOVERY') setErr('');
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   async function onUpdate() {
@@ -47,11 +60,11 @@ export default function ResetPasswordScreen() {
     const { error } = await updatePassword(password);
     setLoading(false);
     if (error) {
-      setErr(error.message);
+      setErr(formatRecoveryAuthError(error.message));
       return;
     }
     await refreshSession();
-    router.replace('/');
+    router.replace('/(auth)/login' as Href);
   }
 
   if (!ready) {
@@ -67,10 +80,20 @@ export default function ResetPasswordScreen() {
       <DatingAuthShell showHeroCopy={false} showPagination={false}>
         <Ionicons name="alert-circle-outline" size={40} color={colors.warning} style={styles.warnIcon} />
         <Text style={styles.title}>Link expired</Text>
-        <Text style={styles.body}>
-          Open the reset link from your email again, or request a new one from the sign-in screen.
-        </Text>
-        <Button title="Back to sign in" onPress={() => router.replace('/(auth)/login' as Href)} gradient fullWidth />
+        <Text style={styles.body}>{PASSWORD_RESET_EXPIRED_MESSAGE}</Text>
+        <Button
+          title="Request a new reset email"
+          onPress={() => router.replace('/(auth)/forgot-password' as Href)}
+          gradient
+          fullWidth
+        />
+        <Button
+          title="Back to sign in"
+          onPress={() => router.replace('/(auth)/login' as Href)}
+          variant="ghost"
+          fullWidth
+          style={styles.secondaryBtn}
+        />
       </DatingAuthShell>
     );
   }
@@ -80,7 +103,7 @@ export default function ResetPasswordScreen() {
       <View style={styles.head}>
         <Ionicons name="lock-closed-outline" size={28} color={colors.primary} />
         <Text style={styles.title}>Create a new password</Text>
-        <Text style={styles.sub}>Choose something strong — you&apos;ll use it to sign in to LinkUp.</Text>
+        <Text style={styles.sub}>Choose something strong. You&apos;ll use it to sign in to LinkUp.</Text>
       </View>
 
       <Input
@@ -116,6 +139,7 @@ const styles = StyleSheet.create({
   sub: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.72)', fontWeight: '500', fontFamily: fonts.regular, },
   formErr: { color: '#FCA5A5', fontSize: 13, textAlign: 'center', marginVertical: spacing.sm, fontFamily: fonts.regular, },
   cta: { marginTop: spacing.md },
+  secondaryBtn: { marginTop: spacing.sm },
   warnIcon: { alignSelf: 'center', marginBottom: spacing.md },
   body: {
     fontSize: 15,

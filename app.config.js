@@ -1,10 +1,9 @@
 /**
  * Single Expo config (no app.json) — env-driven Maps keys + EAS env extras.
  * New Architecture is enabled in android/gradle.properties (newArchEnabled=true).
+ *
+ * Keep this file plain JS — do not require .ts modules (EAS reads config without TS transpile).
  */
-const { colors } = require('./constants/theme.ts');
-
-/** @type {import('expo/config').ExpoConfig} */
 module.exports = {
   expo: {
     name: 'LinkUp',
@@ -18,7 +17,7 @@ module.exports = {
     splash: {
       image: './assets/splash-icon.png',
       resizeMode: 'contain',
-      backgroundColor: colors.splashBackground,
+      backgroundColor: '#FBE9E9',
     },
     ios: {
       supportsTablet: true,

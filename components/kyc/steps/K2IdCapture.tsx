@@ -35,6 +35,8 @@ type Props = {
   onCountryChange: (code: string) => void;
   idUri: string | null;
   onIdChange: (uri: string | null) => void;
+  idBackUri?: string | null;
+  onIdBackChange?: (uri: string | null) => void;
   onBack: () => void;
   onNext: () => void;
 };
@@ -45,6 +47,8 @@ export function K2IdCapture({
   onCountryChange,
   idUri,
   onIdChange,
+  idBackUri = null,
+  onIdBackChange,
   onBack,
   onNext,
 }: Props) {
@@ -99,7 +103,8 @@ export function K2IdCapture({
     }
   }
 
-  const canNext = !!countryCode && !!idUri;
+  const needsBack = documentType !== 'passport';
+  const canNext = !!countryCode && !!idUri && (!needsBack || !!idBackUri);
 
   function selectCountry(code: string) {
     onCountryChange(code);
@@ -149,9 +154,9 @@ export function K2IdCapture({
           <Ionicons name="chevron-down" size={22} color={kycColors.muted} />
         </Pressable>
 
-        <KycSectionHead title="Document photo" />
+        <KycSectionHead title={needsBack ? 'Front of ID' : 'Document photo'} />
         <Text style={styles.captureHint}>
-          Position your document in the frame — avoid glare. We use this only to verify you; it is never shown on your
+          Position your document in the frame. Avoid glare. We use this only to verify you; it is never shown on your
           profile.
         </Text>
 
@@ -202,6 +207,56 @@ export function K2IdCapture({
           )}
         </View>
         {capturing ? <ActivityIndicator color={kycColors.primary} style={{ marginTop: spacing.sm }} /> : null}
+
+        {needsBack && onIdBackChange ? (
+          <>
+            <KycSectionHead title="Back of ID" />
+            <Text style={styles.captureHint}>
+              Flip your document and capture the back clearly. Keep all corners visible.
+            </Text>
+            <View style={kycInboxStyles.frostedCard}>
+              <View style={styles.previewBox}>
+                {idBackUri ? (
+                  <Image source={{ uri: idBackUri }} style={styles.previewImg} resizeMode="cover" />
+                ) : (
+                  <View style={styles.permBox}>
+                    <Ionicons name="card-outline" size={36} color={kycColors.primary} />
+                    <Text style={styles.permText}>Upload or capture the back of your ID.</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <View style={styles.btnRow}>
+              {idBackUri ? (
+                <Button title="Retake back" variant="ghost" onPress={() => onIdBackChange(null)} pill fullWidth />
+              ) : (
+                <KycDualActionRow
+                  secondaryLabel="Upload back"
+                  onSecondary={async () => {
+                    try {
+                      const r = await ImagePicker.launchImageLibraryAsync({
+                        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                        quality: 0.85,
+                      });
+                      if (!r.canceled && r.assets[0]) onIdBackChange(r.assets[0].uri);
+                    } catch {
+                      Alert.alert('Upload failed', 'Could not open your photo library.');
+                    }
+                  }}
+                  primaryLabel="Use front camera"
+                  onPrimary={async () => {
+                    try {
+                      const r = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+                      if (!r.canceled && r.assets[0]) onIdBackChange(r.assets[0].uri);
+                    } catch {
+                      Alert.alert('Capture failed', 'Try uploading the back photo instead.');
+                    }
+                  }}
+                />
+              )}
+            </View>
+          </>
+        ) : null}
       </ScrollView>
 
       <KycStepFooter onBack={onBack} onContinue={onNext} continueDisabled={!canNext} />

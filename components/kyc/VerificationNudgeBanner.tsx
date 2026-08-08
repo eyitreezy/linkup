@@ -12,7 +12,7 @@ export function VerificationNudgeBanner() {
     <View style={styles.wrap}>
       <Pressable style={styles.inner} onPress={() => router.push('/kyc' as Href)} accessibilityRole="button">
         <Text style={styles.txt}>
-          <Text style={styles.bold}>Verify in a few minutes</Text> — unlock plans, negotiation, and escrow.
+          <Text style={styles.bold}>Verify in a few minutes</Text> to unlock plans, negotiation, and escrow.
         </Text>
       </Pressable>
       <Pressable hitSlop={8} onPress={() => setDismissed(true)} accessibilityLabel="Dismiss">

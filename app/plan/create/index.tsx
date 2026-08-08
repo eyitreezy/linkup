@@ -1,6 +1,7 @@
 /**
  * Create plan — Step 1: meet type, schedule, duration, mood (premium carousel + progress).
  */
+import { FlexibleHourSelector } from '@/components/plans/create/FlexibleHourSelector';
 import { CreatePlanHeroCarousel } from '@/components/plans/create/CreatePlanHeroCarousel';
 import { CreatePlanStickyProgress } from '@/components/plans/create/CreatePlanProgressBar';
 import { CreatePlanWizardBack } from '@/components/plans/create/CreatePlanWizardBack';
@@ -24,13 +25,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-const DURATIONS = [
-  { m: 30, label: '30m' },
-  { m: 60, label: '1h' },
-  { m: 90, label: '1.5h' },
-  { m: 120, label: '2h' },
-  { m: 180, label: '3h+' },
-];
+import { MEETUP_DURATION_QUICK_PRESETS } from '@/lib/plans/moodPlanUiHelpers';
 
 function clampScheduledNotPast(d: Date): Date {
   const now = new Date();
@@ -138,53 +133,52 @@ export default function CreatePlanStepMeetScreen() {
 
           <MeetTypeSelectorSection />
 
-          <Text style={styles.section}>Duration</Text>
-          <View style={styles.durRow}>
-            {DURATIONS.map((d) => {
-              const on = draft.durationMinutes === d.m;
-              return (
-                <Pressable
-                  key={d.m}
-                  onPress={() => setDraft((prev) => ({ ...prev, durationMinutes: d.m }))}
-                  style={styles.durChipWrap}
-                >
-                  {on ? (
-                    <LinearGradient
-                      colors={[...APP_CHIP_GRADIENT]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.durChipGrad}
-                    >
-                      <Text style={styles.durTxtOn}>{d.label}</Text>
-                    </LinearGradient>
-                  ) : (
-                    <View style={styles.durChipPlain}>
-                      <Text style={styles.durTxt}>{d.label}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => setDraft((prev) => ({ ...prev, durationMinutes: null }))}
-              style={styles.durChipWrap}
-            >
-              {draft.durationMinutes == null ? (
-                <LinearGradient
-                  colors={[...APP_CHIP_GRADIENT]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.durChipGrad}
-                >
-                  <Text style={styles.durTxtOn}>Flexible</Text>
-                </LinearGradient>
-              ) : (
-                <View style={styles.durChipPlain}>
-                  <Text style={styles.durTxt}>Flexible</Text>
-                </View>
-              )}
-            </Pressable>
-          </View>
+          <Text style={styles.section}>Meetup duration</Text>
+          <Text style={styles.durationHint}>
+            How long the hangout itself is expected to last. This is separate from mood listing time in Discover.
+          </Text>
+          {draft.durationMinutes == null ? (
+            <View style={styles.flexibleBlock}>
+              <Text style={styles.flexibleLabel}>Flexible length</Text>
+              <Text style={styles.flexibleSub}>Guests can agree on timing in chat.</Text>
+              <Pressable
+                onPress={() => setDraft((prev) => ({ ...prev, durationMinutes: 60 }))}
+                style={({ pressed }) => [styles.setDurationBtn, pressed && styles.datePressed]}
+              >
+                <Text style={styles.setDurationBtnTxt}>Set a duration instead</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <FlexibleHourSelector
+              label="Duration"
+              value={draft.durationMinutes}
+              min={15}
+              max={360}
+              step={15}
+              unit="minutes"
+              presets={MEETUP_DURATION_QUICK_PRESETS}
+              onChange={(m) => setDraft((prev) => ({ ...prev, durationMinutes: m }))}
+            />
+          )}
+          <Pressable
+            onPress={() =>
+              setDraft((prev) => ({
+                ...prev,
+                durationMinutes: prev.durationMinutes == null ? 60 : null,
+              }))
+            }
+            style={styles.flexibleToggleWrap}
+          >
+            {draft.durationMinutes == null ? (
+              <LinearGradient colors={[...APP_CHIP_GRADIENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.flexibleToggleGrad}>
+                <Text style={styles.durTxtOn}>Flexible duration</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.flexibleTogglePlain}>
+                <Text style={styles.durTxt}>Use flexible duration</Text>
+              </View>
+            )}
+          </Pressable>
 
           {draft.isMoodPlan ? (
             <>
@@ -296,14 +290,38 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  durRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
-  durChipWrap: { borderRadius: radius.button, overflow: 'hidden' },
-  durChipGrad: {
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: radius.button,
+  durationHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    marginBottom: spacing.sm,
   },
-  durChipPlain: {
+  flexibleBlock: {
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.18)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    gap: 6,
+  },
+  flexibleLabel: { fontSize: 16, fontWeight: '800', color: colors.text, fontFamily: fonts.bold },
+  flexibleSub: { fontSize: 13, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium },
+  setDurationBtn: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.25)',
+  },
+  setDurationBtnTxt: { fontSize: 13, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold },
+  flexibleToggleWrap: { marginBottom: spacing.md, borderRadius: radius.button, overflow: 'hidden', alignSelf: 'flex-start' },
+  flexibleToggleGrad: { paddingHorizontal: 16, paddingVertical: 11, borderRadius: radius.button },
+  flexibleTogglePlain: {
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderRadius: radius.button,
@@ -311,9 +329,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(94, 82, 255, 0.22)',
     backgroundColor: 'rgba(255,255,255,0.85)',
   },
-  durTxt: { fontSize: 14, fontWeight: '800',
-    fontFamily: fonts.bold, color: colors.text },
-  durTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff', fontFamily: fonts.bold, },
+  durTxt: { fontSize: 14, fontWeight: '800', fontFamily: fonts.bold, color: colors.text },
+  durTxtOn: { fontSize: 14, fontWeight: '900', color: '#fff', fontFamily: fonts.bold },
   dateField: {
     borderColor: 'rgba(255, 74, 114, 0.35)',
     backgroundColor: 'rgba(255,255,255,0.92)',

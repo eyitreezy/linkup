@@ -10,17 +10,14 @@ import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { TRAVEL_QUICK_PRESETS } from '@/lib/travel/travelPresets';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-const PRESETS = [
-  { label: 'Lagos', latitude: 6.5244, longitude: 3.3792 },
-  { label: 'Abuja', latitude: 9.0765, longitude: 7.3986 },
-  { label: 'Port Harcourt', latitude: 4.8156, longitude: 7.0498 },
-] as const;
+const PRESETS = TRAVEL_QUICK_PRESETS;
 
 const PAYWALL_POINTS = [
   'Browse meetups as if you were visiting another city.',
@@ -188,29 +185,6 @@ export default function TravelModeScreen() {
               <View style={styles.sectionHead}>
                 <View style={styles.sectionHeadRow}>
                   <View style={styles.sectionAccentDot} />
-                  <Text style={styles.sectionTitle}>Search location</Text>
-                </View>
-                <LinearGradient
-                  colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.sectionRule}
-                />
-              </View>
-
-              <View style={styles.searchBlock}>
-                <LocationSearchField
-                  label="Where do you want to browse?"
-                  placeholder="e.g. Lagos, Abuja, London"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  onSelectSuggestion={onPickLocation}
-                />
-              </View>
-
-              <View style={[styles.sectionHead, styles.sectionHeadSpaced]}>
-                <View style={styles.sectionHeadRow}>
-                  <View style={styles.sectionAccentDot} />
                   <Text style={styles.sectionTitle}>Quick presets</Text>
                 </View>
                 <LinearGradient
@@ -253,14 +227,56 @@ export default function TravelModeScreen() {
                 </View>
               </LinearGradient>
 
-              <Pressable
-                onPress={() => void save(null)}
-                style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Clear travel mode"
-              >
-                <Text style={styles.clearBtnTxt}>Clear travel mode</Text>
-              </Pressable>
+              <View style={[styles.sectionHead, styles.sectionHeadSpaced]}>
+                <View style={styles.sectionHeadRow}>
+                  <View style={styles.sectionAccentDot} />
+                  <Text style={styles.sectionTitle}>Your travel pin</Text>
+                </View>
+                <LinearGradient
+                  colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sectionRule}
+                />
+              </View>
+
+              <View style={styles.searchBlock}>
+                <LocationSearchField
+                  label="Where do you want to browse?"
+                  placeholder="e.g. Lagos, Abuja, London"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSelectSuggestion={onPickLocation}
+                />
+              </View>
+
+              {tm?.label ? (
+                <View style={styles.ctaWrap}>
+                  <Pressable
+                    onPress={() => router.replace('/(tabs)' as Href)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go to Discover"
+                    style={({ pressed }) => [styles.ctaOuter, pressed && styles.ctaPressed]}
+                  >
+                    <LinearGradient
+                      colors={[colors.primary, '#8B7CE8', colors.secondary]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.ctaGrad}
+                    >
+                      <Text style={styles.ctaLabel}>Go to Discover</Text>
+                    </LinearGradient>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void save(null)}
+                    style={({ pressed }) => [styles.turnOffBtn, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Turn off travel mode"
+                  >
+                    <Text style={styles.turnOffBtnTxt}>Turn off travel mode</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </>
           )}
         </ScrollView>
@@ -573,5 +589,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: fonts.medium,
     color: colors.primary,
+  },
+  turnOffBtn: {
+    alignSelf: 'stretch',
+    marginTop: spacing.sm,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+  },
+  turnOffBtnTxt: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
   },
 });

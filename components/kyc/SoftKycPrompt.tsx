@@ -38,7 +38,7 @@ export function SoftKycPrompt({ visible, onDismiss }: Props) {
         <Pressable style={styles.sheet} onPress={() => {}}>
           <Text style={styles.title}>Unlock more with verification</Text>
           <Text style={styles.lead}>
-            A quick check helps everyone trust who they&apos;re meeting — and unlocks paid features fairly.
+            A quick check helps everyone trust who they&apos;re meeting and unlocks paid features fairly.
           </Text>
           <View style={styles.bullets}>
             <View style={styles.row}>

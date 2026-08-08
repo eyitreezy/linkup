@@ -20,6 +20,5 @@ export function moodDiscoverMeta(row: PlanFeedRow): {
           : row.urgency_level === 'happening_now'
             ? 'Live now'
             : null;
-
   return { showMood, urgencyLabel, moodTypeLabel, moodExpiresAt };
 }

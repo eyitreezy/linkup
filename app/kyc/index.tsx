@@ -44,6 +44,7 @@ export default function KycWizardScreen() {
   const [documentType, setDocumentType] = useState<KycDocumentType | null>(null);
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [idUri, setIdUri] = useState<string | null>(null);
+  const [idBackUri, setIdBackUri] = useState<string | null>(null);
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -118,7 +119,11 @@ export default function KycWizardScreen() {
 
   async function onSubmitConsent() {
     if (!user?.id || !idUri || !videoUri || !documentType) {
-      Alert.alert('Almost there', 'Choose your ID type, add your document photo, and record your video first.');
+      Alert.alert('Almost there', 'Choose your ID type, add your document photos, and record your video first.');
+      return;
+    }
+    if (documentType !== 'passport' && !idBackUri) {
+      Alert.alert('Back of ID needed', 'Add both the front and back of your ID.');
       return;
     }
     if (!consent) {
@@ -133,6 +138,7 @@ export default function KycWizardScreen() {
     const { error } = await submitVerificationBundle({
       userId: user.id,
       idLocalUri: idUri,
+      idBackLocalUri: documentType === 'passport' ? null : idBackUri,
       videoLocalUri: videoUri,
       countryCode,
       documentType,
@@ -196,7 +202,7 @@ export default function KycWizardScreen() {
           <KycLeadBlock
             kicker="Trust & safety"
             title="Build trust together"
-            subtitle="A quick check unlocks messaging, meetups, and optional paid hangouts with escrow — so connections stay human, not risky."
+            subtitle="A quick check unlocks messaging, meetups, and optional paid hangouts with escrow so connections stay human, not risky."
           />
           <KycSectionHead title="Why verify" />
           <View style={kycInboxStyles.frostedCard}>
@@ -217,7 +223,7 @@ export default function KycWizardScreen() {
           </View>
           <View style={[kycInboxStyles.frostedCard, { marginTop: 0 }]}>
             <Text style={styles.cardNote}>
-              Your ID and short clip stay private — used only to confirm you&apos;re you, like checks you&apos;d
+              Your ID and short clip stay private. We use them only to confirm you&apos;re you, like checks you&apos;d
               expect from a bank or travel app.
             </Text>
           </View>
@@ -258,6 +264,8 @@ export default function KycWizardScreen() {
           onCountryChange={setCountryCode}
           idUri={idUri}
           onIdChange={setIdUri}
+          idBackUri={idBackUri}
+          onIdBackChange={setIdBackUri}
           onBack={() => setStep(2)}
           onNext={() => setStep(4)}
         />
@@ -282,7 +290,7 @@ export default function KycWizardScreen() {
             <KycLeadBlock
               kicker="Final step"
               title="Consent"
-              subtitle="We use your ID and video only to verify identity, prevent fraud, and comply with law — never on your public profile."
+              subtitle="We use your ID and video only to verify identity, prevent fraud, and comply with law. They never appear on your public profile."
             />
             <Pressable
               style={[styles.checkRow, consent && styles.checkRowOn]}
@@ -314,12 +322,12 @@ export default function KycWizardScreen() {
             <KycLeadBlock
               kicker="Almost there"
               title="Verification in progress"
-              subtitle="Our team usually reviews within a few hours. Keep browsing — we'll notify you when it's done."
+              subtitle="Our team usually reviews within a few hours. Keep browsing. We&apos;ll notify you when it&apos;s done."
             />
             <View style={kycInboxStyles.frostedCard}>
               <Text style={styles.eta}>Estimated time: under 24 hours</Text>
               <Text style={styles.etaMuted}>
-                Some cases take a little longer — we&apos;ll let you know if we need more detail.
+                Some cases take a little longer. We&apos;ll let you know if we need more detail.
               </Text>
             </View>
           </ScrollView>
@@ -381,7 +389,7 @@ export default function KycWizardScreen() {
             <KycLeadBlock
               kicker="Try again"
               title="Needs another look"
-              subtitle="We couldn't confirm your documents this time — often lighting or glare hides details."
+              subtitle="We couldn't confirm your documents this time. Often lighting or glare hides details."
             />
             <View style={[kycInboxStyles.frostedCard, styles.rejectCard]}>
               <Text style={styles.rejectLabel}>Reason</Text>

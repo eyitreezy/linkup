@@ -1,7 +1,12 @@
 /**
  * Mood plan configuration — chips, window, listing TTL, live preview of discover expiry.
  */
+import { FlexibleHourSelector } from '@/components/plans/create/FlexibleHourSelector';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
+import {
+  MOOD_LISTING_QUICK_PRESETS,
+  shouldShowWeekendVisibilityText,
+} from '@/lib/plans/moodPlanUiHelpers';
 import { authSoftLabelStyle, planCreateTouchableFieldStyle } from '@/components/Input';
 import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
@@ -279,12 +284,15 @@ export function MoodPlanFieldsSection({ visible }: Props) {
 
       {draft.isMoodPlan ? (
         <>
-          {(effectiveTier === 'GOLD' || effectiveTier === 'PLATINUM') && isFridayActivation() ? (
+          {(effectiveTier === 'GOLD' || effectiveTier === 'PLATINUM') &&
+          isFridayActivation() &&
+          shouldShowWeekendVisibilityText({
+            listingHours: draft.moodListingHours,
+            durationMinutes: draft.durationMinutes,
+          }) ? (
             <View style={styles.weekendChip}>
               <Text style={styles.weekendChipTitle}>Weekend Plan</Text>
-              <Text style={styles.weekendChipSub}>
-                Activating today labels this as a Weekend Plan, visible through the weekend.
-              </Text>
+              <Text style={styles.weekendChipSub}>Visible through the weekend.</Text>
             </View>
           ) : null}
 
@@ -403,32 +411,15 @@ export function MoodPlanFieldsSection({ visible }: Props) {
             </>
           ) : null}
 
-          <Text style={styles.subLabel}>Listing duration (Discover)</Text>
-          <View style={styles.chipRow}>
-            {EXPIRIES.map(({ h, label }) => {
-              const locked = h > windowCap;
-              const needTier = tierForListingHours(h);
-              return (
-                <Pressable key={h} onPress={() => selectListingHours(h)} style={styles.expiryChipWrap}>
-                  {locked ? (
-                    <View style={styles.lockedChip}>
-                      <Ionicons name="lock-closed" size={12} color={colors.textMuted} />
-                      <Text style={styles.lockedChipTxt}>{label}</Text>
-                      {needTier ? (
-                        <Text style={styles.lockedTierBadge}>{needTier}</Text>
-                      ) : null}
-                    </View>
-                  ) : (
-                    <GradientSelectionChip
-                      label={label}
-                      selected={draft.moodListingHours === h}
-                      onPress={() => selectListingHours(h)}
-                    />
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
+          <FlexibleHourSelector
+            label="Listing duration (Discover)"
+            value={draft.moodListingHours}
+            min={1}
+            max={windowCap}
+            unit="hours"
+            presets={MOOD_LISTING_QUICK_PRESETS.filter((h) => h <= windowCap)}
+            onChange={(h) => selectListingHours(h as MoodListingHours)}
+          />
 
           <Text style={styles.reachLabel}>Your reach: {MOOD_REACH_LABELS_BY_TIER[effectiveTier]}</Text>
 

@@ -162,7 +162,7 @@ export function K3Liveness({ videoUri, onVideoChange, onBack, onNext }: Props) {
         <KycLeadBlock
           kicker="Liveness"
           title="Selfie video"
-          subtitle={`A ${MIN_DURATION_SEC}–${MAX_DURATION_SEC} second clip in good light. You'll preview it before continuing.`}
+          subtitle={`A ${MIN_DURATION_SEC} to ${MAX_DURATION_SEC} second clip in good light. You'll preview it before continuing.`}
         />
 
         <KycSectionHead title="Live prompts" />

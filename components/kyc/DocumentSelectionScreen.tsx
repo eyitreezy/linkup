@@ -63,7 +63,7 @@ export function DocumentSelectionScreen({ selected, onSelect, onContinue, onBack
         <KycLeadBlock
           kicker="Document"
           title="Choose your ID type"
-          subtitle="Select the document you'd like to use. We only use it to confirm you're real — reviewers never post it on your profile."
+          subtitle="Select the document you'd like to use. We only use it to confirm you're real. Reviewers never post it on your profile."
         />
         <KycSectionHead title="Accepted IDs" />
         <View style={styles.cardList}>
