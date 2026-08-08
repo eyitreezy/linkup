@@ -63,6 +63,11 @@ type Props = {
   onUpgrade: () => void;
   baseRadiusKm: number;
   effectiveTier: SubscriptionTier;
+  canTravelMode: boolean;
+  travelModeActive: boolean;
+  travelCityLabel: string | null;
+  onToggleTravelMode: () => void;
+  onClearTravelMode: () => void;
 };
 
 export function PlansFilterSheet({
@@ -76,6 +81,11 @@ export function PlansFilterSheet({
   onUpgrade,
   baseRadiusKm,
   effectiveTier,
+  canTravelMode,
+  travelModeActive,
+  travelCityLabel,
+  onToggleTravelMode,
+  onClearTravelMode,
 }: Props) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -203,6 +213,79 @@ export function PlansFilterSheet({
                 showsVerticalScrollIndicator={false}
                 bounces
               >
+              {canTravelMode ? (
+                <View style={styles.travelSection}>
+                  <View style={styles.travelRow}>
+                    <View style={styles.travelLeft}>
+                      <Ionicons
+                        name={travelModeActive ? 'airplane' : 'airplane-outline'}
+                        size={20}
+                        color={travelModeActive ? colors.primary : colors.textMuted}
+                      />
+                      <View style={styles.travelTextCol}>
+                        <Text
+                          style={[
+                            styles.travelLabel,
+                            travelModeActive && styles.travelLabelActive,
+                          ]}
+                        >
+                          Travel mode
+                        </Text>
+                        {travelModeActive && travelCityLabel ? (
+                          <Text style={styles.travelCity} numberOfLines={1}>
+                            {travelCityLabel.split(',')[0].trim()}
+                          </Text>
+                        ) : (
+                          <Text style={styles.travelHint}>Browse plans in another city</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {travelModeActive ? (
+                      <View style={styles.travelActions}>
+                        <Pressable
+                          onPress={onToggleTravelMode}
+                          hitSlop={8}
+                          style={({ pressed }) => [
+                            styles.travelChangeBtn,
+                            pressed && { opacity: 0.7 },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Change travel destination"
+                        >
+                          <Text style={styles.travelChangeBtnLabel}>Change</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={onClearTravelMode}
+                          hitSlop={8}
+                          style={({ pressed }) => [
+                            styles.travelOffBtn,
+                            pressed && { opacity: 0.7 },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Turn off travel mode"
+                        >
+                          <Text style={styles.travelOffBtnLabel}>Off</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={onToggleTravelMode}
+                        style={({ pressed }) => [
+                          styles.travelSetupBtn,
+                          pressed && { opacity: 0.7 },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Set up travel mode"
+                      >
+                        <Text style={styles.travelSetupLabel}>Set up</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                  <View style={styles.travelDivider} />
+                </View>
+              ) : null}
+
               <Text style={styles.sectionEyebrow}>Display</Text>
               <View style={styles.sectionCard}>
                 <Text style={styles.label}>Feed layout</Text>
@@ -323,6 +406,14 @@ export function PlansFilterSheet({
                   maximumTrackTintColor={colors.border}
                   thumbTintColor={colors.primary}
                 />
+                {travelModeActive && travelCityLabel ? (
+                  <View style={styles.travelOriginNote}>
+                    <Ionicons name="airplane-outline" size={13} color={colors.primary} />
+                    <Text style={styles.travelOriginNoteText}>
+                      Distance measured from {travelCityLabel.split(',')[0].trim()}
+                    </Text>
+                  </View>
+                ) : null}
                 {effectiveTier !== 'PLATINUM' ? (
                   <Pressable style={styles.widerRadiusUpsell} onPress={onUpgrade}>
                     <View style={styles.widerRadiusUpsellRow}>
@@ -778,4 +869,105 @@ const styles = StyleSheet.create({
   displayPillTxt: { fontSize: 14, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.text },
   displayPillTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
+  travelSection: {
+    marginBottom: spacing.md,
+  },
+  travelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+  },
+  travelLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  travelTextCol: { flex: 1, minWidth: 0 },
+  travelLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
+  travelLabelActive: {
+    color: colors.text,
+  },
+  travelCity: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.primary,
+    marginTop: 1,
+  },
+  travelHint: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  travelActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  travelChangeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  travelChangeBtnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
+  travelOffBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(94,82,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(94,82,255,0.15)',
+  },
+  travelOffBtnLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.primary,
+  },
+  travelSetupBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(94,82,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(94,82,255,0.15)',
+  },
+  travelSetupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.primary,
+  },
+  travelDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginTop: spacing.sm,
+  },
+  travelOriginNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    marginBottom: spacing.sm,
+  },
+  travelOriginNoteText: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.primary,
+    flex: 1,
+  },
 });

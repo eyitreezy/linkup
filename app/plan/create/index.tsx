@@ -25,7 +25,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { MEETUP_DURATION_QUICK_PRESETS } from '@/lib/plans/moodPlanUiHelpers';
+import { MEETUP_DURATION_MAX_MINUTES, MEETUP_DURATION_QUICK_PRESETS } from '@/lib/plans/moodPlanUiHelpers';
 
 function clampScheduledNotPast(d: Date): Date {
   const now = new Date();
@@ -153,7 +153,7 @@ export default function CreatePlanStepMeetScreen() {
               label="Duration"
               value={draft.durationMinutes}
               min={15}
-              max={360}
+              max={MEETUP_DURATION_MAX_MINUTES}
               step={15}
               unit="minutes"
               presets={MEETUP_DURATION_QUICK_PRESETS}

@@ -84,6 +84,7 @@ export interface ProfilePreferences {
     label: string;
     latitude: number;
     longitude: number;
+    set_at?: string;
   } | null;
   notifications?: {
     push?: boolean;

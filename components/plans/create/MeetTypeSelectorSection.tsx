@@ -7,7 +7,6 @@ import { MeetTypeFormModal } from '@/components/plans/create/MeetTypeFormModal';
 import { MeetTypeReviewPendingModal } from '@/components/plans/create/MeetTypeReviewPendingModal';
 import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
-import { GradientSelectionChip } from '@/components/ui/GradientSelectionChip';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
@@ -31,7 +30,17 @@ import type { DbMeetType, EscrowPattern } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActionSheetIOS,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 type FormMode = 'create' | 'edit';
 type PendingModalMode = 'submitted' | 'pending';
@@ -278,6 +287,69 @@ export function MeetTypeSelectorSection() {
     }
   }
 
+  const POPULAR_SLUGS = ['mood', 'dinner', 'dinner-date', 'casual', 'hangout', 'gym-buddy', 'gym'];
+  const SOCIAL_SLUGS = [
+    'group',
+    'brunch-meet',
+    'street-food',
+    'cook-together-experience',
+    'lounge-drinks',
+    'live-event',
+    'game-night',
+    'run-club',
+    'spa-wellness',
+    'sports-companion',
+  ];
+
+  const popularTypes = types.filter((t) => POPULAR_SLUGS.includes(t.slug ?? ''));
+  const socialTypes = types.filter((t) => SOCIAL_SLUGS.includes(t.slug ?? ''));
+  const extendedTypes = types.filter(
+    (t) =>
+      !POPULAR_SLUGS.includes(t.slug ?? '') &&
+      !SOCIAL_SLUGS.includes(t.slug ?? '') &&
+      !isUserMeetType(t, user?.id ?? '')
+  );
+  const customTypes = types.filter((t) => isUserMeetType(t, user?.id ?? ''));
+
+  function escrowPatternLabel(pattern: string | null | undefined): string {
+    if (pattern === 'A') return 'Host funds';
+    if (pattern === 'B') return 'Split 50/50';
+    if (pattern === 'C') return 'Guest funds';
+    return '';
+  }
+
+  function durationLabel(minutes: number | null | undefined): string {
+    if (!minutes) return '';
+    if (minutes >= 60) return `${minutes / 60}h default`;
+    return `${minutes}min default`;
+  }
+
+  function onLongPressCustomType(t: DbMeetType) {
+    const options = ['Edit', 'Delete', 'Cancel'];
+    const destructiveIndex = 1;
+    const cancelIndex = 2;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          destructiveButtonIndex: destructiveIndex,
+          cancelButtonIndex: cancelIndex,
+        },
+        (idx) => {
+          if (idx === 0) openEditForm(t);
+          if (idx === 1) setDeleteTarget(t);
+        }
+      );
+    } else {
+      Alert.alert(t.name, undefined, [
+        { text: 'Edit', onPress: () => openEditForm(t) },
+        { text: 'Delete', style: 'destructive', onPress: () => setDeleteTarget(t) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }
+
   if (loading) {
     return <ActivityIndicator style={{ marginVertical: spacing.md }} color={colors.primary} />;
   }
@@ -285,66 +357,99 @@ export function MeetTypeSelectorSection() {
   return (
     <View style={styles.wrap}>
       <Text style={styles.sectionLabel}>Meet type</Text>
-      <Text style={styles.hint}>Pick a vibe or add your own — edit or remove types you created.</Text>
-      <View style={styles.chipRow}>
-        {types.map((t) => {
-          const pending = isMeetTypePendingForUser(t, user?.id);
-          const on = draft.meetTypeId === t.id && !pending;
-          const owned = !!user?.id && isUserMeetType(t, user.id);
-          return (
-            <View key={t.id} style={[styles.chipWrap, pending && styles.chipWrapPending]}>
-              <GradientSelectionChip
-                selected={on}
-                onPress={() => void onSelectMeetType(t)}
-                style={pending ? styles.chipPending : undefined}
-              >
-                <View style={styles.typeChipInner}>
-                  <Ionicons
-                    name={(t.icon as keyof typeof Ionicons.glyphMap) ?? 'ellipse-outline'}
-                    size={16}
-                    color={on ? '#fff' : colors.primary}
-                  />
-                  <Text style={[styles.typeChipTxt, on && styles.typeChipTxtOn]}>{t.name}</Text>
-                  {pending ? <Text style={styles.pendingChipLbl}>Pending</Text> : null}
-                </View>
-              </GradientSelectionChip>
-              {owned && !isAdmin ? (
-                <View style={styles.chipActions}>
-                  <Pressable
-                    onPress={() => openEditForm(t)}
-                    style={({ pressed }) => [styles.chipActionBtn, pressed && styles.chipActionPressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit ${t.name}`}
-                    hitSlop={4}
-                  >
-                    <Ionicons name="pencil-outline" size={15} color={colors.primary} />
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setDeleteTarget(t)}
-                    style={({ pressed }) => [styles.chipActionBtn, pressed && styles.chipActionPressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Delete ${t.name}`}
-                    hitSlop={4}
-                  >
-                    <Ionicons name="trash-outline" size={15} color={colors.danger} />
-                  </Pressable>
-                </View>
+      <Text style={styles.hint}>Pick a vibe for your meetup.</Text>
+
+      {popularTypes.length > 0 && (
+        <MeetTypeRow
+          label="Popular"
+          types={popularTypes}
+          draft={draft}
+          userId={user?.id}
+          isAdmin={!!isAdmin}
+          onSelect={(t) => void onSelectMeetType(t)}
+          onLongPress={onLongPressCustomType}
+        />
+      )}
+
+      {socialTypes.length > 0 && (
+        <MeetTypeRow
+          label="Social & activities"
+          types={socialTypes}
+          draft={draft}
+          userId={user?.id}
+          isAdmin={!!isAdmin}
+          onSelect={(t) => void onSelectMeetType(t)}
+          onLongPress={onLongPressCustomType}
+        />
+      )}
+
+      {extendedTypes.length > 0 && (
+        <MeetTypeRow
+          label="More"
+          types={extendedTypes}
+          draft={draft}
+          userId={user?.id}
+          isAdmin={!!isAdmin}
+          onSelect={(t) => void onSelectMeetType(t)}
+          onLongPress={onLongPressCustomType}
+        />
+      )}
+
+      {customTypes.length > 0 && (
+        <MeetTypeRow
+          label="Your types"
+          types={customTypes}
+          draft={draft}
+          userId={user?.id}
+          isAdmin={!!isAdmin}
+          onSelect={(t) => void onSelectMeetType(t)}
+          onLongPress={onLongPressCustomType}
+        />
+      )}
+
+      {selectedType && (
+        <View style={styles.selectedCard}>
+          <View style={styles.selectedIconWrap}>
+            <Ionicons
+              name={(selectedType.icon as keyof typeof Ionicons.glyphMap) ?? 'ellipse-outline'}
+              size={22}
+              color={colors.primary}
+            />
+          </View>
+          <View style={styles.selectedCardBody}>
+            <Text style={styles.selectedCardName} numberOfLines={1}>
+              {selectedType.name}
+            </Text>
+            <View style={styles.selectedCardMeta}>
+              {durationLabel(selectedType.default_duration_minutes) ? (
+                <Text style={styles.selectedCardMetaText}>
+                  {durationLabel(selectedType.default_duration_minutes)}
+                </Text>
+              ) : null}
+              {escrowPatternLabel(selectedType.default_pattern) ? (
+                <Text style={styles.selectedCardMetaText}>
+                  {escrowPatternLabel(selectedType.default_pattern)}
+                </Text>
               ) : null}
             </View>
-          );
-        })}
-        {!isAdmin ? (
-          <Pressable
-            onPress={openCreateForm}
-            style={styles.addChip}
-            accessibilityRole="button"
-            accessibilityLabel="Add custom meet type"
-          >
-            <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-            <Text style={styles.addChipTxt}>New</Text>
-          </Pressable>
-        ) : null}
-      </View>
+          </View>
+          <View style={styles.selectedBadge}>
+            <Text style={styles.selectedBadgeText}>Selected</Text>
+          </View>
+        </View>
+      )}
+
+      {!isAdmin && (
+        <Pressable
+          onPress={openCreateForm}
+          style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Add custom meet type"
+        >
+          <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+          <Text style={styles.addButtonText}>Add your own meet type</Text>
+        </Pressable>
+      )}
 
       <MeetTypeFormModal
         visible={formOpen}
@@ -419,51 +524,263 @@ export function MeetTypeSelectorSection() {
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { marginBottom: spacing.lg },
-  sectionLabel: { fontSize: 14, fontWeight: '800',
-    fontFamily: fonts.bold, color: colors.text, marginBottom: 4 },
-  hint: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: spacing.sm, fontFamily: fonts.regular, },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
-  chipWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  chipWrapPending: { opacity: 0.45 },
-  chipPending: { opacity: 1 },
-  chipActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  chipActionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: '#D8DCE6',
+interface MeetTypeRowProps {
+  label: string;
+  types: DbMeetType[];
+  draft: ReturnType<typeof usePlanDraft>['draft'];
+  userId: string | undefined;
+  isAdmin: boolean;
+  onSelect: (t: DbMeetType) => void;
+  onLongPress: (t: DbMeetType) => void;
+}
+
+function MeetTypeRow({
+  label,
+  types,
+  draft,
+  userId,
+  isAdmin,
+  onSelect,
+  onLongPress,
+}: MeetTypeRowProps) {
+  return (
+    <View style={rowStyles.wrap}>
+      <Text style={rowStyles.label}>{label}</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={rowStyles.scrollContent}
+      >
+        {types.map((t) => {
+          const pending = isMeetTypePendingForUser(t, userId);
+          const selected = draft.meetTypeId === t.id && !pending;
+          const owned = !!userId && isUserMeetType(t, userId) && !isAdmin;
+
+          return (
+            <Pressable
+              key={t.id}
+              onPress={() => onSelect(t)}
+              onLongPress={() => owned && !pending && onLongPress(t)}
+              delayLongPress={400}
+              style={({ pressed }) => [
+                rowStyles.chip,
+                selected && rowStyles.chipSelected,
+                owned && !selected && rowStyles.chipOwned,
+                pending && rowStyles.chipPending,
+                pressed && !pending && rowStyles.chipPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t.name}
+              accessibilityState={{ selected }}
+            >
+              <View style={[rowStyles.iconCircle, selected && rowStyles.iconCircleSelected]}>
+                <Ionicons
+                  name={(t.icon as keyof typeof Ionicons.glyphMap) ?? 'ellipse-outline'}
+                  size={14}
+                  color={selected ? '#fff' : colors.primary}
+                />
+              </View>
+
+              <Text style={[rowStyles.chipText, selected && rowStyles.chipTextSelected]}>
+                {t.name}
+              </Text>
+
+              {pending && (
+                <View style={rowStyles.pendingBadge}>
+                  <Text style={rowStyles.pendingBadgeText}>Pending</Text>
+                </View>
+              )}
+
+              {owned && !selected && !pending && <View style={rowStyles.ownedDot} />}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const rowStyles = StyleSheet.create({
+  wrap: {
+    marginBottom: spacing.sm,
   },
-  chipActionPressed: { opacity: 0.85 },
-  typeChipInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  typeChipTxt: { fontWeight: '700',
-    fontFamily: fonts.medium, color: colors.text },
-  typeChipTxtOn: { color: '#fff' },
-  pendingChipLbl: {
-    fontSize: 9,
+  label: {
+    fontSize: 11,
     fontWeight: '800',
     fontFamily: fonts.bold,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.6,
+    marginBottom: 6,
   },
-  addChip: {
+  scrollContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingRight: 16,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: '#D8DCE6',
+    backgroundColor: '#fff',
+  },
+  chipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipOwned: {
+    borderStyle: 'dashed',
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(94,82,255,0.05)',
+  },
+  chipPending: {},
+  chipPressed: {
+    opacity: 0.8,
+  },
+  iconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(94,82,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleSelected: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.text,
+  },
+  chipTextSelected: {
+    color: '#fff',
+  },
+  pendingBadge: {
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pendingBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#92400E',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  ownedDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    opacity: 0.5,
+  },
+});
+
+const styles = StyleSheet.create({
+  wrap: {
+    marginBottom: spacing.lg,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  hint: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+    fontFamily: fonts.regular,
+  },
+  selectedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(94,82,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(94,82,255,0.15)',
     borderRadius: radius.button,
+    padding: 12,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  selectedIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  selectedCardBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  selectedCardName: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  selectedCardMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  selectedCardMetaText: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+  },
+  selectedBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 50,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  selectedBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.primary,
-    backgroundColor: 'rgba(94, 82, 255,0.06)',
+    borderRadius: radius.button,
+    paddingVertical: 14,
+    marginTop: spacing.xs,
+    backgroundColor: 'rgba(94,82,255,0.04)',
   },
-  addChipTxt: { fontWeight: '800',
-    fontFamily: fonts.bold, color: colors.primary, fontSize: 14 },
+  addButtonPressed: {
+    backgroundColor: 'rgba(94,82,255,0.10)',
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
+  },
 });

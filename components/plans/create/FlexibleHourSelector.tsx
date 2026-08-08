@@ -83,7 +83,7 @@ export function FlexibleHourSelector({
         thumbTintColor={colors.primary}
       />
       {presets?.length ? (
-        <View style={styles.presetsRow}>
+        <View style={styles.presetsRow} accessibilityRole="radiogroup" accessibilityLabel={`${label} quick presets`}>
           {presets.map((preset) => {
             const selected = value === preset;
             return (
@@ -91,6 +91,9 @@ export function FlexibleHourSelector({
                 key={preset}
                 onPress={() => onChange(clamp(preset))}
                 style={[styles.presetChip, selected && styles.presetChipOn]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={formatValue ? formatValue(preset) : defaultFormat(preset, unit)}
               >
                 <Text style={[styles.presetChipTxt, selected && styles.presetChipTxtOn]}>
                   {formatValue ? formatValue(preset) : defaultFormat(preset, unit)}
@@ -143,10 +146,12 @@ const styles = StyleSheet.create({
   rangeTxt: { marginTop: 2, fontSize: 11, fontWeight: '600', color: colors.textMuted, fontFamily: fonts.medium },
   presetsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   presetChip: {
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.button,
     backgroundColor: 'rgba(94, 82, 255, 0.1)',
+    justifyContent: 'center',
   },
   presetChipOn: { backgroundColor: colors.primary },
   presetChipTxt: { fontSize: 12, fontWeight: '800', color: colors.primary, fontFamily: fonts.bold },

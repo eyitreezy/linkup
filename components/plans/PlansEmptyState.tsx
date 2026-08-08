@@ -5,10 +5,12 @@ import { Button } from '@/components/Button';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   onCreatePress: () => void;
+  travelCity?: string;
+  onTurnOffTravel?: () => void;
 };
 
 const IDEAS = [
@@ -17,7 +19,31 @@ const IDEAS = [
   { icon: 'cafe-outline' as const, text: 'Coffee and a walk near you', tint: '#059669' },
 ];
 
-export function PlansEmptyState({ onCreatePress }: Props) {
+export function PlansEmptyState({ onCreatePress, travelCity, onTurnOffTravel }: Props) {
+  if (travelCity) {
+    return (
+      <View style={styles.wrap}>
+        <View style={styles.travelEmptyWrap}>
+          <Ionicons name="airplane-outline" size={40} color={colors.textMuted} />
+          <Text style={styles.title}>No plans in {travelCity} yet</Text>
+          <Text style={styles.sub}>
+            There are no active plans in this area right now. Check back later or browse your home city.
+          </Text>
+          {onTurnOffTravel ? (
+            <Pressable
+              onPress={onTurnOffTravel}
+              style={({ pressed }) => [styles.turnOffCta, pressed && { opacity: 0.8 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Turn off travel mode"
+            >
+              <Text style={styles.turnOffCtaLabel}>Turn off travel mode</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.wrap}>
       <LinearGradient
@@ -196,5 +222,25 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '900',
     fontFamily: fonts.bold,
+  },
+  travelEmptyWrap: {
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+  },
+  turnOffCta: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.2)',
+    backgroundColor: 'rgba(94, 82, 255, 0.06)',
+  },
+  turnOffCtaLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.primary,
   },
 });

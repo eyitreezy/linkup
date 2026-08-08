@@ -10,14 +10,17 @@ import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { TRAVEL_QUICK_PRESETS } from '@/lib/travel/travelPresets';
+import { travelPresetsForProfile } from '@/lib/travel/travelPresets';
+import {
+  getRecentTravelCities,
+  recordTravelCity,
+  type RecentTravelCity,
+} from '@/lib/travel/recentTravelCities';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
-const PRESETS = TRAVEL_QUICK_PRESETS;
 
 const PAYWALL_POINTS = [
   'Browse meetups as if you were visiting another city.',
@@ -29,8 +32,14 @@ export default function TravelModeScreen() {
   const { user, profile, dbUser, refreshProfile } = useAuth();
   const { allowed: canTravelMode, loading: permLoading } = usePermission('discover.travel_mode');
   const tm = profile?.preferences?.travel_mode;
+  const presets = useMemo(() => travelPresetsForProfile(profile), [profile]);
   const [searchQuery, setSearchQuery] = useState(tm?.label ?? '');
   const [feedback, setFeedback] = useState<TravelModeFeedback | null>(null);
+  const [recentCities, setRecentCities] = useState<RecentTravelCity[]>([]);
+
+  useEffect(() => {
+    void getRecentTravelCities().then(setRecentCities);
+  }, []);
 
   useEffect(() => {
     setSearchQuery(tm?.label ?? '');
@@ -39,18 +48,30 @@ export default function TravelModeScreen() {
   const save = useCallback(
     async (next: { label: string; latitude: number; longitude: number } | null) => {
       if (!user || !isSupabaseConfigured) return;
+      const payload = next
+        ? {
+            label: next.label,
+            latitude: next.latitude,
+            longitude: next.longitude,
+            set_at: new Date().toISOString(),
+          }
+        : null;
+
       const { error } = await supabase
         .from('profiles')
         .update({
           preferences: {
             ...(profile?.preferences ?? {}),
-            travel_mode: next,
+            travel_mode: payload,
           },
         })
         .eq('user_id', user.id);
       if (error) setFeedback({ kind: 'error', message: error.message });
       else {
         await refreshProfile();
+        if (next) {
+          void recordTravelCity(next).then(() => getRecentTravelCities().then(setRecentCities));
+        }
         setFeedback(next ? { kind: 'saved', label: next.label } : { kind: 'cleared' });
       }
     },
@@ -182,6 +203,64 @@ export default function TravelModeScreen() {
                 </LinearGradient>
               ) : null}
 
+              {recentCities.filter((c) => c.label !== tm?.label).length > 0 ? (
+                <>
+                  <View style={[styles.sectionHead, styles.sectionHeadSpaced]}>
+                    <View style={styles.sectionHeadRow}>
+                      <View style={styles.sectionAccentDot} />
+                      <Text style={styles.sectionTitle}>Recently visited</Text>
+                    </View>
+                    <LinearGradient
+                      colors={['rgba(94, 82, 255,0.35)', 'rgba(255, 74, 114,0.2)', 'transparent']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.sectionRule}
+                    />
+                  </View>
+
+                  <LinearGradient
+                    colors={['rgba(94, 82, 255,0.18)', 'rgba(255, 74, 114,0.1)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.cardOuter}
+                  >
+                    <View style={styles.cardInnerPad}>
+                      {recentCities
+                        .filter((c) => c.label !== tm?.label)
+                        .slice(0, 3)
+                        .map((city, i, arr) => (
+                          <Pressable
+                            key={city.label}
+                            onPress={() => {
+                              setSearchQuery(city.label);
+                              void save({
+                                label: city.label,
+                                latitude: city.latitude,
+                                longitude: city.longitude,
+                              });
+                            }}
+                            style={({ pressed }) => [
+                              styles.presetRow,
+                              i < arr.length - 1 && styles.presetRowBorder,
+                              pressed && styles.presetRowPressed,
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Use ${city.label} as travel location`}
+                          >
+                            <View style={styles.presetRowLeft}>
+                              <Ionicons name="time-outline" size={22} color={colors.textMuted} />
+                              <Text style={styles.presetLabel}>
+                                {city.label.split(',')[0].trim()}
+                              </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+                          </Pressable>
+                        ))}
+                    </View>
+                  </LinearGradient>
+                </>
+              ) : null}
+
               <View style={styles.sectionHead}>
                 <View style={styles.sectionHeadRow}>
                   <View style={styles.sectionAccentDot} />
@@ -202,7 +281,7 @@ export default function TravelModeScreen() {
                 style={styles.cardOuter}
               >
                 <View style={styles.cardInnerPad}>
-                  {PRESETS.map((p, i) => (
+                  {presets.map((p, i) => (
                     <Pressable
                       key={p.label}
                       onPress={() => {
@@ -211,7 +290,7 @@ export default function TravelModeScreen() {
                       }}
                       style={({ pressed }) => [
                         styles.presetRow,
-                        i < PRESETS.length - 1 && styles.presetRowBorder,
+                        i < presets.length - 1 && styles.presetRowBorder,
                         pressed && styles.presetRowPressed,
                       ]}
                       accessibilityRole="button"
@@ -251,12 +330,12 @@ export default function TravelModeScreen() {
               </View>
 
               {tm?.label ? (
-                <View style={styles.ctaWrap}>
+                <View style={styles.ctaRow}>
                   <Pressable
                     onPress={() => router.replace('/(tabs)' as Href)}
                     accessibilityRole="button"
                     accessibilityLabel="Go to Discover"
-                    style={({ pressed }) => [styles.ctaOuter, pressed && styles.ctaPressed]}
+                    style={({ pressed }) => [styles.ctaOuter, styles.ctaHalf, pressed && styles.ctaPressed]}
                   >
                     <LinearGradient
                       colors={[colors.primary, '#8B7CE8', colors.secondary]}
@@ -269,11 +348,11 @@ export default function TravelModeScreen() {
                   </Pressable>
                   <Pressable
                     onPress={() => void save(null)}
-                    style={({ pressed }) => [styles.turnOffBtn, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.turnOffBtn, styles.ctaHalf, pressed && styles.pressed]}
                     accessibilityRole="button"
                     accessibilityLabel="Turn off travel mode"
                   >
-                    <Text style={styles.turnOffBtnTxt}>Turn off travel mode</Text>
+                    <Text style={styles.turnOffBtnTxt}>Turn off</Text>
                   </Pressable>
                 </View>
               ) : null}
@@ -519,6 +598,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
+  ctaRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  ctaHalf: {
+    flex: 1,
+  },
   activeCardOuter: {
     marginBottom: spacing.lg,
   },
@@ -591,9 +679,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   turnOffBtn: {
-    alignSelf: 'stretch',
-    marginTop: spacing.sm,
-    minHeight: 48,
+    minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.button,
@@ -602,9 +688,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.96)',
   },
   turnOffBtnTxt: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     fontFamily: fonts.medium,
     color: colors.textMuted,
+    textAlign: 'center',
   },
 });

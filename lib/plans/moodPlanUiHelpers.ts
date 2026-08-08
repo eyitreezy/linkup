@@ -24,4 +24,5 @@ export function formatDurationMinutesLabel(minutes: number): string {
 }
 
 export const MOOD_LISTING_QUICK_PRESETS = [1, 3, 6, 12, 24] as const;
-export const MEETUP_DURATION_QUICK_PRESETS = [30, 60, 90, 120, 180] as const;
+export const MEETUP_DURATION_QUICK_PRESETS = [30, 60, 90, 120, 180, 240, 360, 480, 720, 1440] as const;
+export const MEETUP_DURATION_MAX_MINUTES = 1440;

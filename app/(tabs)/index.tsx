@@ -12,6 +12,7 @@ import { PlanCard } from '@/components/plans/PlanCard';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import { PlansFilterSheet, type FeedFilterState } from '@/components/plans/PlansFilterSheet';
 import { PlansEmptyState } from '@/components/plans/PlansEmptyState';
+import { TravelModeBanner } from '@/components/plans/TravelModeBanner';
 import { PlansFab } from '@/components/plans/PlansFab';
 import { PlansFeedSkeleton } from '@/components/plans/PlansFeedSkeleton';
 import { PlansKycBanner } from '@/components/plans/PlansKycBanner';
@@ -206,6 +207,30 @@ export default function PlansScreen() {
   const { allowed: canUndoSwipe } = usePermission('discover.undo_swipe');
   const canDismissSwipe = canUndoSwipe;
   const travel = profile?.preferences?.travel_mode ?? null;
+  const travelCityShort = useMemo(
+    () => (travel?.label ? travel.label.split(',')[0].trim() : ''),
+    [travel?.label]
+  );
+  const TRAVEL_STALE_DAYS = 7;
+  const isTravelModeStale = useMemo(() => {
+    const setAt = travel?.set_at;
+    if (!setAt) return false;
+    const diffMs = Date.now() - new Date(setAt).getTime();
+    return diffMs > TRAVEL_STALE_DAYS * 24 * 60 * 60 * 1000;
+  }, [travel?.set_at]);
+  const clearTravelMode = useCallback(async () => {
+    if (!user || !isSupabaseConfigured) return;
+    await supabase
+      .from('profiles')
+      .update({
+        preferences: {
+          ...(profile?.preferences ?? {}),
+          travel_mode: null,
+        },
+      })
+      .eq('user_id', user.id);
+    await refreshProfile();
+  }, [user, profile?.preferences, refreshProfile]);
   const { lat: effectiveLat, lng: effectiveLng } = useMemo(
     () =>
       resolveDiscoverViewerOrigin({
@@ -1270,7 +1295,13 @@ export default function PlansScreen() {
         onCtaPress={() => setFilterOpen(true)}
       />
     ) : (
-      <PlansEmptyState onCreatePress={goCreatePlan} />
+      <PlansEmptyState
+        onCreatePress={goCreatePlan}
+        travelCity={canTravelMode && travel?.label ? travelCityShort : undefined}
+        onTurnOffTravel={
+          canTravelMode && travel?.label ? () => void clearTravelMode() : undefined
+        }
+      />
     );
 
   const discoverFeedEmpty =
@@ -1392,6 +1423,14 @@ export default function PlansScreen() {
           feedMode={feedMode}
           baseRadiusKm={radiusKm}
           effectiveTier={viewerTier}
+          canTravelMode={canTravelMode}
+          travelModeActive={!!(canTravelMode && travel?.label)}
+          travelCityLabel={travel?.label ?? null}
+          onToggleTravelMode={() => {
+            setFilterOpen(false);
+            router.push('/settings/travel' as Href);
+          }}
+          onClearTravelMode={() => void clearTravelMode()}
           onUpgrade={() => {
             setFilterOpen(false);
             router.push('/subscription' as Href);
@@ -1447,6 +1486,13 @@ export default function PlansScreen() {
         onUndoLastHide={undoHide}
         isIncognitoActive={isIncognitoActive}
       />
+      {canTravelMode && travel?.label ? (
+        <TravelModeBanner
+          cityLabel={travelCityShort}
+          onTurnOff={() => void clearTravelMode()}
+          isStale={isTravelModeStale}
+        />
+      ) : null}
       <UpgradePrompt
         visible={upgradeOpen}
         feature={upgradeFeature}
