@@ -15,6 +15,7 @@ type Props = {
   showUndo?: boolean;
   onUndoLastHide?: () => void;
   isIncognitoActive?: boolean;
+  filtersActive?: boolean;
 };
 
 export function NearbyPlansHeader({
@@ -24,6 +25,7 @@ export function NearbyPlansHeader({
   showUndo,
   onUndoLastHide,
   isIncognitoActive,
+  filtersActive,
 }: Props) {
   return (
     <View style={styles.wrap}>
@@ -77,6 +79,7 @@ export function NearbyPlansHeader({
         accessibilityRole="button"
         accessibilityLabel="Filter discover"
       >
+        {filtersActive ? <View style={styles.filterActiveDot} /> : null}
         <LinearGradient
           colors={['rgba(255,255,255,0.98)', 'rgba(232,226,255,0.9)', 'rgba(255,240,248,0.85)']}
           start={{ x: 0, y: 0 }}
@@ -148,8 +151,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(94, 82, 255,0.22)',
+    position: 'relative',
   },
   filterBtnPressed: { opacity: 0.9 },
+  filterActiveDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.secondary,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    zIndex: 1,
+  },
   filterBtnGrad: {
     paddingHorizontal: 12,
     paddingVertical: 12,

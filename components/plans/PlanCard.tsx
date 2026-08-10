@@ -246,6 +246,11 @@ function PlanCardInner({
                   <Ionicons name="flash" size={12} color="#fff" />
                 </LinearGradient>
               ) : null}
+              {row.is_group_plan ? (
+                <View style={styles.datingGroupPill}>
+                  <Text style={styles.datingGroupPillTxt}>Group</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -462,6 +467,11 @@ function PlanCardInner({
             <Text style={styles.boostPillTxt}>Boosted</Text>
           </View>
         ) : null}
+        {row.is_group_plan ? (
+          <View style={styles.groupPill}>
+            <Text style={styles.groupPillTxt}>Group</Text>
+          </View>
+        ) : null}
       </View>
       {moodMeta.showMood ? (
         <View style={styles.listMoodRow}>
@@ -650,6 +660,21 @@ const styles = StyleSheet.create({
   },
   boostPillTxt: { fontSize: 11, fontWeight: '800',
     fontFamily: fonts.bold, color: '#fff' },
+  groupPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(94,82,255,0.85)',
+  },
+  groupPillTxt: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+    letterSpacing: 0.2,
+  },
   listMoodRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -818,6 +843,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.4)',
+  },
+  datingGroupPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(94,82,255,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  datingGroupPillTxt: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+    letterSpacing: 0.2,
   },
   datingBody: { padding: spacing.lg },
   datingHostRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.md },

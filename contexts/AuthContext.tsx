@@ -4,7 +4,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { captureAuthLinkIfPresent, peekPendingAuthUrl } from '@/lib/auth/pendingAuthUrl';
+import { captureAuthLinkIfPresent, markRecoveryFlowActive, peekPendingAuthUrl } from '@/lib/auth/pendingAuthUrl';
 import { clearStaleAuthSession, getSessionRecoveringStale } from '@/lib/auth/sessionRecovery';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
@@ -125,6 +125,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        markRecoveryFlowActive();
+      }
       setSession(s);
       if (s?.user?.id) {
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {

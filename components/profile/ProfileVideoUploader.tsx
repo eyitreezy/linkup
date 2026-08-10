@@ -1,4 +1,8 @@
 import { authSoftLabelStyle } from '@/components/Input';
+import {
+  PROFILE_VIDEO_MAX_DURATION_SECONDS,
+  validateProfileVideoFile,
+} from '@/lib/profile/media/videoLimits';
 import { KycLivenessVideoPreview } from '@/components/kyc/KycLivenessVideoPreview';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
 import { colors, radius, fonts } from '@/constants/theme';
@@ -28,16 +32,30 @@ export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemov
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       allowsMultipleSelection: false,
+      videoMaxDuration: PROFILE_VIDEO_MAX_DURATION_SECONDS,
+      allowsEditing: true,
       videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
     });
     if (res.canceled || !res.assets?.[0]?.uri) return;
-    onPickLocal(res.assets[0].uri);
+
+    const asset = res.assets[0];
+    const durationSeconds = asset.duration != null ? asset.duration / 1000 : null;
+    const validation = validateProfileVideoFile({
+      size: asset.fileSize ?? undefined,
+      duration: durationSeconds,
+    });
+    if (!validation.valid) {
+      Alert.alert('Video not allowed', validation.error ?? 'Please choose a shorter video.');
+      return;
+    }
+
+    onPickLocal(asset.uri);
   }
 
   return (
     <View style={[styles.wrap, highlightError ? styles.wrapError : null]}>
       <Text style={[authSoftLabelStyle, styles.labelSpacing]}>Profile video{required ? ' *' : ''}</Text>
-      <Text style={styles.hint}>One short intro clip (5–30 sec). MP4, MOV, or WebM.</Text>
+      <Text style={styles.hint}>One intro clip up to 60 seconds and 100MB. MP4, MOV, or WebM.</Text>
       {highlightError ? <Text style={styles.errorText}>{highlightError}</Text> : null}
 
       {previewUri ? (

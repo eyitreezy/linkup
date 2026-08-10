@@ -263,6 +263,7 @@ export default function PlansScreen() {
     maxPriceCents: null,
     verifiedHostsOnly: false,
     hostPresence: 'all',
+    planTypeFilter: 'all',
     clientFiltersActive: false,
     distanceFilterActive: false,
   });
@@ -364,7 +365,7 @@ export default function PlansScreen() {
     const f = profile.preferences.feed_filters;
     if (f && typeof f === 'object') {
       const parsed = parseStoredFeedFilters(f, radiusKm);
-      if (parsed.clientFiltersActive || parsed.distanceFilterActive) {
+      if (parsed.clientFiltersActive || parsed.distanceFilterActive || parsed.planTypeFilter !== 'all') {
         setFeedFilter({
           ...parsed,
           maxDistanceKm:
@@ -434,7 +435,7 @@ export default function PlansScreen() {
         const max = row.max_guests;
         if (max != null && accepted >= max) return false;
       }
-      if (user?.id && row.creator_id === user.id && !distanceFilterActive) return true;
+      if (user?.id && row.creator_id === user.id) return false;
       if (
         distanceFilterActive &&
         !planWithinMaxDistanceKm(
@@ -466,6 +467,17 @@ export default function PlansScreen() {
       }
       return true;
     });
+
+    if (feedFilter.planTypeFilter && feedFilter.planTypeFilter !== 'all') {
+      merged = merged.filter((row) => {
+        if (feedFilter.planTypeFilter === 'group') return !!row.is_group_plan;
+        if (feedFilter.planTypeFilter === 'mood') return !!row.is_mood_plan;
+        if (feedFilter.planTypeFilter === 'standard') {
+          return !row.is_group_plan && !row.is_mood_plan;
+        }
+        return true;
+      });
+    }
 
     merged = filterPremiumVisibilityPlans(
       merged,
@@ -649,7 +661,6 @@ export default function PlansScreen() {
     let next = moodFilteredRows;
     if (feedFilter.hostPresence !== 'all') {
       next = next.filter((row) => {
-        if (user?.id && row.creator_id === user.id) return true;
         const kind = resolveHostPresenceKind(
           profile ?? null,
           row.creatorProfile?.preferences,
@@ -1406,6 +1417,11 @@ export default function PlansScreen() {
     }
   }, [showSwipe, swipeDeckRows]);
 
+  const discoverFiltersActive =
+    feedFilter.clientFiltersActive ||
+    distanceFilterActive ||
+    feedFilter.planTypeFilter !== 'all';
+
   return (
     <Screen
       safeAreaEdges={['top', 'left', 'right']}
@@ -1453,6 +1469,7 @@ export default function PlansScreen() {
                       maxPriceCents: next.maxPriceCents,
                       verifiedHostsOnly: next.verifiedHostsOnly,
                       hostPresence: next.hostPresence,
+                      planTypeFilter: next.planTypeFilter,
                       clientFiltersActive: next.clientFiltersActive,
                       distanceFilterActive: next.distanceFilterActive,
                     },
@@ -1485,6 +1502,7 @@ export default function PlansScreen() {
         showUndo={canUndoSwipe && !!lastHiddenId}
         onUndoLastHide={undoHide}
         isIncognitoActive={isIncognitoActive}
+        filtersActive={discoverFiltersActive}
       />
       {canTravelMode && travel?.label ? (
         <TravelModeBanner

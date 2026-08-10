@@ -1,5 +1,5 @@
 export const PASSWORD_RESET_EXPIRED_MESSAGE =
-  'Your password reset link has expired or is no longer valid.';
+  'This reset link has expired or is no longer valid. Request a new password-reset email and open the link on this phone with LinkUp installed.';
 
 function isPkceVerifierError(message: string): boolean {
   return /pkce|code verifier/i.test(message);

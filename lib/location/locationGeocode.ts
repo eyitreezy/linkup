@@ -3,7 +3,7 @@
  */
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
-import { isCoordinateInAfrica } from '@/lib/location/africaCountries';
+import { isCoordinateInNigeria } from '@/lib/location/nigeriaBounds';
 import { searchNominatimSuggestions } from '@/lib/location/nominatimSearch';
 
 export type LocationSuggestion = {
@@ -38,7 +38,7 @@ function dedupeSuggestions(items: LocationSuggestion[]): LocationSuggestion[] {
   return out;
 }
 
-/** Geocode a free-text query into labeled suggestions (deduped by label). Africa-only. */
+/** Geocode a free-text query into labeled suggestions (deduped by label). Nigeria-only. */
 export async function searchLocationSuggestions(
   query: string,
   limit = 8
@@ -67,8 +67,8 @@ export async function searchLocationSuggestions(
     return [];
   }
 
-  const africaResults = results.filter((r) => isCoordinateInAfrica(r.latitude, r.longitude));
-  const top = africaResults.slice(0, limit);
+  const nigeriaResults = results.filter((r) => isCoordinateInNigeria(r.latitude, r.longitude));
+  const top = nigeriaResults.slice(0, limit);
   const seen = new Set<string>();
 
   const labeled = await Promise.all(

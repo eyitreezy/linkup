@@ -70,7 +70,7 @@ export function LocationSearchField({
 
   onSelectSuggestion,
 
-  placeholder = 'City, neighborhood, or area',
+  placeholder = 'Search city or area in Nigeria',
 
   label = 'Search location',
 

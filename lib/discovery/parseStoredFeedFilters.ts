@@ -1,4 +1,4 @@
-import type { FeedFilterState } from '@/components/plans/PlansFilterSheet';
+import type { FeedFilterState, PlanTypeFilter } from '@/components/plans/PlansFilterSheet';
 import {
   hasDiscoverPriceFilter,
   normalizeDiscoverPriceCents,
@@ -15,6 +15,7 @@ type StoredFeedFilters = {
   clientFiltersActive?: boolean;
   /** When true, maxDistanceKm strictly excludes out-of-range plans. */
   distanceFilterActive?: boolean;
+  planTypeFilter?: PlanTypeFilter;
   /** @deprecated Old max-price slider stored cents in `maxPrice`, not `maxPriceCents`. Ignored. */
   maxPrice?: number | null;
 };
@@ -26,9 +27,15 @@ export function defaultDiscoverFeedFilter(_fallbackMaxKm: number): FeedFilterSta
     maxPriceCents: null,
     verifiedHostsOnly: false,
     hostPresence: 'all',
+    planTypeFilter: 'all',
     clientFiltersActive: false,
     distanceFilterActive: false,
   };
+}
+
+function parsePlanTypeFilter(raw: unknown): PlanTypeFilter {
+  if (raw === 'standard' || raw === 'group' || raw === 'mood') return raw;
+  return 'all';
 }
 
 function parseHostPresence(raw: unknown): HostPresenceFilter {
@@ -40,10 +47,16 @@ function parseHostPresence(raw: unknown): HostPresenceFilter {
 export function isDiscoverFilterConstraintActive(
   f: Pick<
     FeedFilterState,
-    'maxDistanceKm' | 'minPriceCents' | 'maxPriceCents' | 'verifiedHostsOnly' | 'hostPresence'
+    | 'maxDistanceKm'
+    | 'minPriceCents'
+    | 'maxPriceCents'
+    | 'verifiedHostsOnly'
+    | 'hostPresence'
+    | 'planTypeFilter'
   >,
   _baseRadiusKm: number
 ): boolean {
+  if (f.planTypeFilter !== 'all' && f.planTypeFilter != null) return true;
   if (f.hostPresence !== 'all') return true;
   if (f.verifiedHostsOnly) return true;
   if (hasDiscoverPriceFilter(f)) return true;
@@ -81,6 +94,7 @@ export function parseStoredFeedFilters(raw: unknown, fallbackMaxKm: number): Fee
     maxPriceCents: normalizeDiscoverPriceCents(f.maxPriceCents),
     verifiedHostsOnly: !!f.verifiedHostsOnly,
     hostPresence: parseHostPresence(f.hostPresence),
+    planTypeFilter: parsePlanTypeFilter(f.planTypeFilter),
     clientFiltersActive: false,
     distanceFilterActive,
   };

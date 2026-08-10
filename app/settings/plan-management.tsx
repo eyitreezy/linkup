@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { distanceKm } from '@/lib/location';
 import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
 import { getCreatorEditCapabilities } from '@/lib/plans/planCreatorEditPolicy';
+import { getNewActivityCount, markPlanActivityRead } from '@/lib/plans/planActivityRead';
 import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbPlan, DbMeetType } from '@/types/database';
@@ -154,6 +155,9 @@ export default function PlanManagementScreen() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [offersCountByPlan, setOffersCountByPlan] = useState<Record<string, number>>({});
   const [viewsByPlan, setViewsByPlan] = useState<Record<string, number>>({});
+  const [savesByPlan, setSavesByPlan] = useState<Record<string, number>>({});
+  const [latestEngagementByPlan, setLatestEngagementByPlan] = useState<Record<string, string>>({});
+  const [newActivityMap, setNewActivityMap] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [section, setSection] = useState<Section>('all');
@@ -198,18 +202,27 @@ export default function PlanManagementScreen() {
     if (ids.length === 0) {
       setOffersCountByPlan({});
       setViewsByPlan({});
+      setSavesByPlan({});
+      setLatestEngagementByPlan({});
+      setNewActivityMap({});
       setLoading(false);
       return;
     }
     const [{ data: eng }, { data: offAgg }] = await Promise.all([
-      supabase.from('plan_engagements').select('plan_id, kind').in('plan_id', ids),
+      supabase.from('plan_engagements').select('plan_id, kind, created_at').in('plan_id', ids),
       supabase.from('plan_offers').select('plan_id').in('plan_id', ids),
     ]);
     const views: Record<string, number> = {};
+    const saves: Record<string, number> = {};
+    const latest: Record<string, string> = {};
     for (const r of eng ?? []) {
-      if ((r as { kind: string }).kind !== 'view') continue;
-      const pid = (r as { plan_id: string }).plan_id;
-      views[pid] = (views[pid] ?? 0) + 1;
+      const row = r as { plan_id: string; kind: string; created_at: string };
+      if (row.kind === 'view') views[row.plan_id] = (views[row.plan_id] ?? 0) + 1;
+      else if (row.kind === 'save') saves[row.plan_id] = (saves[row.plan_id] ?? 0) + 1;
+      const existing = latest[row.plan_id];
+      if (!existing || new Date(row.created_at) > new Date(existing)) {
+        latest[row.plan_id] = row.created_at;
+      }
     }
     const neg: Record<string, number> = {};
     for (const r of offAgg ?? []) {
@@ -217,9 +230,29 @@ export default function PlanManagementScreen() {
       neg[pid] = (neg[pid] ?? 0) + 1;
     }
     setViewsByPlan(views);
+    setSavesByPlan(saves);
+    setLatestEngagementByPlan(latest);
     setOffersCountByPlan(neg);
     setLoading(false);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (plans.length === 0) return;
+    let cancelled = false;
+    const checkNew = async () => {
+      const entries = await Promise.all(
+        plans.map(async (p) => {
+          const count = await getNewActivityCount(p.id, latestEngagementByPlan[p.id] ?? null);
+          return [p.id, count > 0] as [string, boolean];
+        })
+      );
+      if (!cancelled) setNewActivityMap(Object.fromEntries(entries));
+    };
+    void checkNew();
+    return () => {
+      cancelled = true;
+    };
+  }, [plans, latestEngagementByPlan]);
 
   useEffect(() => {
     void load();
@@ -448,6 +481,8 @@ export default function PlanManagementScreen() {
                   : null;
               const neg = offersCountByPlan[p.id] ?? 0;
               const views = viewsByPlan[p.id] ?? 0;
+              const saves = savesByPlan[p.id] ?? 0;
+              const interestCount = views + saves;
               const moodLive = p.is_mood_plan && !isPlanMoodWindowClosed(p);
               const stripeStyle = p.archived_at
                 ? styles.stripeArchived
@@ -465,9 +500,16 @@ export default function PlanManagementScreen() {
                   <View style={styles.planBody}>
                     <View style={styles.cardTop}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle} numberOfLines={2}>
-                          {p.title}
-                        </Text>
+                        <View style={styles.titleRow}>
+                          <Text style={styles.cardTitle} numberOfLines={2}>
+                            {p.title}
+                          </Text>
+                          {newActivityMap[p.id] ? (
+                            <View style={styles.newDot}>
+                              <Text style={styles.newDotTxt}>new</Text>
+                            </View>
+                          ) : null}
+                        </View>
                         <Text style={styles.cardMeta}>
                           {p.status}
                           {p.is_mood_plan ? ' · Mood' : ''}
@@ -490,6 +532,10 @@ export default function PlanManagementScreen() {
                         <Text style={styles.statItem}>{views} views</Text>
                       </View>
                       <View style={styles.statPill}>
+                        <Ionicons name="bookmark-outline" size={15} color={colors.secondary} />
+                        <Text style={styles.statItem}>{saves} saves</Text>
+                      </View>
+                      <View style={styles.statPill}>
                         <Ionicons name="chatbubbles-outline" size={15} color={colors.secondary} />
                         <Text style={styles.statItem}>{neg} offers</Text>
                       </View>
@@ -503,12 +549,26 @@ export default function PlanManagementScreen() {
                       <Pressable
                         style={styles.actionBtn}
                         onPress={() => {
+                          void markPlanActivityRead(p.id);
+                          setNewActivityMap((prev) => ({ ...prev, [p.id]: false }));
                           warmPlanDetailNavigation(p.id, { plan: p });
                           router.push(`/plan/${p.id}` as Href);
                         }}
                       >
                         <Text style={styles.actionBtnTxt}>Open</Text>
                       </Pressable>
+                      {p.status !== 'draft' ? (
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() => {
+                            router.push(`/plan/${p.id}/interest` as Href);
+                          }}
+                        >
+                          <Text style={styles.actionBtnTxt}>
+                            Interest{interestCount > 0 ? ` (${interestCount})` : ''}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                       {capsNeg.canEdit ? (
                         <Pressable style={styles.actionBtn} onPress={() => setEditPlan(p)}>
                           <Text style={styles.actionBtnTxt}>Edit</Text>
@@ -792,8 +852,28 @@ const styles = StyleSheet.create({
   planBody: { flex: 1, padding: spacing.md },
 
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
   cardTitle: { fontSize: 16, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.text },
+  newDot: {
+    backgroundColor: colors.secondary,
+    borderRadius: 50,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  newDotTxt: {
+    fontSize: 9,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   cardMeta: { marginTop: 4, fontSize: 13, color: colors.textMuted, fontWeight: '600', fontFamily: fonts.medium, },
   livePill: {
     backgroundColor: 'rgba(255, 74, 114,0.18)',

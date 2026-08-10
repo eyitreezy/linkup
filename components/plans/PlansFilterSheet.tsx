@@ -33,6 +33,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+export type PlanTypeFilter = 'all' | 'standard' | 'group' | 'mood';
+
 export type FeedFilterState = {
   /** null = no max-distance filter applied (any distance). */
   maxDistanceKm: number | null;
@@ -40,11 +42,19 @@ export type FeedFilterState = {
   maxPriceCents: number | null;
   verifiedHostsOnly: boolean;
   hostPresence: HostPresenceFilter;
+  planTypeFilter: PlanTypeFilter;
   /** When false, discover shows all non-expired plans (distance is sort-only). */
   clientFiltersActive: boolean;
   /** When true, maxDistanceKm strictly excludes plans outside range. */
   distanceFilterActive: boolean;
 };
+
+const PLAN_TYPE_OPTIONS: { id: PlanTypeFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'standard', label: 'Standard' },
+  { id: 'group', label: 'Group' },
+  { id: 'mood', label: 'Mood' },
+];
 
 const HOST_PRESENCE_OPTIONS: { id: HostPresenceFilter; label: string }[] = [
   { id: 'all', label: 'All hosts' },
@@ -97,6 +107,7 @@ export function PlansFilterSheet({
   const [maxPriceText, setMaxPriceText] = useState(() => formatFilterPriceMajor(initial.maxPriceCents));
   const [verifiedOnly, setVerifiedOnly] = useState(initial.verifiedHostsOnly);
   const [hostPresence, setHostPresence] = useState<HostPresenceFilter>(initial.hostPresence);
+  const [planTypeFilter, setPlanTypeFilter] = useState<PlanTypeFilter>(initial.planTypeFilter);
   const [mood, setMood] = useState<DiscoveryMood>(discoveryMood);
   const [displayMode, setDisplayMode] = useState<FeedViewMode>(feedMode);
   const [priceRangeErrorOpen, setPriceRangeErrorOpen] = useState(false);
@@ -114,6 +125,7 @@ export function PlansFilterSheet({
       setMaxPriceText(formatFilterPriceMajor(initial.maxPriceCents));
       setVerifiedOnly(initial.verifiedHostsOnly);
       setHostPresence(initial.hostPresence);
+      setPlanTypeFilter(initial.planTypeFilter);
       setMood(discoveryMood);
       setDisplayMode(feedMode);
     }
@@ -137,6 +149,7 @@ export function PlansFilterSheet({
         maxPriceCents,
         verifiedHostsOnly,
         hostPresence,
+        planTypeFilter,
       },
       baseRadiusKm
     );
@@ -147,8 +160,10 @@ export function PlansFilterSheet({
         maxPriceCents,
         verifiedHostsOnly,
         hostPresence,
+        planTypeFilter,
         distanceFilterActive,
-        clientFiltersActive: distanceFilterActive || hasOtherConstraints,
+        clientFiltersActive:
+          distanceFilterActive || hasOtherConstraints || planTypeFilter !== 'all',
       },
       mood,
       displayMode
@@ -385,6 +400,45 @@ export function PlansFilterSheet({
                   Respects each host&apos;s privacy settings. Hosts who hide activity won&apos;t appear in Online or
                   Offline filters.
                 </Text>
+              </View>
+
+              <Text style={styles.sectionEyebrow}>Plan type</Text>
+              <View style={styles.sectionCard}>
+                <Text style={styles.label}>Show plans that are</Text>
+                <View style={styles.planTypeRow}>
+                  {PLAN_TYPE_OPTIONS.map((opt) => {
+                    const selected = planTypeFilter === opt.id;
+                    return (
+                      <Pressable
+                        key={opt.id}
+                        onPress={() => setPlanTypeFilter(opt.id)}
+                        style={({ pressed }) => [
+                          styles.planTypeChipOuter,
+                          selected && styles.planTypeChipOuterOn,
+                          pressed && styles.planTypeChipPressed,
+                        ]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`Filter by ${opt.label} plans`}
+                      >
+                        {selected ? (
+                          <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.planTypeChipGradient}
+                          >
+                            <Text style={styles.planTypeChipTxtOn}>{opt.label}</Text>
+                          </LinearGradient>
+                        ) : (
+                          <View style={styles.planTypeChipInner}>
+                            <Text style={styles.planTypeChipTxt}>{opt.label}</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
 
               <Text style={styles.sectionEyebrow}>Location</Text>
@@ -970,4 +1024,33 @@ const styles = StyleSheet.create({
     color: colors.primary,
     flex: 1,
   },
+  planTypeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  planTypeChipOuter: {
+    borderRadius: radius.button,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  planTypeChipOuterOn: {
+    borderColor: 'transparent',
+  },
+  planTypeChipPressed: { opacity: 0.92 },
+  planTypeChipInner: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  planTypeChipGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.button,
+  },
+  planTypeChipTxt: { fontSize: 14, fontWeight: '800',
+    fontFamily: fonts.bold, color: colors.text },
+  planTypeChipTxtOn: { fontSize: 14, fontWeight: '800', color: '#fff', fontFamily: fonts.bold, },
 });

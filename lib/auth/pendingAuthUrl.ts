@@ -3,6 +3,7 @@ import { urlLooksLikeAuthRedirect } from '@/lib/authProviders';
 
 let pending: string | null = null;
 let pendingRecoveryIntent = false;
+let recoveryFlowActive = false;
 
 function shouldCapture(url: string): boolean {
   const u = url.trim();
@@ -11,11 +12,30 @@ function shouldCapture(url: string): boolean {
   return lower.includes('auth/callback') || urlLooksLikeAuthRedirect(u) || isRecoveryAuthUrl(u);
 }
 
+/** Mark an in-progress password recovery (until reset completes or user abandons). */
+export function markRecoveryFlowActive(): void {
+  recoveryFlowActive = true;
+  pendingRecoveryIntent = true;
+}
+
+export function peekRecoveryFlowActive(): boolean {
+  return recoveryFlowActive || pendingRecoveryIntent;
+}
+
+export function peekPendingRecoveryIntent(): boolean {
+  return pendingRecoveryIntent;
+}
+
+export function clearRecoveryFlowActive(): void {
+  recoveryFlowActive = false;
+  pendingRecoveryIntent = false;
+}
+
 /** Store the full deep link before Expo Router strips query/hash or navigates away. */
 export function captureAuthLinkIfPresent(url: string | null | undefined): void {
   const u = url?.trim();
   if (!u) return;
-  if (isRecoveryAuthUrl(u)) pendingRecoveryIntent = true;
+  if (isRecoveryAuthUrl(u)) markRecoveryFlowActive();
   if (!shouldCapture(u)) return;
   pending = u;
 }

@@ -83,9 +83,12 @@ export default function AuthCallbackScreen() {
   if (phase === 'failed') {
     return (
       <View style={styles.center}>
+        <Text style={styles.title}>
+          {recoveryFlow ? 'Reset link expired or invalid' : 'Sign-in could not be completed'}
+        </Text>
         <Text style={styles.err}>
           {recoveryFlow
-            ? 'We could not open your reset link. Request a new email from Forgot password, tap the purple Reset button (not plain text), and open the link on this phone with LinkUp installed.'
+            ? 'This reset link has expired or is no longer valid. Request a new password-reset email and open the link on this phone with LinkUp installed.'
             : 'We could not finish signing you in. Open the confirmation link on the same phone where you signed up, or request a new email and try again. You can also sign in with your password if your email is already confirmed.'}
         </Text>
         <Pressable
@@ -94,7 +97,7 @@ export default function AuthCallbackScreen() {
           }
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
         >
-          <Text style={styles.btnText}>{recoveryFlow ? 'Request new reset link' : 'Back to sign in'}</Text>
+          <Text style={styles.btnText}>{recoveryFlow ? 'Request a new reset link' : 'Back to sign in'}</Text>
         </Pressable>
       </View>
     );
@@ -114,7 +117,15 @@ const styles = StyleSheet.create({
   },
   hint: { color: colors.textMuted, fontSize: 15, fontWeight: '600',
     fontFamily: fonts.medium,},
-  err: { color: colors.text, textAlign: 'center', lineHeight: 22, fontSize: 15, fontFamily: fonts.regular, },
+  title: {
+    color: colors.text,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    marginBottom: 4,
+  },
+  err: { color: colors.textMuted, textAlign: 'center', lineHeight: 22, fontSize: 15, fontFamily: fonts.regular, },
   btn: {
     marginTop: 8,
     paddingVertical: 12,

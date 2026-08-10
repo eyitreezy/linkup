@@ -78,6 +78,7 @@ export interface ProfilePreferences {
     maxDistanceKm?: number | null;
     clientFiltersActive?: boolean;
     distanceFilterActive?: boolean;
+    planTypeFilter?: 'all' | 'standard' | 'group' | 'mood';
   };
   /** Travel browse location override (Premium). */
   travel_mode?: {

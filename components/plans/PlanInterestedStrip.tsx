@@ -189,7 +189,7 @@ export function PlanInterestedStrip({ planId, hostUserId, currentUserId }: Props
         <Text style={styles.title}>Interested</Text>
         {rows.length > 0 ? (
           <Pressable
-            onPress={() => router.push(`/plan/${planId}/negotiate` as Href)}
+            onPress={() => router.push(`/plan/${planId}/interest` as Href)}
             accessibilityRole="button"
             accessibilityLabel="Connect with all interested members"
             hitSlop={8}

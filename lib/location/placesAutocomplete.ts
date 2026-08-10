@@ -1,12 +1,11 @@
 /**
  * Google Places Autocomplete (when Maps API key is configured).
- * Africa-only; addresses + establishments (restaurants, venues, landmarks).
+ * Nigeria-only; addresses + establishments (restaurants, venues, landmarks).
  */
 import {
-  AFRICA_COUNTRY_CODES_LOWER,
-  AFRICA_LOCATION_REJECTED_MESSAGE,
-  isCoordinateInAfrica,
-} from '@/lib/location/africaCountries';
+  NIGERIA_LOCATION_REJECTED_MESSAGE,
+  isCoordinateInNigeria,
+} from '@/lib/location/nigeriaBounds';
 import { getMapsApiKeyForCurrentPlatform } from '@/lib/mapsConfig';
 import type { LocationSuggestion } from '@/lib/location/locationGeocode';
 
@@ -25,15 +24,9 @@ type PlaceDetailsResponse = {
   error_message?: string;
 };
 
-/** Lagos — center bias for Africa-wide search. */
-const AFRICA_SEARCH_BIAS = '6.5244,3.3792';
-const AFRICA_SEARCH_RADIUS_M = '8000000';
-
-function africaComponentRestrictions(): string {
-  return AFRICA_COUNTRY_CODES_LOWER.slice(0, 5)
-    .map((c) => `country:${c}`)
-    .join('|');
-}
+/** Lagos — center bias for Nigeria search. */
+const NIGERIA_SEARCH_BIAS = '6.5244,3.3792';
+const NIGERIA_SEARCH_RADIUS_M = '1000000';
 
 async function fetchGooglePredictions(
   query: string,
@@ -43,9 +36,9 @@ async function fetchGooglePredictions(
   const params = new URLSearchParams({
     input: query,
     key,
-    location: AFRICA_SEARCH_BIAS,
-    radius: AFRICA_SEARCH_RADIUS_M,
-    components: africaComponentRestrictions(),
+    location: NIGERIA_SEARCH_BIAS,
+    radius: NIGERIA_SEARCH_RADIUS_M,
+    components: 'country:ng',
   });
   if (types) params.set('types', types);
 
@@ -102,21 +95,21 @@ export async function resolveGooglePlaceSuggestion(
   if (
     suggestion.latitude !== 0 &&
     suggestion.longitude !== 0 &&
-    isCoordinateInAfrica(suggestion.latitude, suggestion.longitude)
+    isCoordinateInNigeria(suggestion.latitude, suggestion.longitude)
   ) {
     return suggestion;
   }
 
   if (suggestion.placeId?.startsWith('osm:')) {
-    if (!isCoordinateInAfrica(suggestion.latitude, suggestion.longitude)) {
-      throw new Error(AFRICA_LOCATION_REJECTED_MESSAGE);
+    if (!isCoordinateInNigeria(suggestion.latitude, suggestion.longitude)) {
+      throw new Error(NIGERIA_LOCATION_REJECTED_MESSAGE);
     }
     return suggestion;
   }
 
   if (!suggestion.placeId) {
-    if (!isCoordinateInAfrica(suggestion.latitude, suggestion.longitude)) {
-      throw new Error(AFRICA_LOCATION_REJECTED_MESSAGE);
+    if (!isCoordinateInNigeria(suggestion.latitude, suggestion.longitude)) {
+      throw new Error(NIGERIA_LOCATION_REJECTED_MESSAGE);
     }
     return suggestion;
   }
@@ -134,8 +127,8 @@ export async function resolveGooglePlaceSuggestion(
   const loc = detJson.result?.geometry?.location;
   if (!loc) return suggestion;
 
-  if (!isCoordinateInAfrica(loc.lat, loc.lng)) {
-    throw new Error(AFRICA_LOCATION_REJECTED_MESSAGE);
+  if (!isCoordinateInNigeria(loc.lat, loc.lng)) {
+    throw new Error(NIGERIA_LOCATION_REJECTED_MESSAGE);
   }
 
   return {

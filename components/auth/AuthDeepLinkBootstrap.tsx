@@ -5,7 +5,7 @@ import { captureAuthLinkIfPresent } from '@/lib/auth/pendingAuthUrl';
 import { urlLooksLikeAuthRedirect } from '@/lib/authProviders';
 import * as Linking from 'expo-linking';
 import { useRouter, useSegments, type Href } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 const CALLBACK_HREF = '/auth/callback' as Href;
 
@@ -17,7 +17,6 @@ function shouldOpenAuthCallback(url: string): boolean {
 export function AuthDeepLinkBootstrap() {
   const router = useRouter();
   const segments = useSegments();
-  const handledRef = useRef(false);
 
   useEffect(() => {
     const routeKey = segments.join('/');
@@ -28,9 +27,6 @@ export function AuthDeepLinkBootstrap() {
       if (!shouldOpenAuthCallback(url)) return;
       captureAuthLinkIfPresent(url);
       if (onCallback) return;
-      if (handledRef.current) return;
-
-      handledRef.current = true;
       router.replace(CALLBACK_HREF);
     }
 

@@ -5,6 +5,47 @@ export type PasswordStrength = {
   hints: string[];
 };
 
+export const PASSWORD_MIN_LENGTH = 6;
+
+export type PasswordRequirementKey = 'minLength' | 'uppercase' | 'number';
+
+export type PasswordRequirement = {
+  key: PasswordRequirementKey;
+  message: string;
+  satisfied: boolean;
+};
+
+export function getPasswordRequirements(password: string): PasswordRequirement[] {
+  return [
+    {
+      key: 'minLength',
+      message: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`,
+      satisfied: password.length >= PASSWORD_MIN_LENGTH,
+    },
+    {
+      key: 'uppercase',
+      message: 'Password must contain at least one uppercase letter.',
+      satisfied: /[A-Z]/.test(password),
+    },
+    {
+      key: 'number',
+      message: 'Password must contain at least one number.',
+      satisfied: /\d/.test(password),
+    },
+  ];
+}
+
+/** All unmet requirement messages (shown together on submit). */
+export function getPasswordRequirementErrors(password: string): string[] {
+  return getPasswordRequirements(password)
+    .filter((r) => !r.satisfied)
+    .map((r) => r.message);
+}
+
+export function isPasswordValid(password: string): boolean {
+  return getPasswordRequirementErrors(password).length === 0;
+}
+
 export function evaluatePasswordStrength(password: string): PasswordStrength {
   const hints: string[] = [];
   let score = 0;

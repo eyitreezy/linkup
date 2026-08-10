@@ -2,7 +2,7 @@
  * Entry redirect — auth deep links → callback; session + pending onboarding → wizard; else login/tabs.
  */
 import { useAuth } from '@/contexts/AuthContext';
-import { captureAuthLinkIfPresent } from '@/lib/auth/pendingAuthUrl';
+import { captureAuthLinkIfPresent, peekPendingAuthUrl, peekRecoveryFlowActive } from '@/lib/auth/pendingAuthUrl';
 import { postAuthHref } from '@/lib/auth/postAuthNavigation';
 import { urlLooksLikeAuthRedirect } from '@/lib/authProviders';
 import * as Linking from 'expo-linking';
@@ -33,7 +33,7 @@ export default function Index() {
     return <View style={styles.blank} />;
   }
 
-  if (pendingAuthLink) {
+  if (pendingAuthLink || peekPendingAuthUrl() || peekRecoveryFlowActive()) {
     return <Redirect href={'/auth/callback' as Href} />;
   }
 

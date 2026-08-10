@@ -6,6 +6,7 @@ import { AuthModeToggle, type AuthMode } from '@/components/auth/AuthModeToggle'
 import { useAuthSheetScroll } from '@/components/auth/AuthSheetScrollContext';
 import { DatingAuthShell } from '@/components/auth/DatingAuthShell';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { PasswordRequirementFeedback } from '@/components/auth/PasswordRequirementFeedback';
 import { PasswordStrengthIndicator } from '@/components/auth/PasswordStrengthIndicator';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -15,6 +16,7 @@ import { getAuthRedirectUrl, signInWithGoogle, waitForSupabaseSession } from '@/
 import { formatAuthError } from '@/lib/auth/formatAuthError';
 import { useEmailSendCooldown } from '@/lib/auth/useEmailSendCooldown';
 import { resolvePostAuthHref } from '@/lib/auth/postAuthNavigation';
+import { getPasswordRequirementErrors } from '@/lib/auth/passwordStrength';
 import {
   consumePendingSignupPrivacyConsent,
   markPendingSignupPrivacyConsent,
@@ -34,10 +36,11 @@ type Props = {
 type SignupPasswordFieldProps = {
   password: string;
   onChangePassword: (value: string) => void;
+  showRequirements: boolean;
 };
 
 /** Must render inside DatingAuthShell so keyboard scroll context is available. */
-function SignupPasswordField({ password, onChangePassword }: SignupPasswordFieldProps) {
+function SignupPasswordField({ password, onChangePassword, showRequirements }: SignupPasswordFieldProps) {
   const groupRef = useRef<View>(null);
   const authSheetScroll = useAuthSheetScroll();
 
@@ -57,11 +60,15 @@ function SignupPasswordField({ password, onChangePassword }: SignupPasswordField
         scrollAnchorRef={groupRef}
         value={password}
         onChangeText={onChangePassword}
-        placeholder="Password (min. 6 characters)"
+        placeholder="Password (min. 6 characters, 1 uppercase, 1 number)"
         autoComplete="new-password"
         textContentType="newPassword"
       />
       <PasswordStrengthIndicator password={password} />
+      <PasswordRequirementFeedback
+        password={password}
+        visible={showRequirements || password.length > 0}
+      />
     </View>
   );
 }
@@ -82,6 +89,7 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
   const resendCooldown = useEmailSendCooldown(60);
   const [privacyConsentChecked, setPrivacyConsentChecked] = useState(false);
   const [showConsentError, setShowConsentError] = useState(false);
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
 
   const switchMode = useCallback(
     (next: AuthMode) => {
@@ -91,6 +99,7 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
       setVerificationSent(false);
       setPrivacyConsentChecked(false);
       setShowConsentError(false);
+      setShowPasswordRequirements(false);
     },
     [mode]
   );
@@ -182,8 +191,10 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
       setErr('Enter your email.');
       return;
     }
-    if (password.length < 6) {
-      setErr('Password must be at least 6 characters');
+    const requirementErrors = getPasswordRequirementErrors(password);
+    if (requirementErrors.length > 0) {
+      setShowPasswordRequirements(true);
+      setErr(requirementErrors.join('\n'));
       return;
     }
     if (!privacyConsentChecked) {
@@ -430,7 +441,23 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
               onChangeText={setEmail}
               placeholder="Email"
             />
-            <SignupPasswordField password={password} onChangePassword={setPassword} />
+            <SignupPasswordField
+              password={password}
+              onChangePassword={(value) => {
+                setPassword(value);
+                if (showPasswordRequirements || value.length > 0) {
+                  setShowPasswordRequirements(true);
+                }
+                if (showPasswordRequirements) {
+                  const remaining = getPasswordRequirementErrors(value);
+                  setErr((prev) => {
+                    if (!prev || !prev.includes('Password must')) return prev;
+                    return remaining.length > 0 ? remaining.join('\n') : '';
+                  });
+                }
+              }}
+              showRequirements={showPasswordRequirements}
+            />
             {err ? <Text style={styles.formErr}>{err}</Text> : null}
             <View style={styles.consentRow}>
               <Pressable

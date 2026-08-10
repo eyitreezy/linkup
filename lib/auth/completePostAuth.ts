@@ -5,7 +5,11 @@ import {
 } from '@/lib/authProviders';
 import { isRecoveryAuthUrl } from '@/lib/auth/passwordReset';
 import { ONBOARDING_ROUTE, resolvePostAuthHref } from '@/lib/auth/postAuthNavigation';
-import { consumePendingAuthUrl, consumePendingRecoveryIntent } from '@/lib/auth/pendingAuthUrl';
+import {
+  consumePendingAuthUrl,
+  markRecoveryFlowActive,
+  peekPendingRecoveryIntent,
+} from '@/lib/auth/pendingAuthUrl';
 import { getSessionRecoveringStale } from '@/lib/auth/sessionRecovery';
 import { consumePendingSignupPrivacyConsent } from '@/lib/privacy/pendingSignupConsentStorage';
 import { recordPrivacyConsent } from '@/lib/privacy/recordPrivacyConsent';
@@ -32,7 +36,8 @@ export async function completePostAuthFromDeepLink(opts: {
   router: Pick<Router, 'replace'>;
 }): Promise<PostAuthCallbackResult> {
   const trimmed = resolveAuthCallbackUrl(opts.url) || opts.url?.trim() || '';
-  const recovery = isRecoveryAuthUrl(trimmed) || consumePendingRecoveryIntent();
+  const recovery = isRecoveryAuthUrl(trimmed) || peekPendingRecoveryIntent();
+  if (recovery) markRecoveryFlowActive();
   const expectAuth = trimmed ? urlLooksLikeAuthRedirect(trimmed) : false;
 
   if (!trimmed) {
@@ -59,8 +64,12 @@ export async function completePostAuthFromDeepLink(opts: {
           if (pendingSignupConsent) {
             await recordPrivacyConsent(retry.user.id, 'signup');
           }
-          const href = await resolvePostAuthHref(retry.user.id);
-          opts.router.replace(href);
+          if (recovery) {
+            opts.router.replace('/(auth)/reset-password' as Href);
+          } else {
+            const href = await resolvePostAuthHref(retry.user.id);
+            opts.router.replace(href);
+          }
           void opts.refreshSession();
           return 'success';
         }

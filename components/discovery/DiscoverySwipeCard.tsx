@@ -148,6 +148,11 @@ function DiscoverySwipeCardInner({
               <Text style={styles.boostBadgeTxt}>Boosted</Text>
             </LinearGradient>
           ) : null}
+          {row.is_group_plan ? (
+            <View style={styles.groupBadge}>
+              <Text style={styles.groupBadgeTxt}>Group</Text>
+            </View>
+          ) : null}
           {showMood && urgencyLabel ? (
             <View style={styles.urgencyBadge}>
               <Text style={styles.urgencyTxt}>{urgencyLabel}</Text>
@@ -269,6 +274,22 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: '#fff',
     letterSpacing: 0.3,
+  },
+  groupBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.button,
+    backgroundColor: 'rgba(94,82,255,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  groupBadgeTxt: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+    letterSpacing: 0.2,
   },
   metaBadge: {
     alignSelf: 'flex-start',

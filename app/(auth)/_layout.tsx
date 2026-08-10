@@ -3,13 +3,25 @@
  */
 import { useAuth } from '@/contexts/AuthContext';
 import { needsOnboarding, ONBOARDING_ROUTE, postAuthHref } from '@/lib/auth/postAuthNavigation';
-import { Redirect, Stack, useSegments } from 'expo-router';
+import { peekRecoveryFlowActive } from '@/lib/auth/pendingAuthUrl';
+import { Redirect, Stack, useSegments, type Href } from 'expo-router';
 
 function AuthSessionRedirect() {
   const { session, profile, loading } = useAuth();
   const segments = useSegments();
-  const allowWithSession =
-    segments.includes('reset-password') || segments.includes('forgot-password-sent');
+  const inRecoveryFlow = peekRecoveryFlowActive();
+  const onResetPassword = segments.includes('reset-password');
+  const onForgotSent = segments.includes('forgot-password-sent');
+  const onForgotPassword = segments.includes('forgot-password');
+
+  if (inRecoveryFlow) {
+    if (!onResetPassword && !onForgotPassword && !onForgotSent) {
+      return <Redirect href={'/(auth)/reset-password' as Href} />;
+    }
+    return null;
+  }
+
+  const allowWithSession = onResetPassword || onForgotSent;
 
   if (allowWithSession) return null;
   if (!session?.user) return null;

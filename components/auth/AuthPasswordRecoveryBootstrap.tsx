@@ -2,6 +2,7 @@
  * Routes to reset-password when Supabase emits PASSWORD_RECOVERY (PKCE/hash flows
  * often omit type=recovery on the final linkup:// URL).
  */
+import { markRecoveryFlowActive } from '@/lib/auth/pendingAuthUrl';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { type Href, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
@@ -20,8 +21,10 @@ export function AuthPasswordRecoveryBootstrap() {
     } = supabase.auth.onAuthStateChange((event) => {
       if (event !== 'PASSWORD_RECOVERY') return;
 
+      markRecoveryFlowActive();
+
       const routeKey = segments.join('/');
-      if (routeKey.includes('reset-password')) return;
+      if (routeKey.includes('reset-password') || routeKey.includes('auth/callback')) return;
 
       router.replace(RESET_HREF);
     });

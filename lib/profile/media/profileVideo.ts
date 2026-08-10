@@ -124,7 +124,7 @@ async function localFileSize(uri: string): Promise<number> {
 export async function uploadProfileVideo(userId: string, localUri: string): Promise<ProfileVideoRecord> {
   const size = await localFileSize(localUri);
   if (size > PROFILE_VIDEO_MAX_BYTES) {
-    throw new Error('Video is too large. Please upload a shorter clip (under 30 seconds).');
+    throw new Error('Video must be under 100MB. Please trim or compress it and try again.');
   }
 
   const mime = mimeFromUri(localUri);

@@ -116,7 +116,7 @@ export function PlansLocationPrompt({
 
             label="Your area"
 
-            placeholder="e.g. Lagos, Abuja, London"
+            placeholder="e.g. Lagos, Abuja, Kano"
 
             value={manualQuery}
 

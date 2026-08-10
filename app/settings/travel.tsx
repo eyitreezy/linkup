@@ -322,7 +322,7 @@ export default function TravelModeScreen() {
               <View style={styles.searchBlock}>
                 <LocationSearchField
                   label="Where do you want to browse?"
-                  placeholder="e.g. Lagos, Abuja, London"
+                  placeholder="e.g. Lagos, Abuja, Kano"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   onSelectSuggestion={onPickLocation}
