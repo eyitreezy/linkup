@@ -165,7 +165,7 @@ export default function OnboardingScreen() {
 
   const canContinue1 = useMemo(() => {
     const photos = draft.localPhotoUris.length + draft.remotePhotoUrls.length;
-    const hasVideo = !!(draft.localVideoUri || draft.remoteVideoUrl);
+    const hasVideo = draft.videos.some((v) => v.localUri || v.remoteUrl);
     const age = ageFromBirthDate(draft.birthDate);
     return (
       draft.displayName.trim().length >= 1 &&
@@ -178,8 +178,7 @@ export default function OnboardingScreen() {
     draft.displayName,
     draft.localPhotoUris.length,
     draft.remotePhotoUrls.length,
-    draft.localVideoUri,
-    draft.remoteVideoUrl,
+    draft.videos,
     draft.birthDate,
     draft.adultConfirmed,
   ]);
@@ -225,10 +224,7 @@ export default function OnboardingScreen() {
       return;
     }
     const merged = mergeDraftAfterSave(draft, uploadedPhotoUrls);
-    const enriched = await enrichDraftWithProfileVideo(user.id, {
-      ...merged,
-      localVideoUri: null,
-    });
+    const enriched = await enrichDraftWithProfileVideo(user.id, merged);
     setDraft(enriched);
     setStep((s) => Math.min(s + 1, ONBOARDING_TOTAL_STEPS - 1));
     skipDraftHydrateRef.current = true;
@@ -636,17 +632,19 @@ export default function OnboardingScreen() {
                 onPrimaryChange={(ref) => setDraft((d) => ({ ...d, primaryPhotoRef: ref }))}
               />
               <ProfileVideoUploader
-                localUri={draft.localVideoUri}
-                remoteUrl={draft.remoteVideoUrl}
+                videos={draft.videos}
                 required
                 highlightError={validationFocus === 'video' ? validationMessage : null}
-                onPickLocal={(uri) => setDraft((d) => ({ ...d, localVideoUri: uri }))}
-                onRemove={() =>
+                onAddVideo={(uri) =>
                   setDraft((d) => ({
                     ...d,
-                    localVideoUri: null,
-                    remoteVideoUrl: null,
-                    remoteVideoMediaId: null,
+                    videos: [...d.videos, { localUri: uri, remoteUrl: null, mediaId: null }],
+                  }))
+                }
+                onRemoveVideo={(index) =>
+                  setDraft((d) => ({
+                    ...d,
+                    videos: d.videos.filter((_, i) => i !== index),
                   }))
                 }
               />

@@ -169,6 +169,8 @@ export default function EditProfileScreen() {
       });
       await refreshProfile();
       setDraft((d) => mergeDraftAfterSave(d, uploadedPhotoUrls));
+      const patch = await fetchProfileVideoDraftPatch(user.id);
+      if (patch) setDraft((d) => ({ ...d, ...patch }));
       setFeedback({
         variant: 'success',
         title: 'Saved',
@@ -280,14 +282,17 @@ export default function EditProfileScreen() {
                 }
               />
               <ProfileVideoUploader
-                localUri={draft.localVideoUri}
-                remoteUrl={draft.remoteVideoUrl}
-                onPickLocal={(uri) => setDraft((d) => ({ ...d, localVideoUri: uri }))}
-                onRemove={() =>
+                videos={draft.videos}
+                onAddVideo={(uri) =>
                   setDraft((d) => ({
                     ...d,
-                    localVideoUri: null,
-                    remoteVideoUrl: null,
+                    videos: [...d.videos, { localUri: uri, remoteUrl: null, mediaId: null }],
+                  }))
+                }
+                onRemoveVideo={(index) =>
+                  setDraft((d) => ({
+                    ...d,
+                    videos: d.videos.filter((_, i) => i !== index),
                   }))
                 }
               />

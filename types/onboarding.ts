@@ -14,6 +14,12 @@ export type PromptAnswer = {
   answer: string;
 };
 
+export type OnboardingVideoSlot = {
+  localUri: string | null;
+  remoteUrl: string | null;
+  mediaId: string | null;
+};
+
 export type OnboardingDraft = {
   displayName: string;
   birthDate: Date;
@@ -23,12 +29,8 @@ export type OnboardingDraft = {
   remotePhotoUrls: string[];
   /** Which tile is the primary / avatar photo */
   primaryPhotoRef: PrimaryPhotoRef | null;
-  /** Local intro video before upload */
-  localVideoUri: string | null;
-  /** Persisted intro video public URL */
-  remoteVideoUrl: string | null;
-  /** media.id for profile intro video */
-  remoteVideoMediaId: string | null;
+  /** Profile intro videos (1–3 slots). */
+  videos: OnboardingVideoSlot[];
   bio: string;
   interests: string[];
   languages: string[];
@@ -61,9 +63,7 @@ export function defaultOnboardingDraft(partial?: Partial<OnboardingDraft>): Onbo
     localPhotoUris: [],
     remotePhotoUrls: [],
     primaryPhotoRef: null,
-    localVideoUri: null,
-    remoteVideoUrl: null,
-    remoteVideoMediaId: null,
+    videos: [],
     bio: '',
     interests: [],
     languages: [],

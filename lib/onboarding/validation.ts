@@ -1,6 +1,7 @@
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
 import { PROFILE_MIN_PHOTOS_ONBOARDING } from '@/lib/profile/media/constants';
+import { PROFILE_VIDEO_MIN_COUNT } from '@/lib/profile/media/videoLimits';
 import { defaultPrimaryRef, resolvePhotoUrl } from '@/lib/profile/media/photoOrder';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import type { OnboardingDraft } from '@/types/onboarding';
@@ -11,8 +12,12 @@ function photoCount(draft: OnboardingDraft): number {
   return draft.localPhotoUris.length + draft.remotePhotoUrls.length;
 }
 
+function filledVideoCount(draft: OnboardingDraft): number {
+  return draft.videos.filter((v) => v.localUri || v.remoteUrl).length;
+}
+
 function hasIntroVideo(draft: OnboardingDraft): boolean {
-  return !!(draft.localVideoUri || draft.remoteVideoUrl);
+  return filledVideoCount(draft) >= PROFILE_VIDEO_MIN_COUNT;
 }
 
 function hasValidPrimaryPhoto(draft: OnboardingDraft): boolean {

@@ -1,11 +1,17 @@
 /** Maximum profile video duration in seconds. */
-export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 60;
+export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 20;
 
-/** Maximum profile video file size in bytes (100MB). */
-export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+/** Maximum profile video file size in bytes (30MB). */
+export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 30 * 1024 * 1024;
 
 /** Human-readable size label for error messages. */
-export const PROFILE_VIDEO_MAX_SIZE_LABEL = '100MB';
+export const PROFILE_VIDEO_MAX_SIZE_LABEL = '30MB';
+
+/** Maximum profile videos per user. */
+export const PROFILE_VIDEO_MAX_COUNT = 3;
+
+/** Minimum profile videos required for onboarding. */
+export const PROFILE_VIDEO_MIN_COUNT = 1;
 
 export function validateProfileVideoFile(
   file: { size?: number; duration?: number | null }

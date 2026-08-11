@@ -1,6 +1,10 @@
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
 import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
-import { PROFILE_MEDIA_VIDEO_KIND, PROFILE_VIDEO_MAX_BYTES, PROFILE_VIDEO_MIME_TYPES } from '@/lib/profile/media/constants';
+import { PROFILE_MEDIA_VIDEO_KIND, PROFILE_VIDEO_MIME_TYPES } from '@/lib/profile/media/constants';
+import {
+  PROFILE_VIDEO_MAX_COUNT,
+  PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
+} from '@/lib/profile/media/videoLimits';
 import { supabase } from '@/lib/supabase';
 import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -48,22 +52,24 @@ function rowToProfileVideo(row: {
   };
 }
 
-export async function fetchProfileVideo(userId: string): Promise<ProfileVideoRecord | null> {
+export async function fetchProfileVideos(userId: string): Promise<ProfileVideoRecord[]> {
   const { data, error } = await supabase
     .from('media')
     .select('id, storage_path, mime_type, metadata')
     .eq('parent_table', 'profiles')
     .eq('parent_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(8);
+    .order('created_at', { ascending: true })
+    .limit(PROFILE_VIDEO_MAX_COUNT);
 
-  if (error || !data?.length) return null;
+  if (error || !data?.length) return [];
+  return data
+    .map((row) => rowToProfileVideo(row))
+    .filter((v): v is ProfileVideoRecord => v !== null);
+}
 
-  for (const row of data) {
-    const video = rowToProfileVideo(row);
-    if (video) return video;
-  }
-  return null;
+export async function fetchProfileVideo(userId: string): Promise<ProfileVideoRecord | null> {
+  const videos = await fetchProfileVideos(userId);
+  return videos[0] ?? null;
 }
 
 /** Batch intro videos for discover feed creators (newest per user). */
@@ -98,7 +104,11 @@ async function removeVideoStorage(storagePath: string) {
 }
 
 export async function deleteProfileVideo(userId: string, mediaId?: string | null): Promise<void> {
-  let query = supabase.from('media').select('id, storage_path').eq('parent_table', 'profiles').eq('parent_id', userId);
+  let query = supabase
+    .from('media')
+    .select('id, storage_path')
+    .eq('parent_table', 'profiles')
+    .eq('parent_id', userId);
   if (mediaId) query = query.eq('id', mediaId);
 
   const { data: rows } = await query;
@@ -121,10 +131,14 @@ async function localFileSize(uri: string): Promise<number> {
   return file.size;
 }
 
-export async function uploadProfileVideo(userId: string, localUri: string): Promise<ProfileVideoRecord> {
+export async function uploadProfileVideo(
+  userId: string,
+  localUri: string,
+  existingMediaId?: string | null
+): Promise<ProfileVideoRecord> {
   const size = await localFileSize(localUri);
-  if (size > PROFILE_VIDEO_MAX_BYTES) {
-    throw new Error('Video must be under 100MB. Please trim or compress it and try again.');
+  if (size > PROFILE_VIDEO_MAX_FILE_SIZE_BYTES) {
+    throw new Error('Video must be under 30MB. Please trim or compress it and try again.');
   }
 
   const mime = mimeFromUri(localUri);
@@ -132,7 +146,9 @@ export async function uploadProfileVideo(userId: string, localUri: string): Prom
     throw new Error('Unsupported video format. Use MP4, MOV, or WebM.');
   }
 
-  await deleteProfileVideo(userId);
+  if (existingMediaId) {
+    await deleteProfileVideo(userId, existingMediaId);
+  }
 
   const path = `${userId}/${Date.now()}-intro.${extForMime(mime)}`;
   const bytes = await readLocalAssetAsUint8Array(localUri);

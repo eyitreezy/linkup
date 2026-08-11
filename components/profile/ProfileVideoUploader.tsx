@@ -1,149 +1,248 @@
 import { authSoftLabelStyle } from '@/components/Input';
+import { onboarding } from '@/components/onboarding/onboardingTheme';
+import { KycLivenessVideoPreview } from '@/components/kyc/KycLivenessVideoPreview';
+import { colors, radius, fonts } from '@/constants/theme';
 import {
+  PROFILE_VIDEO_MAX_COUNT,
   PROFILE_VIDEO_MAX_DURATION_SECONDS,
+  PROFILE_VIDEO_MAX_SIZE_LABEL,
   validateProfileVideoFile,
 } from '@/lib/profile/media/videoLimits';
-import { KycLivenessVideoPreview } from '@/components/kyc/KycLivenessVideoPreview';
-import { onboarding } from '@/components/onboarding/onboardingTheme';
-import { colors, radius, fonts } from '@/constants/theme';
+import type { OnboardingVideoSlot } from '@/types/onboarding';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, Alert, StyleSheet, Text, View } from 'react-native';
+import { MotiView } from 'moti';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+const ADD_TILE_GRADIENT = [colors.primary, '#8B7CE8', colors.secondary] as const;
+
+const TILE_W = 108;
+const TILE_H = 132;
 
 type Props = {
-  localUri: string | null;
-  remoteUrl: string | null;
-  onPickLocal: (uri: string) => void;
-  onRemove: () => void;
+  videos: OnboardingVideoSlot[];
+  onAddVideo: (localUri: string, mimeType: string) => void;
+  onRemoveVideo: (index: number) => void;
   required?: boolean;
   highlightError?: string | null;
 };
 
-export function ProfileVideoUploader({ localUri, remoteUrl, onPickLocal, onRemove, required, highlightError }: Props) {
-  const previewUri = localUri ?? remoteUrl;
+export function ProfileVideoUploader({
+  videos,
+  onAddVideo,
+  onRemoveVideo,
+  required,
+  highlightError,
+}: Props) {
+  const [picking, setPicking] = useState(false);
+  const canAdd = videos.length < PROFILE_VIDEO_MAX_COUNT;
 
-  async function pickVideo() {
+  async function pick() {
+    if (!canAdd) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Photos access needed', 'Allow photo library access to upload your intro video.');
+      Alert.alert('Photos access needed', 'Allow photo library access to upload a video.');
       return;
     }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsMultipleSelection: false,
-      videoMaxDuration: PROFILE_VIDEO_MAX_DURATION_SECONDS,
-      allowsEditing: true,
-      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
-    });
-    if (res.canceled || !res.assets?.[0]?.uri) return;
-
-    const asset = res.assets[0];
-    const durationSeconds = asset.duration != null ? asset.duration / 1000 : null;
-    const validation = validateProfileVideoFile({
-      size: asset.fileSize ?? undefined,
-      duration: durationSeconds,
-    });
-    if (!validation.valid) {
-      Alert.alert('Video not allowed', validation.error ?? 'Please choose a shorter video.');
-      return;
+    setPicking(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        videoMaxDuration: PROFILE_VIDEO_MAX_DURATION_SECONDS,
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      const durationSeconds = asset.duration != null ? asset.duration / 1000 : null;
+      const validation = validateProfileVideoFile({
+        size: asset.fileSize ?? undefined,
+        duration: durationSeconds,
+      });
+      if (!validation.valid) {
+        Alert.alert('Video not allowed', validation.error ?? 'Please choose a shorter video.');
+        return;
+      }
+      onAddVideo(asset.uri, asset.mimeType ?? 'video/mp4');
+    } finally {
+      setPicking(false);
     }
-
-    onPickLocal(asset.uri);
   }
 
   return (
-    <View style={[styles.wrap, highlightError ? styles.wrapError : null]}>
-      <Text style={[authSoftLabelStyle, styles.labelSpacing]}>Profile video{required ? ' *' : ''}</Text>
-      <Text style={styles.hint}>One intro clip up to 60 seconds and 100MB. MP4, MOV, or WebM.</Text>
-      {highlightError ? <Text style={styles.errorText}>{highlightError}</Text> : null}
+    <View style={styles.wrap}>
+      <Text style={[authSoftLabelStyle, styles.labelSpacing]}>
+        Videos{required ? ' *' : ''}
+      </Text>
+      <Text style={styles.hint}>
+        Up to {PROFILE_VIDEO_MAX_COUNT} clips, max {PROFILE_VIDEO_MAX_DURATION_SECONDS}s and{' '}
+        {PROFILE_VIDEO_MAX_SIZE_LABEL} each.
+      </Text>
 
-      {previewUri ? (
-        <View style={styles.previewCard}>
-          <KycLivenessVideoPreview uri={previewUri} style={styles.video} mirror={false} />
-          <View style={styles.actions}>
-            <Pressable onPress={pickVideo} style={styles.actionBtn}>
-              <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
-              <Text style={styles.actionTxt}>Replace</Text>
-            </Pressable>
-            <Pressable onPress={onRemove} style={[styles.actionBtn, styles.actionDanger]}>
-              <Ionicons name="trash-outline" size={16} color={colors.danger} />
-              <Text style={[styles.actionTxt, styles.actionDangerTxt]}>Delete</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : (
-        <Pressable onPress={pickVideo} style={({ pressed }) => [styles.addOuter, pressed && styles.addPressed]}>
-          <LinearGradient
-            colors={['rgba(94, 82, 255,0.12)', 'rgba(255, 74, 114,0.08)']}
-            style={styles.addInner}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {videos.map((slot, i) => {
+          const previewUri = slot.localUri ?? slot.remoteUrl ?? undefined;
+          return (
+            <MotiView
+              key={`${slot.mediaId ?? 'local'}-${i}`}
+              from={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <View style={styles.tileWrap}>
+                {previewUri ? (
+                  <KycLivenessVideoPreview uri={previewUri} style={styles.tileMedia} mirror={false} />
+                ) : (
+                  <View style={[styles.tileMedia, styles.tileEmpty]}>
+                    <Ionicons name="videocam-outline" size={22} color={colors.textMuted} />
+                  </View>
+                )}
+                <View style={styles.slotBadge}>
+                  <Text style={styles.slotBadgeTxt}>{i + 1}</Text>
+                </View>
+                <Pressable
+                  style={styles.remove}
+                  onPress={() => onRemoveVideo(i)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove video ${i + 1}`}
+                >
+                  <Ionicons name="close-circle" size={22} color="#fff" />
+                </Pressable>
+              </View>
+            </MotiView>
+          );
+        })}
+
+        {canAdd ? (
+          <Pressable
+            onPress={() => void pick()}
+            disabled={picking}
+            style={({ pressed }) => [
+              styles.addTileOuter,
+              pressed && !picking && styles.addTilePressed,
+              picking && styles.addTileDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Add profile video"
           >
-            <Ionicons name="videocam-outline" size={32} color={colors.primary} />
-            <Text style={styles.addTitle}>Upload video</Text>
-            <Text style={styles.addSub}>Show your vibe — one clip only</Text>
-          </LinearGradient>
-        </Pressable>
-      )}
+            <LinearGradient
+              colors={[...ADD_TILE_GRADIENT]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.addTile}
+            >
+              {picking ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={videos.length === 0 ? 'videocam-outline' : 'add'}
+                    size={videos.length === 0 ? 28 : 36}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.addLabel}>
+                    {videos.length === 0 ? 'Add video' : 'Add another'}
+                  </Text>
+                </>
+              )}
+            </LinearGradient>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+
+      {highlightError ? <Text style={styles.errorText}>{highlightError}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { marginTop: onboarding.spacing.lg },
-  wrapError: {
+  labelSpacing: { marginBottom: 4 },
+  hint: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: onboarding.muted,
+    marginBottom: onboarding.spacing.md,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  tileWrap: { position: 'relative' },
+  tileMedia: {
+    width: TILE_W,
+    height: TILE_H,
     borderRadius: onboarding.radius2xl,
+    backgroundColor: '#0F172A',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.35)',
-    backgroundColor: 'rgba(239, 68, 68, 0.05)',
-    padding: onboarding.spacing.sm,
+    borderColor: '#D8DCE6',
+    overflow: 'hidden',
+  },
+  tileEmpty: {
+    backgroundColor: '#eee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: radius.button,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  slotBadgeTxt: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
+  remove: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: radius.button,
+  },
+  addTileOuter: {
+    borderRadius: onboarding.radius2xl,
+    overflow: 'hidden',
+  },
+  addTilePressed: { opacity: 0.92, transform: [{ scale: 0.98 }] },
+  addTileDisabled: { opacity: 0.4 },
+  addTile: {
+    width: TILE_W,
+    height: TILE_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+    marginTop: 4,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+    paddingHorizontal: 6,
   },
   errorText: {
     fontSize: 13,
     fontWeight: '700',
     fontFamily: fonts.bold,
     color: colors.danger,
-    marginBottom: onboarding.spacing.sm,
+    marginTop: 6,
     lineHeight: 18,
   },
-  labelSpacing: { marginBottom: 4 },
-  hint: { fontSize: 12,
-    fontFamily: fonts.regular, color: onboarding.muted, marginBottom: onboarding.spacing.md, lineHeight: 18 },
-  previewCard: {
-    borderRadius: onboarding.radius2xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(94, 82, 255,0.18)',
-    backgroundColor: '#fff',
-  },
-  video: { width: '100%', height: 220, backgroundColor: '#0F172A' },
-  actions: { flexDirection: 'row', gap: 10, padding: 12 },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: radius.button,
-    backgroundColor: 'rgba(94, 82, 255,0.08)',
-  },
-  actionTxt: { fontSize: 13, fontWeight: '800',
-    fontFamily: fonts.bold, color: colors.primary },
-  actionDanger: { backgroundColor: 'rgba(239,68,68,0.08)' },
-  actionDangerTxt: { color: colors.danger },
-  addOuter: { borderRadius: onboarding.radius2xl, overflow: 'hidden' },
-  addPressed: { opacity: 0.92 },
-  addInner: {
-    minHeight: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(94, 82, 255,0.2)',
-    borderRadius: onboarding.radius2xl,
-    borderStyle: 'dashed',
-  },
-  addTitle: { marginTop: 8, fontSize: 15, fontWeight: '900',
-    fontFamily: fonts.bold, color: colors.text },
-  addSub: { marginTop: 4, fontSize: 12, fontWeight: '600', color: onboarding.muted, fontFamily: fonts.medium, },
 });

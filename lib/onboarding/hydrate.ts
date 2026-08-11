@@ -2,7 +2,7 @@
  * Map Supabase profile row → onboarding draft (resume / prefill).
  */
 import { orderPhotoUrls, uniquePhotoUrls } from '@/lib/profile/media/photoOrder';
-import { fetchProfileVideo } from '@/lib/profile/media/profileVideo';
+import { fetchProfileVideos } from '@/lib/profile/media/profileVideo';
 import type { DbProfile } from '@/types/database';
 import { defaultOnboardingDraft, type OnboardingDraft, type PromptAnswer } from '@/types/onboarding';
 
@@ -89,13 +89,15 @@ export async function enrichDraftWithProfileVideo(
 /** Video fields only — safe to merge into live draft state without wiping edits. */
 export async function fetchProfileVideoDraftPatch(
   userId: string
-): Promise<Pick<OnboardingDraft, 'remoteVideoUrl' | 'remoteVideoMediaId' | 'localVideoUri'> | null> {
-  const video = await fetchProfileVideo(userId);
-  if (!video) return null;
+): Promise<Pick<OnboardingDraft, 'videos'> | null> {
+  const videos = await fetchProfileVideos(userId);
+  if (!videos.length) return null;
   return {
-    remoteVideoUrl: video.url,
-    remoteVideoMediaId: video.id,
-    localVideoUri: null,
+    videos: videos.map((v) => ({
+      localUri: null,
+      remoteUrl: v.url,
+      mediaId: v.id,
+    })),
   };
 }
 
@@ -130,13 +132,14 @@ export function mergeDraftAfterSave(
 /** After save when video was uploaded locally. */
 export function mergeDraftAfterVideoSave(
   current: OnboardingDraft,
-  videoUrl: string | null,
-  videoMediaId: string | null
+  savedVideos: Array<{ url: string; id: string }>
 ): OnboardingDraft {
   return {
     ...current,
-    localVideoUri: null,
-    remoteVideoUrl: videoUrl,
-    remoteVideoMediaId: videoMediaId,
+    videos: savedVideos.map((v) => ({
+      localUri: null,
+      remoteUrl: v.url,
+      mediaId: v.id,
+    })),
   };
 }
