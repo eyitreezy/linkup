@@ -1,17 +1,29 @@
+import {
+  PROFILE_VIDEO_DURATION_ERROR,
+  PROFILE_VIDEO_SIZE_ERROR,
+  PROFILE_VIDEO_TYPE_ERROR,
+} from '@/lib/profile/media/videoLimits';
+
 /** Map technical save errors to onboarding-friendly copy. */
 export function userFacingOnboardingSaveError(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes('media_type') || lower.includes('violates not-null constraint')) {
     return 'We could not save your intro video. Please try again or choose a different clip.';
   }
-  if (lower.includes('video is too large') || lower.includes('under 30mb') || lower.includes('under 100mb')) {
-    return 'That video is too large. Please trim or compress it (under 30MB and 20 seconds) and try again.';
+  if (message.includes(PROFILE_VIDEO_SIZE_ERROR) || lower.includes('greater than 30mb')) {
+    return PROFILE_VIDEO_SIZE_ERROR;
   }
-  if (lower.includes('video must be') && lower.includes('seconds')) {
-    return 'That video is too long. Please trim it to 20 seconds or less and try again.';
+  if (
+    message.includes(PROFILE_VIDEO_DURATION_ERROR) ||
+    lower.includes('greater than 21s') ||
+    lower.includes('greater than 20s') ||
+    lower.includes('greater than 21 seconds') ||
+    lower.includes('greater than 20 seconds')
+  ) {
+    return PROFILE_VIDEO_DURATION_ERROR;
   }
-  if (lower.includes('unsupported video format')) {
-    return 'Unsupported video format. Use MP4, MOV, or WebM.';
+  if (message.includes(PROFILE_VIDEO_TYPE_ERROR) || lower.includes('unsupported video')) {
+    return PROFILE_VIDEO_TYPE_ERROR;
   }
   return message;
 }

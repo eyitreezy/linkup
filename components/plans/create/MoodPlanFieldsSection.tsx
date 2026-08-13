@@ -22,7 +22,7 @@ import {
 } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow } from '@/lib/plans/moodPlanStart';
 import { getMoodPlanCooldown } from '@/lib/plans/moodPlanCooldown';
-import { MOOD_REACH_LABELS_BY_TIER } from '@/lib/plans/moodReachFilter';
+import { MOOD_REACH_KM, MOOD_REACH_LABELS_BY_TIER } from '@/lib/plans/moodReachFilter';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
 import { Ionicons } from '@expo/vector-icons';
 import { Href, router } from 'expo-router';
@@ -187,6 +187,18 @@ export function MoodPlanFieldsSection({ visible }: Props) {
       draft.scheduledAt
     );
   }, [draft.moodWindow, draft.moodCustomStart, draft.moodCustomEnd, draft.scheduledAt]);
+
+  const moodReachKey =
+    effectiveTier === 'PLATINUM'
+      ? 'all_cities'
+      : effectiveTier === 'GOLD'
+        ? 'city_widest'
+        : effectiveTier === 'SILVER'
+          ? 'city_adjacent'
+          : 'city';
+
+  const reachKm = MOOD_REACH_KM[moodReachKey];
+  const hasLocation = !!(draft.locationLabel || draft.latitude);
 
   useEffect(() => {
     if (draft.moodWindow !== 'custom') setIosCustomPick(null);
@@ -423,6 +435,17 @@ export function MoodPlanFieldsSection({ visible }: Props) {
 
           <Text style={styles.reachLabel}>Your reach: {MOOD_REACH_LABELS_BY_TIER[effectiveTier]}</Text>
 
+          {hasLocation ? (
+            <View style={styles.visibilityNotice}>
+              <Ionicons name="information-circle-outline" size={14} color={colors.primary} />
+              <Text style={styles.visibilityNoticeTxt}>
+                {reachKm != null
+                  ? `Only people within ${reachKm}km of your meetup location will see this plan in Discover.`
+                  : 'This plan will be visible in Discover across all cities.'}
+              </Text>
+            </View>
+          ) : null}
+
           {bounds ? (
             <Text style={styles.meta}>
               Social window · {bounds.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} –{' '}
@@ -503,4 +526,23 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium, color: colors.textMuted },
   lockedTierBadge: { fontSize: 9, fontWeight: '900', color: colors.primary, marginLeft: 4, fontFamily: fonts.bold, },
   reachLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginTop: spacing.sm, fontFamily: fonts.medium, },
+  visibilityNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(94,82,255,0.18)',
+    backgroundColor: 'rgba(94,82,255,0.06)',
+  },
+  visibilityNoticeTxt: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.primary,
+    lineHeight: 17,
+  },
 });

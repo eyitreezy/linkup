@@ -9,16 +9,16 @@ export type MoodReach = 'city' | 'city_adjacent' | 'city_widest' | 'all_cities';
  * Keep in sync with linkup-web/src/lib/plans/moodReachFilter.ts and public.mood_reach_km().
  */
 export const MOOD_REACH_KM: Record<MoodReach, number | null> = {
-  city: 25,
-  city_adjacent: 50,
-  city_widest: 20,
+  city: 20,
+  city_adjacent: 35,
+  city_widest: 50,
   all_cities: null,
 };
 
 export const MOOD_REACH_LABELS: Record<MoodReach, string> = {
-  city: 'City-wide · 25km',
-  city_adjacent: 'City + nearby · 50km',
-  city_widest: 'Widest reach · 20km',
+  city: 'City-wide · 20km',
+  city_adjacent: 'City + nearby · 35km',
+  city_widest: 'Widest reach · 50km',
   all_cities: 'All cities',
 };
 

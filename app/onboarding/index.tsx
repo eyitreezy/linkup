@@ -635,6 +635,10 @@ export default function OnboardingScreen() {
                 videos={draft.videos}
                 required
                 highlightError={validationFocus === 'video' ? validationMessage : null}
+                onPickSuccess={() => {
+                  setValidationFocus(null);
+                  setValidationMessage(null);
+                }}
                 onAddVideo={(uri) =>
                   setDraft((d) => ({
                     ...d,

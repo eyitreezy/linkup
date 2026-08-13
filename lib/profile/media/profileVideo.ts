@@ -1,10 +1,16 @@
 import { readLocalAssetAsUint8Array } from '@/lib/nativeImageRead';
 import { buildMediaInsertPayload } from '@/lib/media/mediaInsertPayload';
-import { PROFILE_MEDIA_VIDEO_KIND, PROFILE_VIDEO_MIME_TYPES } from '@/lib/profile/media/constants';
+import { PROFILE_MEDIA_VIDEO_KIND } from '@/lib/profile/media/constants';
 import {
   PROFILE_VIDEO_MAX_COUNT,
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
+  PROFILE_VIDEO_DURATION_ERROR,
+  PROFILE_VIDEO_SIZE_ERROR,
+  PROFILE_VIDEO_TYPE_ERROR,
+  isAllowedProfileVideoMime,
+  profileVideoDurationWithinLimit,
 } from '@/lib/profile/media/videoLimits';
+import { probeProfileVideoDurationSeconds } from '@/lib/profile/media/probeProfileVideoDuration';
 import { supabase } from '@/lib/supabase';
 import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -138,12 +144,17 @@ export async function uploadProfileVideo(
 ): Promise<ProfileVideoRecord> {
   const size = await localFileSize(localUri);
   if (size > PROFILE_VIDEO_MAX_FILE_SIZE_BYTES) {
-    throw new Error('Video must be under 30MB. Please trim or compress it and try again.');
+    throw new Error(PROFILE_VIDEO_SIZE_ERROR);
   }
 
   const mime = mimeFromUri(localUri);
-  if (!PROFILE_VIDEO_MIME_TYPES.includes(mime as (typeof PROFILE_VIDEO_MIME_TYPES)[number])) {
-    throw new Error('Unsupported video format. Use MP4, MOV, or WebM.');
+  if (!isAllowedProfileVideoMime(mime, localUri)) {
+    throw new Error(PROFILE_VIDEO_TYPE_ERROR);
+  }
+
+  const durationSeconds = await probeProfileVideoDurationSeconds(localUri);
+  if (durationSeconds == null || !profileVideoDurationWithinLimit(durationSeconds)) {
+    throw new Error(PROFILE_VIDEO_DURATION_ERROR);
   }
 
   if (existingMediaId) {

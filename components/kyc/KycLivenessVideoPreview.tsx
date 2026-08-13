@@ -12,15 +12,18 @@ type Props = {
   style?: ViewStyle;
   /** Match front-camera selfie orientation in preview. */
   mirror?: boolean;
+  /** Tile thumbnails: muted loop without controls. */
+  previewOnly?: boolean;
 };
 
-export function KycLivenessVideoPreview({ uri, style, mirror = true }: Props) {
+export function KycLivenessVideoPreview({ uri, style, mirror = true, previewOnly = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
-    p.muted = false;
+    p.muted = previewOnly;
+    if (previewOnly) p.play();
   });
 
   useEventListener(player, 'statusChange', ({ status }) => {
@@ -49,9 +52,9 @@ export function KycLivenessVideoPreview({ uri, style, mirror = true }: Props) {
       <VideoView
         player={player}
         style={[styles.video, mirror && styles.mirror]}
-        nativeControls
+        nativeControls={!previewOnly}
         contentFit="cover"
-        fullscreenOptions={{ enable: true }}
+        fullscreenOptions={{ enable: !previewOnly }}
       />
     </View>
   );

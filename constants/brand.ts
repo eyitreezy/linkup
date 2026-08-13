@@ -20,3 +20,6 @@ export const APP_SPLASH_DURATION_MS = 5000;
 
 /** Subtle product attribution on splash screens. */
 export const FLOWDECK_ATTRIBUTION = '...a product of Flowdeck Labs';
+
+/** Subtle product attribution on splash screens. */
+export const FLOWDECK_ATTRIBUTION = 'A product of Flowdecklabs';
