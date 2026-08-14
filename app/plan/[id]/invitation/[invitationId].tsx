@@ -22,19 +22,41 @@ import type { DbPlan } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { Href, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
 const ACCEPT_GRADIENT = [colors.primary, colors.secondary] as const;
 const DISABLED_GRADIENT = [colors.border, colors.border] as const;
+
+const DECLINE_REASONS = [
+  'I can no longer make it',
+  'Schedule conflict',
+  'Budget constraints',
+  'Personal reasons',
+  'Found alternative plans',
+  'Other',
+] as const;
+
+type DeclineReason = (typeof DECLINE_REASONS)[number];
+
+function invitationExpiryLabel(expiresAt: string): string {
+  const msLeft = new Date(expiresAt).getTime() - Date.now();
+  const hoursLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60)));
+  if (hoursLeft <= 0) return 'Expired';
+  if (hoursLeft < 24) return `${hoursLeft}h left`;
+  return `${Math.ceil(hoursLeft / 24)}d left`;
+}
 
 export default function InvitationDetailScreen() {
   const { id: planId, invitationId } = useLocalSearchParams<{
@@ -50,6 +72,9 @@ export default function InvitationDetailScreen() {
   const [hostAvatar, setHostAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isResponding, setIsResponding] = useState(false);
+  const [showDeclineSheet, setShowDeclineSheet] = useState(false);
+  const [declineReason, setDeclineReason] = useState<DeclineReason | null>(null);
+  const [declineOther, setDeclineOther] = useState('');
 
   const isKycApproved = isUserVerified(dbUser?.verification_status);
 
@@ -107,6 +132,30 @@ export default function InvitationDetailScreen() {
     };
   }, [invitationId, load]);
 
+  function handleRespondError(err: unknown) {
+    const msg = err instanceof Error ? err.message : '';
+    if (msg === 'KYC_REQUIRED') {
+      Alert.alert(
+        'Verification required',
+        'Complete your identity verification to accept this invitation.',
+        [
+          { text: 'Verify now', onPress: () => router.push('/kyc' as Href) },
+          { text: 'Later', style: 'cancel' },
+        ]
+      );
+    } else if (msg === 'EXPIRED') {
+      Alert.alert('Invitation expired', 'This invitation is no longer valid.');
+      router.replace('/(tabs)' as Href);
+    } else if (msg === 'PLAN_FULL') {
+      Alert.alert('Plan is full', 'All slots have been filled.');
+    } else if (msg === 'ALREADY_RESPONDED') {
+      Alert.alert('Already responded', 'You have already responded to this invitation.');
+      void load();
+    } else {
+      Alert.alert('Could not respond', 'Something went wrong. Please try again.', [{ text: 'OK' }]);
+    }
+  }
+
   const handleRespond = async (action: 'accept' | 'decline') => {
     if (!invitationId || !planId) return;
     setIsResponding(true);
@@ -128,26 +177,32 @@ export default function InvitationDetailScreen() {
         router.replace('/(tabs)' as Href);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '';
-      if (msg === 'KYC_REQUIRED') {
-        Alert.alert(
-          'Verification required',
-          'Complete your identity verification to accept this invitation.',
-          [
-            { text: 'Later', style: 'cancel' },
-            { text: 'Verify now', onPress: () => router.push('/kyc' as Href) },
-          ]
-        );
-      } else if (msg === 'EXPIRED') {
-        Alert.alert('Invitation expired', 'This invitation is no longer valid.');
-        router.back();
-      } else {
-        Alert.alert('Could not respond', 'Please try again.');
-      }
+      handleRespondError(err);
     } finally {
       setIsResponding(false);
     }
   };
+
+  async function handleDeclineWithReason(reason: DeclineReason, other?: string) {
+    if (!invitationId) return;
+    setIsResponding(true);
+    try {
+      await respondToInvitation(invitationId, 'decline', reason, other);
+      setShowDeclineSheet(false);
+      setDeclineReason(null);
+      setDeclineOther('');
+      router.replace('/(tabs)' as Href);
+    } catch (err: unknown) {
+      handleRespondError(err);
+    } finally {
+      setIsResponding(false);
+    }
+  }
+
+  const expiryLabel = useMemo(
+    () => (invitation ? invitationExpiryLabel(invitation.expires_at) : ''),
+    [invitation]
+  );
 
   if (loading || !plan) {
     return (
@@ -172,10 +227,6 @@ export default function InvitationDetailScreen() {
 
   const isExpired =
     invitation.status === 'expired' || new Date(invitation.expires_at).getTime() < Date.now();
-  const daysUntilExpiry = Math.max(
-    0,
-    Math.ceil((new Date(invitation.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-  );
   const shareLabel = resolveJoinRequestSlotCentsLabel(plan);
   const hostLabel = hostName?.trim() || 'Your host';
 
@@ -215,9 +266,7 @@ export default function InvitationDetailScreen() {
         {!isExpired && invitation.status === 'pending' ? (
           <View style={styles.expiryBanner}>
             <Ionicons name="time-outline" size={16} color={colors.warning} />
-            <Text style={styles.expiryText}>
-              {`Invitation expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}`}
-            </Text>
+            <Text style={styles.expiryText}>Invitation expires in {expiryLabel}</Text>
           </View>
         ) : null}
 
@@ -262,7 +311,7 @@ export default function InvitationDetailScreen() {
             <Pressable
               accessibilityRole="button"
               style={styles.declineButton}
-              onPress={() => void handleRespond('decline')}
+              onPress={() => setShowDeclineSheet(true)}
               disabled={isResponding}
             >
               <Text style={styles.declineButtonLabel}>Decline</Text>
@@ -282,6 +331,94 @@ export default function InvitationDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={showDeclineSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDeclineSheet(false)}
+      >
+        <View style={styles.declineSheetOverlay}>
+          <View style={styles.declineSheet}>
+            <Text style={styles.declineSheetTitle}>Why are you declining?</Text>
+            <Text style={styles.declineSheetSub}>Your reason helps the host understand.</Text>
+
+            <ScrollView style={styles.declineReasonList}>
+              {DECLINE_REASONS.map((reason) => (
+                <Pressable
+                  key={reason}
+                  onPress={() => setDeclineReason(reason)}
+                  style={[
+                    styles.declineReasonRow,
+                    declineReason === reason && styles.declineReasonRowSelected,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.declineRadio,
+                      declineReason === reason && styles.declineRadioSelected,
+                    ]}
+                  >
+                    {declineReason === reason ? <View style={styles.declineRadioInner} /> : null}
+                  </View>
+                  <Text
+                    style={[
+                      styles.declineReasonTxt,
+                      declineReason === reason && styles.declineReasonTxtSelected,
+                    ]}
+                  >
+                    {reason}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {declineReason === 'Other' ? (
+              <TextInput
+                value={declineOther}
+                onChangeText={setDeclineOther}
+                placeholder="Please tell us more..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                maxLength={300}
+                style={styles.declineOtherInput}
+                textAlignVertical="top"
+              />
+            ) : null}
+
+            <View style={styles.declineSheetActions}>
+              <Pressable
+                style={styles.declineCancelBtn}
+                onPress={() => {
+                  setShowDeclineSheet(false);
+                  setDeclineReason(null);
+                  setDeclineOther('');
+                }}
+              >
+                <Text style={styles.declineCancelTxt}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.declineConfirmBtn,
+                  (!declineReason || isResponding) && styles.declineConfirmBtnDisabled,
+                ]}
+                disabled={!declineReason || isResponding}
+                onPress={() =>
+                  void handleDeclineWithReason(
+                    declineReason!,
+                    declineReason === 'Other' ? declineOther : undefined
+                  )
+                }
+              >
+                <Text style={styles.declineConfirmTxt}>
+                  {isResponding ? 'Declining...' : 'Confirm decline'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -426,5 +563,117 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     color: colors.text,
     textAlign: 'center',
+  },
+  declineSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  declineSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+    maxHeight: '80%',
+  },
+  declineSheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  declineSheetSub: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
+  },
+  declineReasonList: {
+    maxHeight: 280,
+  },
+  declineReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  declineReasonRowSelected: {},
+  declineRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  declineRadioSelected: {
+    borderColor: colors.primary,
+  },
+  declineRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+  },
+  declineReasonTxt: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    flex: 1,
+  },
+  declineReasonTxtSelected: {
+    fontFamily: fonts.medium,
+    color: colors.primary,
+  },
+  declineOtherInput: {
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    height: 80,
+  },
+  declineSheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: spacing.md,
+  },
+  declineCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  declineCancelTxt: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
+  declineConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 50,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+  },
+  declineConfirmBtnDisabled: {
+    opacity: 0.45,
+  },
+  declineConfirmTxt: {
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#DC2626',
   },
 });

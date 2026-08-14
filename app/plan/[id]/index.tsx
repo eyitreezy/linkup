@@ -26,6 +26,7 @@ import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planAc
 import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngagement';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
+import { GroupPlanPolicyGate } from '@/components/plans/GroupPlanPolicyGate';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
 import { GroupMeetupHostConfirmCard } from '@/components/plans/GroupMeetupHostConfirmCard';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
@@ -234,7 +235,7 @@ export default function PlanOverviewScreen() {
   const [pendingInvitationCount, setPendingInvitationCount] = useState(0);
   const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
   const [groupMemberCount, setGroupMemberCount] = useState(0);
-  const [groupMinimumCount, setGroupMinimumCount] = useState(5);
+  const [groupMaxCount, setGroupMaxCount] = useState(4);
   const [hasOptedOut, setHasOptedOut] = useState(false);
   const [isOptingOut, setIsOptingOut] = useState(false);
 
@@ -560,7 +561,7 @@ export default function PlanOverviewScreen() {
     if (!plan?.id || !plan.is_group_plan) return;
 
     setGroupMemberCount((plan.accepted_guest_count ?? 0) + 1);
-    setGroupMinimumCount(plan.minimum_member_count ?? 5);
+    setGroupMaxCount((plan.max_guests ?? 0) + 1);
 
     const channel = supabase
       .channel(`plan-members-${plan.id}`)
@@ -575,13 +576,13 @@ export default function PlanOverviewScreen() {
         (payload) => {
           const row = payload.new as {
             accepted_guest_count?: number;
-            minimum_member_count?: number;
+            max_guests?: number;
           };
           if (typeof row.accepted_guest_count === 'number') {
             setGroupMemberCount(row.accepted_guest_count + 1);
           }
-          if (typeof row.minimum_member_count === 'number') {
-            setGroupMinimumCount(row.minimum_member_count);
+          if (typeof row.max_guests === 'number') {
+            setGroupMaxCount(row.max_guests + 1);
           }
         }
       )
@@ -590,7 +591,7 @@ export default function PlanOverviewScreen() {
     return () => {
       removeSupabaseChannel(channel);
     };
-  }, [plan?.id, plan?.is_group_plan, plan?.accepted_guest_count, plan?.minimum_member_count]);
+  }, [plan?.id, plan?.is_group_plan, plan?.accepted_guest_count, plan?.max_guests]);
 
   useEffect(() => {
     if (!plan?.id || !user?.id || !plan.is_group_plan || plan.creator_id === user.id) {
@@ -933,8 +934,34 @@ export default function PlanOverviewScreen() {
   }
 
   const guestCalendarSaveRow = !isCreator && !!(ctx?.showCalendar && ctx.showSave);
+  const groupMinimumMembers = plan.minimum_member_count ?? 5;
 
-  return shell(
+  if (!user?.id) {
+    return shell(
+      <View style={styles.authPromptContainer}>
+        <Text style={styles.authPromptTitle}>{plan.title?.trim() || 'Meetup'}</Text>
+        <Text style={styles.authPromptSubtitle}>
+          Sign in to view this plan and connect with the host.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/(auth)/login' as Href)}
+          style={({ pressed }) => [styles.authPromptBtn, pressed && { opacity: 0.92 }]}
+        >
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.authPromptBtnGrad}
+          >
+            <Text style={styles.authPromptBtnTxt}>Sign in to LinkUp</Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const planDetailScroll = (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled"
@@ -1132,9 +1159,9 @@ export default function PlanOverviewScreen() {
       {plan.is_group_plan ? (
         <View style={styles.memberCountRow}>
           <Text style={styles.memberCountText}>
-            {groupMemberCount} of {groupMinimumCount} members confirmed
+            {groupMemberCount} of {groupMaxCount} members confirmed
           </Text>
-          {groupMemberCount < groupMinimumCount ? (
+          {groupMemberCount < groupMinimumMembers ? (
             <Text style={styles.memberCountWarning}>Minimum not yet reached</Text>
           ) : null}
         </View>
@@ -1911,6 +1938,14 @@ export default function PlanOverviewScreen() {
       </View>
     </ScrollView>
   );
+
+  return shell(
+    plan.is_group_plan && user.id ? (
+      <GroupPlanPolicyGate userId={user.id}>{planDetailScroll}</GroupPlanPolicyGate>
+    ) : (
+      planDetailScroll
+    )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -1935,6 +1970,48 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     maxWidth: 300,
+  },
+  authPromptContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+  authPromptTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  authPromptSubtitle: {
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 320,
+    marginBottom: spacing.lg,
+  },
+  authPromptBtn: {
+    alignSelf: 'stretch',
+    maxWidth: 320,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+  },
+  authPromptBtnGrad: {
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  authPromptBtnTxt: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
   },
   heroCard: {
     borderRadius: radius.xl,
