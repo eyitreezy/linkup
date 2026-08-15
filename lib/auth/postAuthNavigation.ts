@@ -1,3 +1,8 @@
+import {
+  consumePendingAuthRedirect,
+  isSafeInAppRedirect,
+  redirectPathToHref,
+} from '@/lib/auth/pendingAuthRedirect';
 import { supabase } from '@/lib/supabase';
 import type { DbProfile } from '@/types/database';
 import type { Href } from 'expo-router';
@@ -34,5 +39,14 @@ export async function fetchProfileForPostAuth(
 /** Resolve Discover vs onboarding after session is established. */
 export async function resolvePostAuthHref(userId: string): Promise<Href> {
   const profile = await fetchProfileForPostAuth(userId);
+  const pendingRedirect = await consumePendingAuthRedirect();
+  if (
+    pendingRedirect &&
+    isSafeInAppRedirect(pendingRedirect) &&
+    profile &&
+    !needsOnboarding(profile)
+  ) {
+    return redirectPathToHref(pendingRedirect);
+  }
   return postAuthHref(profile);
 }

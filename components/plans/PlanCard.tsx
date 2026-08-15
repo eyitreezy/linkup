@@ -19,9 +19,11 @@ import { isPlanBoostActive } from '@/lib/plans/planBoost';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
+import { PlanTypeBadge } from '@/components/plans/PlanTypeBadge';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import { derivePresenceUi } from '@/lib/presence/derivePresenceUi';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
+import { planTypeBadges } from '@/lib/plans/planTypeIndicators';
 import { isOfferExpired } from '@/lib/plans/offerRules';
 import { resolveProfileHeroPhoto } from '@/lib/profile/displayMedia';
 import type { DbPlanOffer, DbProfile, DbUserPresence } from '@/types/database';
@@ -182,6 +184,11 @@ function PlanCardInner({
     [showCreatorPresence, viewerProfile, row.creatorProfile?.preferences, creatorPresence]
   );
   const moodMeta = useMemo(() => moodDiscoverMeta(row), [row]);
+  const typeBadges = useMemo(() => planTypeBadges(row), [row]);
+  const listTypeBadges = useMemo(
+    () => typeBadges.filter((badge) => badge.key !== 'group'),
+    [typeBadges]
+  );
   const planHasLocation = planHasMeetupCoords(row);
   const distPillLabel = formatPlanDistanceLabel({
     distanceKm,
@@ -246,10 +253,11 @@ function PlanCardInner({
                   <Ionicons name="flash" size={12} color="#fff" />
                 </LinearGradient>
               ) : null}
-              {row.is_group_plan ? (
-                <View style={styles.datingGroupPill}>
-                  <Text style={styles.datingGroupPillTxt}>Group</Text>
-                </View>
+              {typeBadges.some((badge) => badge.key === 'group') ? (
+                <PlanTypeBadge
+                  badge={typeBadges.find((badge) => badge.key === 'group')!}
+                  variant="list"
+                />
               ) : null}
             </View>
           </View>
@@ -290,18 +298,9 @@ function PlanCardInner({
                     <Text style={styles.datingProfileChipTxt}>Solid profile</Text>
                   </View>
                 ) : null}
-                {moodMeta.showMood && moodMeta.urgencyLabel ? (
-                  <View style={styles.datingMoodUrgent}>
-                    <Text style={styles.datingMoodUrgentTxt}>{moodMeta.urgencyLabel}</Text>
-                  </View>
-                ) : null}
-                {moodMeta.showMood && moodMeta.moodTypeLabel ? (
-                  <View style={styles.datingMoodTypeChip}>
-                    <Text style={styles.datingMoodTypeChipTxt} numberOfLines={1}>
-                      {moodMeta.moodTypeLabel}
-                    </Text>
-                  </View>
-                ) : null}
+                {listTypeBadges.map((badge) => (
+                  <PlanTypeBadge key={badge.key} badge={badge} variant="list" />
+                ))}
               </View>
             </View>
           </View>
@@ -467,26 +466,18 @@ function PlanCardInner({
             <Text style={styles.boostPillTxt}>Boosted</Text>
           </View>
         ) : null}
-        {row.is_group_plan ? (
-          <View style={styles.groupPill}>
-            <Text style={styles.groupPillTxt}>Group</Text>
-          </View>
+        {typeBadges.some((badge) => badge.key === 'group') ? (
+          <PlanTypeBadge
+            badge={typeBadges.find((badge) => badge.key === 'group')!}
+            variant="list"
+          />
         ) : null}
       </View>
-      {moodMeta.showMood ? (
+      {listTypeBadges.length > 0 || moodMeta.showMood ? (
         <View style={styles.listMoodRow}>
-          {moodMeta.urgencyLabel ? (
-            <View style={styles.listMoodUrgent}>
-              <Text style={styles.listMoodUrgentTxt}>{moodMeta.urgencyLabel}</Text>
-            </View>
-          ) : null}
-          {moodMeta.moodTypeLabel ? (
-            <View style={styles.listMoodType}>
-              <Text style={styles.listMoodTypeTxt} numberOfLines={1}>
-                {moodMeta.moodTypeLabel}
-              </Text>
-            </View>
-          ) : null}
+          {listTypeBadges.map((badge) => (
+            <PlanTypeBadge key={badge.key} badge={badge} variant="list" />
+          ))}
           {moodMeta.moodExpiresAt ? (
             <View style={styles.listMoodTtl}>
               <Ionicons name="hourglass-outline" size={12} color={colors.secondary} />

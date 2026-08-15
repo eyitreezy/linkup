@@ -3,6 +3,7 @@
  * server will reject if disputed) and PM policy: financials frozen after offers accepted path.
  */
 import { computeUrgencyLevel } from '@/lib/plans/moodPlanComputations';
+import { isPlanDiscoverExpired } from '@/lib/plans/planExpiry';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
 import type { DbPlan, EscrowPattern } from '@/types/database';
 
@@ -24,18 +25,16 @@ export type CreatorEditCapabilities = {
 export function isPlanRowLockedForCreatorEdit(
   plan: Pick<
     DbPlan,
-    'archived_at' | 'is_expired' | 'is_mood_plan' | 'mood_expires_at' | 'status'
+    | 'archived_at'
+    | 'is_expired'
+    | 'is_mood_plan'
+    | 'mood_expires_at'
+    | 'active_expires_at'
+    | 'status'
   >
 ): boolean {
   if (plan.archived_at != null) return true;
-  if (plan.is_expired) return true;
-  if (
-    plan.is_mood_plan &&
-    plan.mood_expires_at != null &&
-    new Date(plan.mood_expires_at).getTime() <= Date.now()
-  ) {
-    return true;
-  }
+  if (isPlanDiscoverExpired(plan)) return true;
   if (plan.status === 'completed') return true;
   return false;
 }
@@ -44,8 +43,10 @@ export function getCreatorEditCapabilities(plan: DbPlan, offersCount: number): C
   if (isPlanRowLockedForCreatorEdit(plan)) {
     let lockReason: string | null = 'This plan can’t be edited in its current state.';
     if (plan.archived_at) lockReason = 'Unarchive this plan before editing.';
-    else if (plan.is_expired || (plan.is_mood_plan && plan.mood_expires_at && new Date(plan.mood_expires_at) <= new Date()))
-      lockReason = 'Mood window ended — duplicate to create a fresh listing.';
+    else if (isPlanDiscoverExpired(plan))
+      lockReason = plan.is_mood_plan
+        ? 'Mood window ended — duplicate to create a fresh listing.'
+        : 'Listing window ended — duplicate to create a fresh listing.';
     else if (plan.status === 'completed') lockReason = 'Completed plans are read-only.';
     return {
       canEdit: false,

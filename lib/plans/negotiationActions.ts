@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isPlanParticipationClosed, type PlanExpireLike } from '@/lib/plans/planExpiry';
 import type { DbPlanOffer } from '@/types/database';
 
 export async function submitOfferOrCounter(
@@ -9,8 +10,12 @@ export async function submitOfferOrCounter(
     note?: string | null;
     proposedScheduledAt?: string | null;
     offerId?: string | null;
+    plan?: PlanExpireLike | null;
   }
 ): Promise<{ offerId: string | null; error: string | null }> {
+  if (params.plan && isPlanParticipationClosed(params.plan)) {
+    return { offerId: null, error: 'PLAN_EXPIRED' };
+  }
   const { data, error } = await supabase.rpc('submit_offer_or_counter', {
     p_plan_id: params.planId,
     p_amount_cents: params.amountCents,

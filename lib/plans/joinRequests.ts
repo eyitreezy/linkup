@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { isPlanParticipationClosed, type PlanExpireLike } from '@/lib/plans/planExpiry';
 import type { DbPlanJoinRequest, JoinRequestStatus } from '@/types/database';
 
 export type JoinRequestWithRequester = DbPlanJoinRequest & {
@@ -10,8 +11,12 @@ export type JoinRequestWithRequester = DbPlanJoinRequest & {
 
 export async function submitJoinRequest(
   planId: string,
-  message?: string
+  message?: string,
+  plan?: PlanExpireLike | null
 ): Promise<{ requestId: string }> {
+  if (plan && isPlanParticipationClosed(plan)) {
+    throw new Error('PLAN_EXPIRED');
+  }
   const { data, error } = await supabase.rpc('submit_join_request', {
     p_plan_id: planId,
     p_message: message ?? null,

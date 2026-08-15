@@ -33,7 +33,7 @@ import {
   isOfferExpired,
   MAX_OFFERS_PER_PLAN,
 } from '@/lib/plans/offerRules';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanParticipationClosed } from '@/lib/plans/planExpiry';
 import { attachPlanNegotiationRoundsChannels } from '@/lib/plans/subscribePlanNegotiationRealtime';
 import { subscribePlanOffersRealtime } from '@/lib/plans/subscribePlanOffersRealtime';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -174,8 +174,8 @@ export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPl
 
   const planId = plan.id;
   const isCreator = user?.id === plan.creator_id;
-  const moodClosed = isPlanMoodWindowClosed(plan);
-  const canNegotiate = plan.status === 'negotiating' && !moodClosed;
+  const planExpired = isPlanParticipationClosed(plan);
+  const canNegotiate = plan.status === 'negotiating' && !planExpired;
   const groupSplitPlan = isGroupSplitPlan(plan);
   const offerBudgetCents = useMemo(() => {
     if (!amount.trim()) return 0;
@@ -348,7 +348,7 @@ export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPl
     }
   }, [openCounterOnMount, focusOffer, plan, user]);
 
-  const showActionBar = Boolean(focusOffer && canNegotiate && !moodClosed);
+  const showActionBar = Boolean(focusOffer && canNegotiate && !planExpired);
 
   const guestAcceptedOffer =
     !isCreator && user?.id
@@ -542,8 +542,17 @@ export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPl
       note: noteWithSuggested,
       proposedScheduledAt: proposedAt ? proposedAt.toISOString() : null,
       offerId: counterTarget?.id ?? null,
+      plan,
     });
     setSending(false);
+    if (res.error === 'PLAN_EXPIRED') {
+      showFeedback(
+        'error',
+        'Plan expired',
+        'This plan has already expired, so new offers can no longer be made.'
+      );
+      return;
+    }
     if (res.error) showFeedback('error', 'Error', res.error);
     else {
       setAmount('');
@@ -1010,7 +1019,7 @@ export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPl
         message={feedback?.message ?? ''}
       />
       <View style={styles.topBar} onLayout={(e) => setTopBlockHeight(e.nativeEvent.layout.height)}>
-        {moodClosed ? (
+        {planExpired ? (
           <View style={styles.expiredStrip}>
             <Ionicons name="moon-outline" size={18} color="#64748b" />
             <Text style={styles.expiredStripTxt}>
@@ -1122,7 +1131,7 @@ export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPl
           const mine = item.bidder_id === user?.id;
           const hostSent = item.bidder_id === plan.creator_id;
           const liveActionable =
-            isCreator && isOfferLive(item) && item.bidder_id !== plan.creator_id && !moodClosed;
+            isCreator && isOfferLive(item) && item.bidder_id !== plan.creator_id && !planExpired;
           return (
             <OfferBubble
               offer={item}

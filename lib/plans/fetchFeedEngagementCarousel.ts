@@ -6,7 +6,7 @@ import { LIVE_NEGOTIATION_OFFER_STATUSES } from '@/lib/plans/negotiationState';
 import { supabase } from '@/lib/supabase';
 import type { DbPlan, DbPlanOffer } from '@/types/database';
 import { isOfferExpired } from '@/lib/plans/offerRules';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanDiscoverExpired } from '@/lib/plans/planExpiry';
 
 /** Story-ring badge for swipe strip (chat vs negotiation vs waiting). */
 export type EngagementStripKind = 'chat' | 'negotiation' | 'pending';
@@ -95,7 +95,7 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
     for (const o of offers) {
       const p = planById.get(o.plan_id);
       if (!p || p.status !== 'negotiating') continue;
-      if (isPlanMoodWindowClosed(p)) continue;
+      if (isPlanDiscoverExpired(p)) continue;
       if (isOfferExpired(o)) continue;
       if (seen.has(o.plan_id)) continue;
       seen.add(o.plan_id);
@@ -142,7 +142,7 @@ export async function fetchFeedEngagementCarousel(userId: string): Promise<Engag
         | Pick<DbPlan, 'id' | 'title' | 'updated_at' | 'is_mood_plan' | 'is_expired' | 'mood_expires_at'>
         | undefined;
       if (!pl) continue;
-      if (isPlanMoodWindowClosed(pl)) continue;
+      if (isPlanDiscoverExpired(pl)) continue;
       const pr = bidders.get(o.bidder_id);
       out.push({
         key: `recv-${o.id}`,

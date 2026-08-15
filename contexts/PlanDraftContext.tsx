@@ -43,7 +43,7 @@ const emptyDraft = (): PlanDraft => ({
   moodListingHours: 3,
   spotlightBoost: false,
   isGroupPlan: false,
-  maxGuests: 4,
+  maxGuests: 5,
   maxFreeGuests: null,
   maxPremiumGuests: null,
   multiCity: false,

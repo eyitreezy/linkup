@@ -33,9 +33,17 @@ type Props = {
   plan: DbPlan;
   hostProfile?: HostMini | null;
   currentUserId?: string | null;
+  participationClosed?: boolean;
+  onExpiredShare?: () => void;
 };
 
-export function PlanShareSection({ plan, hostProfile, currentUserId }: Props) {
+export function PlanShareSection({
+  plan,
+  hostProfile,
+  currentUserId,
+  participationClosed = false,
+  onExpiredShare,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [meetType, setMeetType] = useState<Pick<DbMeetType, 'name' | 'meet_type_images'> | null>(
     null
@@ -104,8 +112,18 @@ export function PlanShareSection({ plan, hostProfile, currentUserId }: Props) {
   return (
     <>
       <Pressable
-        onPress={() => setShowShareOptions(true)}
-        style={({ pressed }) => [styles.shareButton, pressed && { opacity: 0.92 }]}
+        onPress={() => {
+          if (participationClosed) {
+            onExpiredShare?.();
+            return;
+          }
+          setShowShareOptions(true);
+        }}
+        style={({ pressed }) => [
+          styles.shareButton,
+          participationClosed && styles.shareButtonDisabled,
+          pressed && !participationClosed && { opacity: 0.92 },
+        ]}
         accessibilityRole="button"
         accessibilityLabel="Share this plan"
       >
@@ -201,6 +219,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(94, 82, 255,0.22)',
     backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  shareButtonDisabled: {
+    opacity: 0.52,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(148, 163, 184, 0.08)',
   },
   shareButtonLabel: {
     fontSize: 15,

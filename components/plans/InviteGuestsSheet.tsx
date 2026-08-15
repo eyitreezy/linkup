@@ -13,6 +13,7 @@ import {
   type PlanInviteDetails,
 } from '@/lib/plans/planInvitations';
 import { invitationSearchAlreadyMemberLabel } from '@/lib/plans/invitationSearchMemberLabel';
+import { mapInvitationEmailError } from '@/lib/plans/invitationErrors';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
@@ -47,6 +48,17 @@ type Props = {
   visible: boolean;
   onSlotsChanged?: () => void;
 };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function invitationSendErrorMessage(err: unknown): string {
+  const code = err instanceof Error ? err.message : '';
+  if (code === 'PLAN_EXPIRED') {
+    return mapInvitationEmailError('plan_expired');
+  }
+  if (code) return mapInvitationEmailError(code);
+  return 'Please check the email address and try again.';
+}
 
 const STATUS_BADGES: Record<
   PlanInvitationRow['status'],
@@ -299,6 +311,11 @@ export function InviteGuestsSheet({
           );
         } else if (msg === 'ALREADY_INVITED') {
           Alert.alert('Already invited', 'This person already has an active invitation.');
+        } else if (msg === 'PLAN_EXPIRED') {
+          Alert.alert(
+            'Plan expired',
+            'This plan has already expired, so new invitations cannot be sent.'
+          );
         } else {
           Alert.alert('Could not send invitation', 'Please try again.');
         }
@@ -311,15 +328,19 @@ export function InviteGuestsSheet({
   );
 
   const handleSendByEmail = async () => {
-    const email = emailInput.trim();
+    const email = emailInput.trim().toLowerCase();
     if (!email || availableSlots <= 0) return;
+    if (!EMAIL_RE.test(email)) {
+      Alert.alert('Invalid email', 'Enter a valid email address.');
+      return;
+    }
     setIsSending(true);
     try {
       await sendInvitationByEmail(planId, email, planDetails);
       setEmailInput('');
       await refreshInvitations();
-    } catch {
-      Alert.alert('Could not send invitation', 'Please check the email and try again.');
+    } catch (err: unknown) {
+      Alert.alert('Could not send invitation', invitationSendErrorMessage(err));
     } finally {
       setIsSending(false);
     }

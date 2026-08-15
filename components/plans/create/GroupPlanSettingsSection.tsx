@@ -8,6 +8,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePlanDraft } from '@/contexts/PlanDraftContext';
 import { usePermission } from '@/hooks/usePermission';
 import { MultiCitySearchField } from '@/components/plans/create/MultiCitySearchField';
+import {
+  clampGroupPlanMaxGuests,
+  GROUP_PLAN_MAX_MAX_GUESTS,
+  GROUP_PLAN_MIN_MAX_GUESTS,
+  parseGroupPlanMaxGuestsInput,
+} from '@/lib/plans/groupPlanLimits';
 import { checkPermission } from '@/lib/subscription/checkPermission';
 import { tierDisplayName } from '@/lib/subscription/featureLabels';
 import type { SubscriptionTier } from '@/lib/subscription/pricing';
@@ -15,12 +21,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router } from 'expo-router';
 import { MotiView } from 'moti';
-import { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 type Props = { visible: boolean };
-
-const MAX_GUEST_CAP = 20;
 
 function TierPill({ tier }: { tier: SubscriptionTier }) {
   const isPlatinum = tier === 'PLATINUM';
@@ -42,6 +54,15 @@ export function GroupPlanSettingsSection({ visible }: Props) {
   const { effectiveTier, metadata } = usePermission('group_plan.host', { skip: !visible });
   const multiCityPerm = usePermission('group_plan.multi_city', { skip: !visible || !draft.isGroupPlan });
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [guestInputFocused, setGuestInputFocused] = useState(false);
+  const [guestInputText, setGuestInputText] = useState('');
+  const guestInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (!guestInputFocused) {
+      setGuestInputText(String(clampGroupPlanMaxGuests(draft.maxGuests)));
+    }
+  }, [draft.maxGuests, guestInputFocused]);
 
   useEffect(() => {
     if (!visible || !draft.isGroupPlan || !user?.id) return;
@@ -70,18 +91,29 @@ export function GroupPlanSettingsSection({ visible }: Props) {
 
   if (!visible || !draft.isGroupPlan) return null;
 
-  const minGuests = 2;
-  const maxGuests = Math.max(minGuests, draft.maxGuests);
-  const atMin = maxGuests <= minGuests;
-  const atMax = maxGuests >= MAX_GUEST_CAP;
+  const maxGuests = clampGroupPlanMaxGuests(draft.maxGuests);
+  const atMin = maxGuests <= GROUP_PLAN_MIN_MAX_GUESTS;
+  const atMax = maxGuests >= GROUP_PLAN_MAX_MAX_GUESTS;
 
-  function bumpGuests(delta: number) {
+  function commitGuestCount(next: number) {
+    const clamped = clampGroupPlanMaxGuests(next);
     setDraft((d) => ({
       ...d,
-      maxGuests: Math.min(MAX_GUEST_CAP, Math.max(minGuests, d.maxGuests + delta)),
+      maxGuests: clamped,
       maxFreeGuests: caps.maxFreeGuests,
       maxPremiumGuests: caps.maxPremiumGuests === -1 ? null : caps.maxPremiumGuests,
     }));
+    setGuestInputText(String(clamped));
+  }
+
+  function bumpGuests(delta: number) {
+    commitGuestCount(maxGuests + delta);
+  }
+
+  function onGuestInputBlur() {
+    setGuestInputFocused(false);
+    const parsed = parseGroupPlanMaxGuestsInput(guestInputText);
+    commitGuestCount(parsed ?? GROUP_PLAN_MIN_MAX_GUESTS);
   }
 
   async function onMultiCityToggle(v: boolean) {
@@ -153,10 +185,35 @@ export function GroupPlanSettingsSection({ visible }: Props) {
                 )}
               </Pressable>
 
-              <View style={styles.stepCenter}>
-                <Text style={styles.stepVal}>{maxGuests}</Text>
+              <Pressable
+                onPress={() => guestInputRef.current?.focus()}
+                style={styles.stepCenter}
+                accessibilityRole="button"
+                accessibilityLabel="Edit maximum guests"
+              >
+                <TextInput
+                  ref={guestInputRef}
+                  value={guestInputFocused ? guestInputText : String(maxGuests)}
+                  onChangeText={(text) => {
+                    setGuestInputText(text.replace(/[^\d]/g, ''));
+                  }}
+                  onFocus={() => {
+                    setGuestInputFocused(true);
+                    setGuestInputText(String(maxGuests));
+                  }}
+                  onBlur={onGuestInputBlur}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  maxLength={2}
+                  selectTextOnFocus
+                  style={[
+                    styles.stepInput,
+                    guestInputFocused && styles.stepInputActive,
+                  ]}
+                  accessibilityLabel="Maximum guests"
+                />
                 <Text style={styles.stepUnit}>guests</Text>
-              </View>
+              </Pressable>
 
               <Pressable
                 onPress={() => bumpGuests(1)}
@@ -327,9 +384,26 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
   },
-  stepCenter: { alignItems: 'center', minWidth: 72 },
-  stepVal: { fontSize: 32, fontWeight: '900',
-    fontFamily: fonts.bold, color: colors.text, letterSpacing: -1 },
+  stepCenter: { alignItems: 'center', minWidth: 88 },
+  stepInput: {
+    fontSize: 32,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    letterSpacing: -1,
+    textAlign: 'center',
+    minWidth: 72,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  stepInputActive: {
+    borderColor: 'rgba(94, 82, 255, 0.35)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
   stepUnit: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: 2, fontFamily: fonts.medium, },
   capRow: {
     flexDirection: 'row',

@@ -6,6 +6,7 @@
 import { getSupabaseAdmin } from '../_shared/supabaseAdmin.ts';
 
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://linkup.app';
+const INVITATION_TTL_MS = 72 * 60 * 60 * 1000;
 
 function buildNewUserInvitationEmail(p: {
   hostName: string;
@@ -32,7 +33,7 @@ function buildNewUserInvitationEmail(p: {
       </a>
     </p>
     <p style="font-size:12px;color:#999;">
-      This link expires in 7 days. If you did not expect this email, you can ignore it.
+      This link expires in 72 hours. If you did not expect this email, you can ignore it.
     </p>
   `;
 }
@@ -45,7 +46,10 @@ Deno.serve(async (req) => {
   const resendKey = Deno.env.get('RESEND_API_KEY');
   const resendFrom = Deno.env.get('RESEND_FROM');
   if (!resendKey || !resendFrom) {
-    return new Response('misconfigured', { status: 500 });
+    return new Response(JSON.stringify({ error: 'misconfigured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   let supabase;
@@ -97,7 +101,9 @@ Deno.serve(async (req) => {
 
   const { data: plan, error: planErr } = await supabase
     .from('plans')
-    .select('id, creator_id, scheduled_at, is_group_plan, group_closed_at, max_guests, accepted_guest_count')
+    .select(
+      'id, creator_id, scheduled_at, is_group_plan, group_closed_at, max_guests, accepted_guest_count, is_mood_plan, is_expired, mood_expires_at, active_expires_at, status'
+    )
     .eq('id', planId)
     .single();
 
@@ -117,6 +123,24 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'group_already_closed' }), { status: 400 });
   }
 
+  const now = Date.now();
+  const planExpired =
+    plan.status === 'cancelled' ||
+    plan.status === 'completed' ||
+    plan.is_expired ||
+    (plan.is_mood_plan &&
+      plan.mood_expires_at &&
+      new Date(plan.mood_expires_at).getTime() <= now) ||
+    (!plan.is_mood_plan &&
+      plan.active_expires_at &&
+      new Date(plan.active_expires_at).getTime() <= now);
+  if (planExpired) {
+    return new Response(JSON.stringify({ error: 'plan_expired' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const { data: slots, error: slotsErr } = await supabase.rpc('get_plan_available_slots', {
     p_plan_id: planId,
   });
@@ -127,8 +151,8 @@ Deno.serve(async (req) => {
   const scheduledAt = plan.scheduled_at ? new Date(plan.scheduled_at).getTime() : null;
   const expiresAt = new Date(
     Math.min(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-      scheduledAt ? scheduledAt - 48 * 60 * 60 * 1000 : Date.now() + 7 * 24 * 60 * 60 * 1000
+      Date.now() + INVITATION_TTL_MS,
+      scheduledAt ? scheduledAt - 48 * 60 * 60 * 1000 : Date.now() + INVITATION_TTL_MS
     )
   );
 

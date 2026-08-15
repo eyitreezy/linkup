@@ -8,7 +8,6 @@ import { PlanAgreementStatusBadge } from '@/components/plans/agreement/PlanAgree
 import { PlanAgreementUserHeader, type AgreementParty } from '@/components/plans/agreement/PlanAgreementUserHeader';
 import { PreAgreementFullscreenModal } from '@/components/plans/agreement/PreAgreementFullscreenModal';
 import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
-import { GroupPlanPolicyGate } from '@/components/plans/GroupPlanPolicyGate';
 import { SafetyCaveatInterstitial } from '@/components/plans/SafetyCaveatInterstitial';
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
 import { GroupSplitAgreementPanel } from '@/components/plans/agreement/GroupSplitAgreementPanel';
@@ -1537,9 +1536,6 @@ export default function PlanAgreementScreen() {
     </Screen>
   );
 
-  if (planRow.is_group_plan && user?.id) {
-    return <GroupPlanPolicyGate userId={user.id}>{agreementScreen}</GroupPlanPolicyGate>;
-  }
   return agreementScreen;
 }
 

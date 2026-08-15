@@ -16,17 +16,19 @@ import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { setPendingAuthRedirect } from '@/lib/auth/pendingAuthRedirect';
 import { addPlanToDeviceCalendar, planCanAddToCalendar } from '@/lib/plans/addPlanToDeviceCalendar';
 import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanner';
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
 import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { formatPlanAppFee, formatPlanCreated, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
-import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
+import { isPlanMoodWindowClosed, isPlanParticipationClosed, planExpiredAtIso, planExpiryReason } from '@/lib/plans/planExpiry';
+import { ExpiredPlanActionModal } from '@/components/plans/ExpiredPlanActionModal';
+import type { ExpiredPlanAction } from '@/lib/plans/expiredPlanMessages';
 import { daysUntilIso, isPlanActiveWindowExpiringSoon } from '@/lib/plans/planActiveWindow';
 import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngagement';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
-import { GroupPlanPolicyGate } from '@/components/plans/GroupPlanPolicyGate';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
 import { GroupMeetupHostConfirmCard } from '@/components/plans/GroupMeetupHostConfirmCard';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
@@ -234,6 +236,7 @@ export default function PlanOverviewScreen() {
   const [availableSlots, setAvailableSlots] = useState(0);
   const [pendingInvitationCount, setPendingInvitationCount] = useState(0);
   const [inviteSheetOpen, setInviteSheetOpen] = useState(false);
+  const [expiredModalAction, setExpiredModalAction] = useState<ExpiredPlanAction | null>(null);
   const [groupMemberCount, setGroupMemberCount] = useState(0);
   const [groupMaxCount, setGroupMaxCount] = useState(4);
   const [hasOptedOut, setHasOptedOut] = useState(false);
@@ -547,7 +550,7 @@ export default function PlanOverviewScreen() {
   );
 
   const ctx = usePlanViewerContext(plan, user?.id, offers, {
-    moodClosed: plan ? isPlanMoodWindowClosed(plan) : false,
+    planExpired: plan ? isPlanParticipationClosed(plan) : false,
     completionSelfAcked,
     myJoinRequest,
   });
@@ -689,6 +692,7 @@ export default function PlanOverviewScreen() {
     actionContextReady &&
     !!(ctx?.showBoost || ctx?.showInterest || ctx?.showManageOffers || ctx?.showManageRequests);
   const moodClosed = isPlanMoodWindowClosed(plan);
+  const planExpired = isPlanParticipationClosed(plan);
   const moodShelfCopy = planExpiryReason(plan);
   const when = formatPlanWhen(plan);
   const created = formatPlanCreated(plan);
@@ -735,6 +739,10 @@ export default function PlanOverviewScreen() {
   }
 
   function goNegotiate() {
+    if (planExpired) {
+      setExpiredModalAction('offer');
+      return;
+    }
     if (!isCreator && requiresVerificationGate(dbUser?.verification_status)) {
       setGateOpen(true);
       return;
@@ -767,13 +775,17 @@ export default function PlanOverviewScreen() {
 
   async function handleSubmitJoinRequest() {
     if (!id || !plan) return;
+    if (planExpired) {
+      setExpiredModalAction('join');
+      return;
+    }
     if (requiresVerificationGate(dbUser?.verification_status)) {
       setGateOpen(true);
       return;
     }
     setRequestSubmitting(true);
     try {
-      await submitJoinRequest(id, requestMessage.trim() || undefined);
+      await submitJoinRequest(id, requestMessage.trim() || undefined, plan);
       setRequestSheetOpen(false);
       setRequestMessage('');
       const req = user?.id ? await fetchMyJoinRequest(id, user.id) : null;
@@ -782,8 +794,13 @@ export default function PlanOverviewScreen() {
         'Request sent!',
         'The host will review your request and you will be notified of their decision.'
       );
-    } catch {
-      Alert.alert('Something went wrong', 'Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg === 'PLAN_EXPIRED') {
+        setExpiredModalAction('join');
+      } else {
+        Alert.alert('Something went wrong', 'Please try again.');
+      }
     } finally {
       setRequestSubmitting(false);
     }
@@ -945,7 +962,10 @@ export default function PlanOverviewScreen() {
         </Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/(auth)/login' as Href)}
+          onPress={() => {
+            void setPendingAuthRedirect(`/plan/${plan.id}`);
+            router.push('/(auth)/login' as Href);
+          }}
           style={({ pressed }) => [styles.authPromptBtn, pressed && { opacity: 0.92 }]}
         >
           <LinearGradient
@@ -990,6 +1010,11 @@ export default function PlanOverviewScreen() {
         title={feedback?.title ?? ''}
         message={feedback?.message ?? ''}
       />
+      <ExpiredPlanActionModal
+        visible={expiredModalAction != null}
+        action={expiredModalAction ?? 'offer'}
+        onClose={() => setExpiredModalAction(null)}
+      />
       {plan ? (
         <RequestJoinSheet
           visible={requestSheetOpen}
@@ -1025,14 +1050,15 @@ export default function PlanOverviewScreen() {
         />
       ) : null}
 
-      {moodClosed ? (
+      {planExpired ? (
         <ExpiredPlanShelfBanner
-          expiredAtIso={plan.auto_expiry_at ?? plan.mood_expires_at}
-          subtitle={moodShelfCopy}
+          expiredAtIso={planExpiredAtIso(plan) ?? plan.auto_expiry_at ?? plan.mood_expires_at}
+          title={plan.is_mood_plan ? undefined : 'This plan has expired'}
+          subtitle={moodShelfCopy || undefined}
         />
       ) : null}
 
-      <View style={[styles.heroCard, moodClosed && { opacity: 0.88 }]}>
+      <View style={[styles.heroCard, planExpired && { opacity: 0.88 }]}>
         <LinearGradient
           colors={[colors.primary, colors.secondary]}
           start={{ x: 0, y: 0 }}
@@ -1153,8 +1179,14 @@ export default function PlanOverviewScreen() {
         offersReady={actionContextReady}
         refreshKey={`${plan.updated_at ?? ''}:${acceptedOffersSeed.length}:${acceptedOffersSeed.map((o) => o.id).join(',')}`}
         showInvite={showInviteEligible}
-        inviteDisabled={moodClosed}
-        onInvitePress={() => setInviteSheetOpen(true)}
+        inviteDisabled={planExpired}
+        onInvitePress={() => {
+          if (planExpired) {
+            setExpiredModalAction('invite');
+            return;
+          }
+          setInviteSheetOpen(true);
+        }}
       />
       {plan.is_group_plan ? (
         <View style={styles.memberCountRow}>
@@ -1216,6 +1248,8 @@ export default function PlanOverviewScreen() {
         plan={plan}
         hostProfile={profilesById[plan.creator_id]}
         currentUserId={user?.id}
+        participationClosed={planExpired}
+        onExpiredShare={() => setExpiredModalAction('share')}
       />
       {isCreator && user?.id ? (
         <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={user.id} />
@@ -1249,7 +1283,7 @@ export default function PlanOverviewScreen() {
             boostedUntil={plan.boosted_until}
             planVisibility={plan.visibility}
             boostRadiusKm={plan.boost_radius_km}
-            moodClosed={moodClosed}
+            moodClosed={planExpired}
             onBoosted={() => void load()}
             onShowFeedback={(title, message) => showFeedback('success', title, message)}
             cellStyle={styles.planActionGridCell}
@@ -1295,15 +1329,15 @@ export default function PlanOverviewScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={goNegotiate}
-              disabled={moodClosed}
+              disabled={planExpired}
               style={({ pressed }) => [
                 styles.planDetailBtnOuter,
-                moodClosed && styles.planDetailBtnDisabled,
-                pressed && !moodClosed && { opacity: 0.92 },
+                planExpired && styles.planDetailBtnDisabled,
+                pressed && !planExpired && { opacity: 0.92 },
               ]}
             >
               <LinearGradient
-                colors={moodClosed ? [colors.border, colors.border] : [colors.primary, colors.secondary]}
+                colors={planExpired ? [colors.border, colors.border] : [colors.primary, colors.secondary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.planDetailBtnPrimaryGrad}
@@ -1321,15 +1355,15 @@ export default function PlanOverviewScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={goManageRequests}
-              disabled={moodClosed}
+              disabled={planExpired}
               style={({ pressed }) => [
                 styles.planDetailBtnOuter,
-                moodClosed && styles.planDetailBtnDisabled,
-                pressed && !moodClosed && { opacity: 0.92 },
+                planExpired && styles.planDetailBtnDisabled,
+                pressed && !planExpired && { opacity: 0.92 },
               ]}
             >
               <LinearGradient
-                colors={moodClosed ? [colors.border, colors.border] : [colors.primary, colors.secondary]}
+                colors={planExpired ? [colors.border, colors.border] : [colors.primary, colors.secondary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.planDetailBtnPrimaryGrad}
@@ -1595,22 +1629,22 @@ export default function PlanOverviewScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={goNegotiate}
-            disabled={moodClosed}
+            disabled={planExpired}
             style={({ pressed }) => [
               styles.dualActionFlex,
-              moodClosed && styles.dualOfferMuted,
-              pressed && !moodClosed && { opacity: 0.92 },
+              planExpired && styles.dualOfferMuted,
+              pressed && !planExpired && { opacity: 0.92 },
             ]}
           >
             <LinearGradient
               colors={
-                moodClosed ? [colors.border, colors.border] : [colors.primary, colors.secondary]
+                planExpired ? [colors.border, colors.border] : [colors.primary, colors.secondary]
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.dualOfferGradient}
             >
-              <Text style={[styles.dualOfferLabel, moodClosed && styles.dualOfferLabelMuted]}>
+              <Text style={[styles.dualOfferLabel, planExpired && styles.dualOfferLabelMuted]}>
                 Make Offer
               </Text>
             </LinearGradient>
@@ -1630,23 +1664,23 @@ export default function PlanOverviewScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={() => setRequestSheetOpen(true)}
-            disabled={moodClosed}
+            disabled={planExpired}
             style={({ pressed }) => [
               styles.dualActionFlex,
-              moodClosed && styles.dualOfferMuted,
-              pressed && !moodClosed && { opacity: 0.92 },
+              planExpired && styles.dualOfferMuted,
+              pressed && !planExpired && { opacity: 0.92 },
             ]}
           >
             <LinearGradient
               colors={
-                moodClosed ? [colors.border, colors.border] : [colors.primary, colors.secondary]
+                planExpired ? [colors.border, colors.border] : [colors.primary, colors.secondary]
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.dualOfferGradient}
             >
               <Ionicons name="person-add-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={[styles.dualOfferLabel, moodClosed && styles.dualOfferLabelMuted]}>
+              <Text style={[styles.dualOfferLabel, planExpired && styles.dualOfferLabelMuted]}>
                 Request to join
               </Text>
             </LinearGradient>
@@ -1939,13 +1973,7 @@ export default function PlanOverviewScreen() {
     </ScrollView>
   );
 
-  return shell(
-    plan.is_group_plan && user.id ? (
-      <GroupPlanPolicyGate userId={user.id}>{planDetailScroll}</GroupPlanPolicyGate>
-    ) : (
-      planDetailScroll
-    )
-  );
+  return shell(planDetailScroll);
 }
 
 const styles = StyleSheet.create({

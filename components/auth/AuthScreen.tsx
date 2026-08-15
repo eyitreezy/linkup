@@ -16,6 +16,7 @@ import { getAuthRedirectUrl, signInWithGoogle, waitForSupabaseSession } from '@/
 import { formatAuthError } from '@/lib/auth/formatAuthError';
 import { useEmailSendCooldown } from '@/lib/auth/useEmailSendCooldown';
 import { resolvePostAuthHref } from '@/lib/auth/postAuthNavigation';
+import { isSafeInAppRedirect, setPendingAuthRedirect } from '@/lib/auth/pendingAuthRedirect';
 import { getPasswordRequirementErrors } from '@/lib/auth/passwordStrength';
 import {
   consumePendingSignupPrivacyConsent,
@@ -31,6 +32,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
   initialMode?: AuthMode;
+  /** In-app path to open after successful auth (e.g. /plan/{id}). */
+  redirectTo?: string;
 };
 
 type SignupPasswordFieldProps = {
@@ -73,7 +76,7 @@ function SignupPasswordField({ password, onChangePassword, showRequirements }: S
   );
 }
 
-export function AuthScreen({ initialMode = 'login' }: Props) {
+export function AuthScreen({ initialMode = 'login', redirectTo }: Props) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const { session, profile, loading: authLoading, refreshSession } = useAuth();
   const [pendingNav, setPendingNav] = useState(false);
@@ -90,6 +93,12 @@ export function AuthScreen({ initialMode = 'login' }: Props) {
   const [privacyConsentChecked, setPrivacyConsentChecked] = useState(false);
   const [showConsentError, setShowConsentError] = useState(false);
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
+
+  useEffect(() => {
+    if (redirectTo && isSafeInAppRedirect(redirectTo)) {
+      void setPendingAuthRedirect(redirectTo);
+    }
+  }, [redirectTo]);
 
   const switchMode = useCallback(
     (next: AuthMode) => {

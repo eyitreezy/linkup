@@ -394,12 +394,16 @@ export function PlanCreatorEditSheet({ visible, plan, offersCount, onClose, onSa
                       placeholder="Intent, vibe, or what you’re offering"
                     />
                     <Input
-                      label="Category (optional)"
+                      label="Search keywords (optional)"
                       variant="onboardingFlat"
                       value={category}
                       onChangeText={setCategory}
-                      placeholder="e.g. food, fitness"
+                      placeholder="e.g. brunch, fitness"
                     />
+                    <Text style={styles.fieldHint}>
+                      Optional tags that help people find this plan in search. Your meet type remains the
+                      primary classification.
+                    </Text>
                   </>
                 ) : null}
 
@@ -980,4 +984,13 @@ const styles = StyleSheet.create({
   },
   hintCardTxt: { fontSize: 14, color: colors.text, lineHeight: 20, fontWeight: '600',
     fontFamily: fonts.medium,},
+  fieldHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    marginTop: -4,
+    marginBottom: spacing.sm,
+  },
 });

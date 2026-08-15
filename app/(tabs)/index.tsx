@@ -68,7 +68,9 @@ import {
   persistHiddenPlan,
   removeHiddenPlan,
 } from '@/lib/plans/hiddenPlans';
-import { isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
+import { isPlanDiscoverExpired, isPlanMoodWindowClosed, planExpiryReason } from '@/lib/plans/planExpiry';
+import { ExpiredPlanActionModal } from '@/components/plans/ExpiredPlanActionModal';
+import type { ExpiredPlanAction } from '@/lib/plans/expiredPlanMessages';
 import { moodReachVisibleToViewer } from '@/lib/plans/moodReachFilter';
 import { prefetchPlanDetail, seedPlanDetailFromFeed } from '@/lib/plans/planDetailSeed';
 import { derivePresenceUi, hostPresenceMatchesFilter, resolveHostPresenceKind } from '@/lib/presence/derivePresenceUi';
@@ -192,6 +194,7 @@ export default function PlansScreen() {
   const [hasMore, setHasMore] = useState(initialDiscoverSession?.hasMore ?? true);
   const [error, setError] = useState<string | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
+  const [expiredOfferModalOpen, setExpiredOfferModalOpen] = useState(false);
   const [gateTitle, setGateTitle] = useState<string | undefined>();
   const [gateMessage, setGateMessage] = useState<string | undefined>();
 
@@ -425,7 +428,7 @@ export default function PlansScreen() {
     const maxKm = resolveDiscoverMaxDistanceKm(feedFilter, radiusKm, distanceFilterActive);
 
     merged = merged.filter((row) => {
-      if (row.is_mood_plan && isPlanMoodWindowClosed(row)) return false;
+      if (isPlanDiscoverExpired(row)) return false;
       if (row.is_suppressed) return false;
       if (row.archived_at != null) return false;
       if (hidden.has(row.id)) return false;
@@ -1011,6 +1014,10 @@ export default function PlansScreen() {
 
   const onPressOffer = useCallback(
     (row: PlanFeedRow) => {
+      if (isPlanDiscoverExpired(row)) {
+        setExpiredOfferModalOpen(true);
+        return;
+      }
       if (requiresVerificationGate(dbUser?.verification_status)) {
         openOfferGate();
         return;
@@ -1246,6 +1253,10 @@ export default function PlansScreen() {
   const onSwipeInterested = useCallback(
     (row: PlanFeedRow) => {
       dismissFromSwipeDeck(row.id);
+      if (isPlanDiscoverExpired(row)) {
+        setExpiredOfferModalOpen(true);
+        return;
+      }
       if (requiresVerificationGate(dbUser?.verification_status)) {
         openOfferGate();
         return;
@@ -1486,6 +1497,11 @@ export default function PlansScreen() {
         verificationStatus={dbUser?.verification_status}
         title={gateTitle}
         message={gateMessage}
+      />
+      <ExpiredPlanActionModal
+        visible={expiredOfferModalOpen}
+        action="offer"
+        onClose={() => setExpiredOfferModalOpen(false)}
       />
       <PremiumFeaturePaywallModal
         visible={travelPaywallOpen}

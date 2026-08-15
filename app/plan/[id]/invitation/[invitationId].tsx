@@ -9,7 +9,8 @@ import { colors, fonts, radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
-import { planNegotiateHref } from '@/lib/plans/negotiateRoute';
+import { invitationExpiryBannerLabel } from '@/lib/plans/invitationErrors';
+import { navigateAfterInvitationAccept } from '@/lib/plans/invitationAcceptNavigation';
 import { peekPlanDetailSeed } from '@/lib/plans/planDetailSeed';
 import {
   fetchMyInvitation,
@@ -49,14 +50,6 @@ const DECLINE_REASONS = [
 ] as const;
 
 type DeclineReason = (typeof DECLINE_REASONS)[number];
-
-function invitationExpiryLabel(expiresAt: string): string {
-  const msLeft = new Date(expiresAt).getTime() - Date.now();
-  const hoursLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60)));
-  if (hoursLeft <= 0) return 'Expired';
-  if (hoursLeft < 24) return `${hoursLeft}h left`;
-  return `${Math.ceil(hoursLeft / 24)}d left`;
-}
 
 export default function InvitationDetailScreen() {
   const { id: planId, invitationId } = useLocalSearchParams<{
@@ -149,8 +142,19 @@ export default function InvitationDetailScreen() {
     } else if (msg === 'PLAN_FULL') {
       Alert.alert('Plan is full', 'All slots have been filled.');
     } else if (msg === 'ALREADY_RESPONDED') {
-      Alert.alert('Already responded', 'You have already responded to this invitation.');
-      void load();
+      if (!planId || !invitationId) {
+        Alert.alert('Already responded', 'You have already responded to this invitation.');
+        return;
+      }
+      void (async () => {
+        const fresh = await fetchMyInvitation(invitationId);
+        if (fresh?.status === 'accepted') {
+          navigateAfterInvitationAccept(planId, { isNegotiable: plan?.is_negotiable !== false });
+          return;
+        }
+        Alert.alert('Already responded', 'You have already responded to this invitation.');
+        void load();
+      })();
     } else {
       Alert.alert('Could not respond', 'Something went wrong. Please try again.', [{ text: 'OK' }]);
     }
@@ -163,16 +167,7 @@ export default function InvitationDetailScreen() {
       const result = await respondToInvitation(invitationId, action);
 
       if (action === 'accept') {
-        if (result.isNegotiable) {
-          const href = planNegotiateHref(planId, {
-            offerId: result.offerId,
-          });
-          router.replace(href);
-        } else if (result.escrowId) {
-          router.replace(`/escrow/${result.escrowId}` as Href);
-        } else {
-          router.replace(`/plan/${planId}/agreement` as Href);
-        }
+        navigateAfterInvitationAccept(planId, result);
       } else {
         router.replace('/(tabs)' as Href);
       }
@@ -200,7 +195,7 @@ export default function InvitationDetailScreen() {
   }
 
   const expiryLabel = useMemo(
-    () => (invitation ? invitationExpiryLabel(invitation.expires_at) : ''),
+    () => (invitation ? invitationExpiryBannerLabel(invitation.expires_at) : ''),
     [invitation]
   );
 

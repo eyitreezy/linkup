@@ -8,9 +8,11 @@ import { isCreatorSpotlightActive } from '@/lib/plans/creatorSpotlight';
 import { HostPresenceChip } from '@/components/presence/HostPresenceChip';
 import type { PresenceUi } from '@/lib/presence/derivePresenceUi';
 import { MoodPlanCountdown } from '@/components/plans/MoodPlanCountdown';
+import { PlanTypeBadge } from '@/components/plans/PlanTypeBadge';
 import type { PlanFeedRow } from '@/components/plans/planFeedTypes';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { moodDiscoverMeta } from '@/lib/plans/moodDiscoverUi';
+import { planTypeBadges } from '@/lib/plans/planTypeIndicators';
 import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { formatPlanDistanceLabel, planHasMeetupCoords } from '@/lib/plans/planDistanceLabel';
 import { isPlanBoostActive } from '@/lib/plans/planBoost';
@@ -82,10 +84,8 @@ function DiscoverySwipeCardInner({
 
   const tierBadge = row.is_paid ? budgetTierLabel(row.budget_tier) : null;
   const escrowBadge = row.is_paid ? escrowPatternBadge(row.escrow_pattern) : null;
-  const { showMood, urgencyLabel, moodTypeLabel, moodExpiresAt } = useMemo(
-    () => moodDiscoverMeta(row),
-    [row]
-  );
+  const { showMood, moodExpiresAt } = useMemo(() => moodDiscoverMeta(row), [row]);
+  const typeBadges = useMemo(() => planTypeBadges(row), [row]);
   const boosted = isPlanBoostActive(row.boosted_until);
   const creatorSpotlighted = isCreatorSpotlightActive(row.creatorProfile?.spotlight_until);
 
@@ -148,23 +148,9 @@ function DiscoverySwipeCardInner({
               <Text style={styles.boostBadgeTxt}>Boosted</Text>
             </LinearGradient>
           ) : null}
-          {row.is_group_plan ? (
-            <View style={styles.groupBadge}>
-              <Text style={styles.groupBadgeTxt}>Group</Text>
-            </View>
-          ) : null}
-          {showMood && urgencyLabel ? (
-            <View style={styles.urgencyBadge}>
-              <Text style={styles.urgencyTxt}>{urgencyLabel}</Text>
-            </View>
-          ) : null}
-          {showMood && moodTypeLabel ? (
-            <View style={styles.metaBadge}>
-              <Text style={styles.metaBadgeTxt} numberOfLines={1}>
-                {moodTypeLabel}
-              </Text>
-            </View>
-          ) : null}
+          {typeBadges.map((badge) => (
+            <PlanTypeBadge key={badge.key} badge={badge} variant="swipe" />
+          ))}
           {showTiming && showMood && moodExpiresAt ? (
             <View style={styles.moodBadge}>
               <Ionicons name="hourglass-outline" size={12} color="#fff" />

@@ -18,6 +18,7 @@ import {
   moodNegotiationExpiresAt,
 } from '@/lib/plans/moodPlanComputations';
 import { applyMoodPlanLiveNow, moodPlanScheduledNow } from '@/lib/plans/moodPlanStart';
+import { clampGroupPlanMaxGuests } from '@/lib/plans/groupPlanLimits';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { usePermission } from '@/hooks/usePermission';
 import { MIN_ESCROW_CENTS } from '@/lib/plans/planFinancialConfig';
@@ -246,7 +247,7 @@ export default function CreatePlanDetailsScreen() {
       is_group_plan: draft.isGroupPlan,
       max_free_guests: draft.isGroupPlan ? draft.maxFreeGuests : null,
       max_premium_guests: draft.isGroupPlan ? draft.maxPremiumGuests : null,
-      max_guests: draft.isGroupPlan ? draft.maxGuests : null,
+      max_guests: draft.isGroupPlan ? clampGroupPlanMaxGuests(draft.maxGuests) : null,
       multi_city: draft.isGroupPlan && draft.multiCity,
       city_ids: draft.isGroupPlan && draft.cityIds.length ? draft.cityIds : null,
       is_negotiable:

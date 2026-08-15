@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import { isPlanParticipationClosed } from '@/lib/plans/planExpiry';
+import { mapInvitationRpcError } from '@/lib/plans/invitationErrors';
 import type { InvitationStatus } from '@/types/database';
 
 export type InvitationSearchResult = {
@@ -42,6 +44,22 @@ function rpcErrorCode(error: { message?: string; details?: string }): string {
   return (error.message ?? error.details ?? '').toLowerCase();
 }
 
+async function parseEdgeFunctionError(error: unknown): Promise<string> {
+  const err = error as { message?: string; context?: Response };
+  if (err.context) {
+    try {
+      const body = (await err.context.json()) as { error?: string };
+      if (body?.error) return body.error;
+    } catch {
+      // fall through
+    }
+  }
+  const msg = err.message ?? '';
+  if (msg === 'misconfigured') return 'misconfigured';
+  if (msg.toLowerCase().includes('unauthorized')) return 'not_plan_host';
+  return msg || 'invitation_failed';
+}
+
 export async function getPlanAvailableSlots(planId: string): Promise<number> {
   try {
     const { data, error } = await supabase.rpc('get_plan_available_slots', {
@@ -54,11 +72,22 @@ export async function getPlanAvailableSlots(planId: string): Promise<number> {
   }
 }
 
+async function assertPlanAllowsInvitations(planId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('is_mood_plan, is_expired, mood_expires_at, active_expires_at, status')
+    .eq('id', planId)
+    .maybeSingle();
+  if (error || !data) throw new Error('plan_not_found');
+  if (isPlanParticipationClosed(data)) throw new Error('PLAN_EXPIRED');
+}
+
 export async function sendInvitationToUser(
   planId: string,
   inviteeUserId: string,
   _planDetails?: PlanInviteDetails
 ): Promise<{ invitationId: string }> {
+  await assertPlanAllowsInvitations(planId);
   const { data, error } = await supabase.rpc('send_plan_invitation_to_user', {
     p_plan_id: planId,
     p_invitee_user_id: inviteeUserId,
@@ -68,6 +97,9 @@ export async function sendInvitationToUser(
     const code = rpcErrorCode(error);
     if (code.includes('no_slots_available')) throw new Error('NO_SLOTS');
     if (code.includes('invitation_already_exists')) throw new Error('ALREADY_INVITED');
+    if (code.includes('plan_expired') || code.includes('plan_not_available')) {
+      throw new Error('PLAN_EXPIRED');
+    }
     throw error;
   }
 
@@ -79,6 +111,8 @@ export async function sendInvitationByEmail(
   inviteeEmail: string,
   planDetails: PlanInviteDetails
 ): Promise<{ invitationId: string }> {
+  await assertPlanAllowsInvitations(planId);
+
   const { data: existingUser } = await supabase
     .from('users')
     .select('id')
@@ -107,7 +141,10 @@ export async function sendInvitationByEmail(
     },
   });
 
-  if (error) throw error;
+  if (error) {
+    const code = await parseEdgeFunctionError(error);
+    throw new Error(code);
+  }
   const payload = data as { invitationId?: string; error?: string };
   if (payload?.error) throw new Error(payload.error);
   if (!payload?.invitationId) throw new Error('invitation_failed');
@@ -134,22 +171,12 @@ export async function respondToInvitation(
   });
 
   if (error) {
-    const msg = error.message ?? '';
-    const lower = msg.toLowerCase();
-    if (lower.includes('kyc') || lower.includes('verif')) {
-      throw new Error('KYC_REQUIRED');
-    }
-    if (lower.includes('expired')) {
-      throw new Error('EXPIRED');
-    }
-    if (lower.includes('full') || lower.includes('no slot') || lower.includes('no_slots')) {
-      throw new Error('PLAN_FULL');
-    }
-    if (lower.includes('already') || lower.includes('not_pending')) {
-      throw new Error('ALREADY_RESPONDED');
+    const mapped = mapInvitationRpcError(error.message ?? '');
+    if (mapped !== (error.message ?? '')) {
+      throw new Error(mapped);
     }
     console.error('[respondToInvitation]', error);
-    throw new Error(msg || 'UNKNOWN_ERROR');
+    throw new Error(error.message || 'UNKNOWN_ERROR');
   }
 
   return data as {

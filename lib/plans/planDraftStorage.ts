@@ -103,7 +103,7 @@ export function deserializePlanDraft(raw: string): PlanDraft | null {
       moodListingHours: (p.moodListingHours as MoodListingHours) ?? 3,
       spotlightBoost: !!p.spotlightBoost,
       isGroupPlan: !!p.isGroupPlan,
-      maxGuests: p.maxGuests ?? 4,
+      maxGuests: p.maxGuests ?? 5,
       maxFreeGuests: p.maxFreeGuests ?? null,
       maxPremiumGuests: p.maxPremiumGuests ?? null,
       multiCity: !!p.multiCity,

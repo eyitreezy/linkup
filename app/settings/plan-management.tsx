@@ -12,7 +12,10 @@ import { SettingsStickyShell } from '@/components/settings/SettingsStickyShell';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { distanceKm } from '@/lib/location';
-import { isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { isPlanDiscoverExpired, isPlanMoodWindowClosed } from '@/lib/plans/planExpiry';
+import { PlanTypeBadge } from '@/components/plans/PlanTypeBadge';
+import { planTypeBadges } from '@/lib/plans/planTypeIndicators';
+import { formatPlanWhen } from '@/lib/plans/formatPlanMeta';
 import { getCreatorEditCapabilities } from '@/lib/plans/planCreatorEditPolicy';
 import { getNewActivityCount, markPlanActivityRead } from '@/lib/plans/planActivityRead';
 import { warmPlanDetailNavigation } from '@/lib/plans/planDetailSeed';
@@ -38,16 +41,13 @@ type Section = 'all' | 'active' | 'mood' | 'expired' | 'drafts' | 'archived';
 type SortKey = 'newest' | 'oldest' | 'expiring';
 type ShelfDialog = { kind: 'archive' | 'delete'; planId: string } | null;
 
-function isMoodExpired(p: PlanRow): boolean {
-  return (
-    !!p.is_mood_plan &&
-    (!!p.is_expired || (p.mood_expires_at != null && new Date(p.mood_expires_at).getTime() <= Date.now()))
-  );
+function isPlanShelfExpired(p: PlanRow): boolean {
+  return isPlanDiscoverExpired(p);
 }
 
 function planMatchesSection(p: PlanRow, section: Section): boolean {
   const archived = p.archived_at != null;
-  const expiredMood = isMoodExpired(p);
+  const expiredPlan = isPlanShelfExpired(p);
 
   switch (section) {
     case 'all':
@@ -55,14 +55,14 @@ function planMatchesSection(p: PlanRow, section: Section): boolean {
     case 'active':
       return (
         !archived &&
-        !expiredMood &&
+        !expiredPlan &&
         ['negotiating', 'active', 'agreed', 'awaiting_payment'].includes(p.status)
       );
     case 'mood':
       /** All mood plans (TTL ended or not); use Expired for mood-only ended shelf. */
       return !archived && !!p.is_mood_plan;
     case 'expired':
-      return !archived && expiredMood;
+      return !archived && expiredPlan;
     case 'drafts':
       return p.status === 'draft' && !archived;
     case 'archived':
@@ -483,25 +483,37 @@ export default function PlanManagementScreen() {
               const views = viewsByPlan[p.id] ?? 0;
               const saves = savesByPlan[p.id] ?? 0;
               const interestCount = views + saves;
-              const moodLive = p.is_mood_plan && !isPlanMoodWindowClosed(p);
+              const typeBadges = planTypeBadges(p);
+              const shelfExpired = isPlanShelfExpired(p);
+              const moodLive = p.is_mood_plan && !shelfExpired && !isPlanMoodWindowClosed(p);
               const stripeStyle = p.archived_at
                 ? styles.stripeArchived
                 : p.status === 'draft'
                   ? styles.stripeDraft
-                  : isMoodExpired(p)
+                  : shelfExpired
                     ? styles.stripeExpired
                     : p.is_mood_plan
                       ? styles.stripeMood
                       : styles.stripeDefault;
               const capsNeg = getCreatorEditCapabilities(p, neg);
               return (
-                <View key={p.id} style={styles.planCard}>
+                <View key={p.id} style={[styles.planCard, shelfExpired && styles.planCardExpired]}>
                   <View style={[styles.planStripe, stripeStyle]} />
                   <View style={styles.planBody}>
                     <View style={styles.cardTop}>
                       <View style={{ flex: 1 }}>
+                        <View style={styles.badgeRow}>
+                          {typeBadges.map((badge) => (
+                            <PlanTypeBadge key={badge.key} badge={badge} variant="list" />
+                          ))}
+                          {shelfExpired ? (
+                            <View style={styles.expiredPill}>
+                              <Text style={styles.expiredPillTxt}>Expired</Text>
+                            </View>
+                          ) : null}
+                        </View>
                         <View style={styles.titleRow}>
-                          <Text style={styles.cardTitle} numberOfLines={2}>
+                          <Text style={[styles.cardTitle, shelfExpired && styles.cardTitleExpired]} numberOfLines={2}>
                             {p.title}
                           </Text>
                           {newActivityMap[p.id] ? (
@@ -512,7 +524,8 @@ export default function PlanManagementScreen() {
                         </View>
                         <Text style={styles.cardMeta}>
                           {p.status}
-                          {p.is_mood_plan ? ' · Mood' : ''}
+                          {p.location_label ? ` · ${p.location_label.split(',')[0]?.trim()}` : ''}
+                          {formatPlanWhen(p) ? ` · ${formatPlanWhen(p)}` : ''}
                           {dist != null ? ` · ${Math.round(dist)} km` : ''}
                         </Text>
                       </View>
@@ -520,7 +533,7 @@ export default function PlanManagementScreen() {
                         <View style={styles.livePill}>
                           <Text style={styles.livePillTxt}>Live</Text>
                         </View>
-                      ) : p.is_mood_plan && isMoodExpired(p) ? (
+                      ) : shelfExpired ? (
                         <View style={styles.endedPill}>
                           <Text style={styles.endedPillTxt}>Ended</Text>
                         </View>
@@ -843,6 +856,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
+  planCardExpired: {
+    backgroundColor: 'rgba(248, 250, 252, 0.92)',
+    borderColor: 'rgba(100, 116, 139, 0.18)',
+  },
   planStripe: { width: 4 },
   stripeDefault: { backgroundColor: colors.primary },
   stripeMood: { backgroundColor: colors.secondary },
@@ -852,6 +869,28 @@ const styles = StyleSheet.create({
   planBody: { flex: 1, padding: spacing.md },
 
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  expiredPill: {
+    backgroundColor: 'rgba(100,116,139,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(100,116,139,0.28)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  expiredPillTxt: {
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: fonts.bold,
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -860,6 +899,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.text },
+  cardTitleExpired: { color: '#64748B' },
   newDot: {
     backgroundColor: colors.secondary,
     borderRadius: 50,
