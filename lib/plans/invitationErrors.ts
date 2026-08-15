@@ -20,6 +20,8 @@ export function mapInvitationEmailError(code: string): string {
       return 'Only the plan host can send invitations.';
     case 'plan_not_found':
       return 'This plan could not be found.';
+    case 'domain_not_verified':
+      return 'Email delivery is not set up yet. Verify your sending domain in Resend.';
     case 'email_failed':
       return 'We could not send the email right now. Please try again shortly.';
     case 'magic_link_failed':

@@ -14,6 +14,7 @@ import {
 } from '@/lib/plans/planInvitations';
 import { invitationSearchAlreadyMemberLabel } from '@/lib/plans/invitationSearchMemberLabel';
 import { mapInvitationEmailError } from '@/lib/plans/invitationErrors';
+import { inviteSuccessAlertContent } from '@/lib/plans/inviteDialogMessages';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
@@ -302,6 +303,8 @@ export function InviteGuestsSheet({
         setSearchResults((prev) =>
           prev.map((r) => (r.user_id === userId ? { ...r, already_invited: true } : r))
         );
+        const success = inviteSuccessAlertContent(undefined, 'in_app');
+        Alert.alert(success.title, success.message);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : '';
         if (msg === 'NO_SLOTS') {
@@ -336,9 +339,20 @@ export function InviteGuestsSheet({
     }
     setIsSending(true);
     try {
-      await sendInvitationByEmail(planId, email, planDetails);
+      const result = await sendInvitationByEmail(planId, email, planDetails);
       setEmailInput('');
-      await refreshInvitations();
+      try {
+        await refreshInvitations();
+      } catch {
+        // Invitation already saved; list refresh is best-effort.
+      }
+      const success = inviteSuccessAlertContent(
+        result.delivery === 'in_app' ? undefined : email,
+        result.delivery ?? 'email',
+        result.emailSent !== false,
+        result.emailError
+      );
+      Alert.alert(success.title, success.message);
     } catch (err: unknown) {
       Alert.alert('Could not send invitation', invitationSendErrorMessage(err));
     } finally {

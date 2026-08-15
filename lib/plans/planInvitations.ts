@@ -86,7 +86,7 @@ export async function sendInvitationToUser(
   planId: string,
   inviteeUserId: string,
   _planDetails?: PlanInviteDetails
-): Promise<{ invitationId: string }> {
+): Promise<{ invitationId: string; delivery: 'in_app' }> {
   await assertPlanAllowsInvitations(planId);
   const { data, error } = await supabase.rpc('send_plan_invitation_to_user', {
     p_plan_id: planId,
@@ -103,14 +103,19 @@ export async function sendInvitationToUser(
     throw error;
   }
 
-  return { invitationId: data as string };
+  return { invitationId: data as string, delivery: 'in_app' };
 }
 
 export async function sendInvitationByEmail(
   planId: string,
   inviteeEmail: string,
   planDetails: PlanInviteDetails
-): Promise<{ invitationId: string }> {
+): Promise<{
+  invitationId: string;
+  delivery?: 'email' | 'in_app';
+  emailSent?: boolean;
+  emailError?: string;
+}> {
   await assertPlanAllowsInvitations(planId);
 
   const { data: existingUser } = await supabase
@@ -145,10 +150,24 @@ export async function sendInvitationByEmail(
     const code = await parseEdgeFunctionError(error);
     throw new Error(code);
   }
-  const payload = data as { invitationId?: string; error?: string };
-  if (payload?.error) throw new Error(payload.error);
+
+  const payload = data as {
+    invitationId?: string;
+    error?: string;
+    delivery?: 'email' | 'in_app';
+    emailSent?: boolean;
+    emailError?: string;
+  };
+
+  if (payload?.error && !payload?.invitationId) throw new Error(payload.error);
   if (!payload?.invitationId) throw new Error('invitation_failed');
-  return { invitationId: payload.invitationId };
+
+  return {
+    invitationId: payload.invitationId,
+    delivery: payload.delivery ?? 'email',
+    emailSent: payload.emailSent ?? payload.delivery !== 'in_app',
+    emailError: payload.emailError,
+  };
 }
 
 export async function respondToInvitation(
