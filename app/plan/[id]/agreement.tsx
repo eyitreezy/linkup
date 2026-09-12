@@ -12,7 +12,7 @@ import { SafetyCaveatInterstitial } from '@/components/plans/SafetyCaveatInterst
 import { PlanConfirmationModal } from '@/components/plans/agreement/PlanConfirmationModal';
 import { GroupSplitAgreementPanel } from '@/components/plans/agreement/GroupSplitAgreementPanel';
 import { GroupEscrowStatusCard } from '@/components/plans/agreement/GroupEscrowStatusCard';
-import { isGroupSplitPlan, formatGroupSplitCents, hostShareFromGuestCommitments, projectedHostShareCents } from '@/lib/plans/groupSplitDynamic';
+import { canHostCancelGroupPlan } from '@/lib/plans/groupPlanMembership';
 import {
   deriveEscrowPhase,
   resolveEscrowScreenContent,
@@ -258,7 +258,11 @@ function AgreementTopNav({ planId }: { planId?: string }) {
 }
 
 export default function PlanAgreementScreen() {
-  const { id, offerId: offerIdParam } = useLocalSearchParams<{ id: string; offerId?: string }>();
+  const { id, offerId: offerIdParam, joinRequestId: joinRequestIdParam } = useLocalSearchParams<{
+    id: string;
+    offerId?: string;
+    joinRequestId?: string;
+  }>();
   const { user, dbUser } = useAuth();
   const [plan, setPlan] = useState<DbPlan | null>(null);
   const [offer, setOffer] = useState<DbPlanOffer | null>(null);
@@ -319,6 +323,7 @@ export default function PlanAgreementScreen() {
     try {
       const { data, error } = await fetchPlanAgreementBundle(supabase, id, {
         offerId: offerIdParam ?? null,
+        joinRequestId: joinRequestIdParam ?? null,
         userId: user?.id ?? null,
       });
 
@@ -371,7 +376,7 @@ export default function PlanAgreementScreen() {
     } finally {
       setLoadDone(true);
     }
-  }, [id, offerIdParam, user?.id]);
+  }, [id, offerIdParam, joinRequestIdParam, user?.id]);
 
   const loadRef = useRef(load);
   loadRef.current = load;
@@ -553,6 +558,9 @@ export default function PlanAgreementScreen() {
   const payerBlockedByHighValue = isHighValue && userIsPayer && !highValueReady;
 
   const isGroupSplit = isGroupSplitPlan(planRow);
+  const isGroupSplitHost = isGroupSplit && isHost;
+  const groupSplitGuestCanPay = isGroupSplit && !isHost;
+  const isGroupSplitParty = isGroupSplit && (user?.id === planRow.creator_id || !isHost);
   const isPlanActive = planRow.status === 'active';
   const userLegFunded = !!(myEscrow && user?.id && isUserEscrowLegFunded(myEscrow, user.id));
   const agreementPhase = deriveEscrowPhase({
@@ -851,7 +859,7 @@ export default function PlanAgreementScreen() {
         return;
       }
     }
-    if (!bothConfirmed) {
+    if (!bothConfirmed && !isGroupSplitParty) {
       showFeedback(
         'warning',
         'Waiting for confirmation',
@@ -883,7 +891,7 @@ export default function PlanAgreementScreen() {
         primaryLabel = agreementContent.waitingTitle ?? `Waiting for ${otherName}`;
         onPrimary = () => {};
         primaryDisabled = true;
-      } else if (!bothConfirmed) {
+      } else if (!bothConfirmed && !groupSplitGuestCanPay) {
         if (!userConfirmed) {
           primaryLabel = 'Review terms & pay';
           onPrimary = () => openLegalGate('pay');
@@ -929,7 +937,7 @@ export default function PlanAgreementScreen() {
         onPrimary = () => openLegalGate('ack');
       }
       primaryDisabled = busy || legalBusy;
-    } else if (!bothConfirmed) {
+    } else if (!bothConfirmed && !groupSplitGuestCanPay) {
       primaryLabel = `Waiting for ${otherName}`;
       onPrimary = () => {};
       primaryDisabled = true;
@@ -958,7 +966,8 @@ export default function PlanAgreementScreen() {
     }
   }
 
-  const showCancelPlan = needsConfirm || awaitingPay;
+  const showCancelPlan =
+    (isHost && canHostCancelGroupPlan(planRow, user?.id)) || needsConfirm || awaitingPay;
   const counterpartDisplay = isHost ? guestParty?.name ?? 'Guest' : hostParty?.name ?? 'Host';
   const counterpartMessageName =
     counterpartDisplay.trim().split(/\s+/)[0] || counterpartDisplay;
@@ -1340,9 +1349,7 @@ export default function PlanAgreementScreen() {
               <Text style={styles.trustLineMuted}>{agreementContent.projectedShareNote}</Text>
               <Text style={[styles.trustTitle, { marginTop: spacing.sm }]}>
                 {formatGroupSplitCents(
-                  guestEscrowRows.length > 0
-                    ? hostShareFromGuestCommitments(planRow, guestEscrowRows)
-                    : projectedHostShareCents(planRow),
+                  resolveGroupHostShareForPlan(planRow, guestEscrowRows).displayCents,
                   planRow.currency
                 )}
               </Text>

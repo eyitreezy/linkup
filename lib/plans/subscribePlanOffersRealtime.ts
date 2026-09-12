@@ -65,16 +65,6 @@ export function attachPlanOffersChannel({
       {
         event: '*',
         schema: 'public',
-        table: 'plan_engagements',
-        filter: `plan_id=eq.${planId}`,
-      },
-      schedule
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
         table: 'escrow_transactions',
         filter: `plan_id=eq.${planId}`,
       },

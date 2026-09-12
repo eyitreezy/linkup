@@ -2,9 +2,11 @@
  * Text input with label — forms (login, profile, plans).
  * `variant="auth"` = label-less, dating-app auth styling (placeholders only).
  */
+import { EmojiPickerPanel } from '@/components/ui/EmojiPickerPanel';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { AuthSheetScrollContext } from '@/components/auth/AuthSheetScrollContext';
 import { KeyboardFormScrollContext } from '@/components/layout/KeyboardFormScrollContext';
+import { useEmojiTextInsert } from '@/hooks/useEmojiTextInsert';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
@@ -42,6 +44,8 @@ type Props = TextInputProps & {
   /** Auth screens — scroll this container (e.g. password + strength meter) above the keyboard. */
   scrollAnchorRef?: RefObject<View | null>;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Multiline fields only — show emoji picker accessory (default true). */
+  emojiAccessory?: boolean;
 };
 
 /** @deprecated Prefer `variant="auth"` for new auth screens. */
@@ -104,8 +108,12 @@ export function Input({
   passwordToggle,
   scrollAnchorRef,
   secureTextEntry,
+  emojiAccessory = true,
   onFocus,
   onBlur,
+  value,
+  onChangeText,
+  onSelectionChange,
   ...rest
 }: Props) {
   const [passwordHidden, setPasswordHidden] = useState(true);
@@ -117,6 +125,25 @@ export function Input({
   const authSheetScroll = useContext(AuthSheetScrollContext);
   const formScroll = useContext(KeyboardFormScrollContext);
   const fieldGroupRef = useRef<View>(null);
+  const textValue = typeof value === 'string' ? value : '';
+  const showEmoji = !!multiline && emojiAccessory !== false && !passwordToggle;
+
+  const {
+    pickerOpen,
+    togglePicker,
+    insertEmoji,
+    onInputFocus,
+    setSelection,
+  } = useEmojiTextInsert({
+    value: textValue,
+    onChangeText: onChangeText ?? (() => undefined),
+    onSelectionChange: onSelectionChange
+      ? (next) =>
+          onSelectionChange({
+            nativeEvent: { selection: next },
+          } as Parameters<NonNullable<TextInputProps['onSelectionChange']>>[0])
+      : undefined,
+  });
 
   const scrollAuthFieldIntoView = useCallback(() => {
     if (!authSheetScroll) return;
@@ -147,11 +174,12 @@ export function Input({
 
   const handleFieldFocus = useCallback(
     (e: Parameters<NonNullable<React.ComponentProps<typeof TextInput>['onFocus']>>[0]) => {
+      if (showEmoji) onInputFocus();
       if (onboardingLike) setFieldFocused(true);
       scrollFormFieldIntoView();
       onFocus?.(e);
     },
-    [onboardingLike, onFocus, scrollFormFieldIntoView]
+    [showEmoji, onInputFocus, onboardingLike, onFocus, scrollFormFieldIntoView]
   );
 
   const handleFieldBlur = useCallback(
@@ -338,6 +366,46 @@ export function Input({
             />
           </Pressable>
         </View>
+      ) : showEmoji ? (
+        <View style={styles.multilineEmojiWrap}>
+          <TextInput
+            placeholderTextColor={colors.textMuted}
+            style={[inputChrome, styles.multilineEmojiInput]}
+            multiline={multiline}
+            secureTextEntry={effectiveSecure}
+            onFocus={handleFieldFocus}
+            onBlur={handleFieldBlur}
+            value={value}
+            onChangeText={onChangeText}
+            onSelectionChange={(event) => {
+              setSelection(event.nativeEvent.selection);
+              onSelectionChange?.(event);
+            }}
+            {...rest}
+          />
+          <Pressable
+            onPress={togglePicker}
+            style={({ pressed }) => [
+              styles.multilineEmojiBtn,
+              pickerOpen && styles.multilineEmojiBtnActive,
+              pressed && { opacity: 0.75 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={pickerOpen ? 'Show keyboard' : 'Insert emoji'}
+            accessibilityState={{ selected: pickerOpen }}
+          >
+            <Ionicons
+              name={pickerOpen ? 'keypad-outline' : 'happy-outline'}
+              size={20}
+              color={pickerOpen ? colors.primary : colors.textMuted}
+            />
+          </Pressable>
+          {pickerOpen ? (
+            <View style={styles.multilineEmojiPicker}>
+              <EmojiPickerPanel embedded onSelect={insertEmoji} />
+            </View>
+          ) : null}
+        </View>
       ) : (
         <TextInput
           placeholderTextColor={colors.textMuted}
@@ -346,6 +414,9 @@ export function Input({
           secureTextEntry={effectiveSecure}
           onFocus={handleFieldFocus}
           onBlur={handleFieldBlur}
+          value={value}
+          onChangeText={onChangeText}
+          onSelectionChange={onSelectionChange}
           {...rest}
         />
       )}
@@ -506,4 +577,31 @@ const styles = StyleSheet.create({
   passwordTogglePressed: { opacity: 0.7 },
   err: { color: colors.danger, fontSize: 12,
     fontFamily: fonts.regular, marginTop: spacing.xs },
+  multilineEmojiWrap: {
+    position: 'relative',
+  },
+  multilineEmojiInput: {
+    paddingRight: 44,
+  },
+  multilineEmojiBtn: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+  },
+  multilineEmojiBtnActive: {
+    backgroundColor: 'rgba(94, 82, 255, 0.12)',
+  },
+  multilineEmojiPicker: {
+    marginTop: spacing.xs,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.12)',
+  },
 });

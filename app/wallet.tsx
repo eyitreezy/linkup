@@ -52,6 +52,8 @@ export default function WalletScreen() {
   const [unclaimedFunds, setUnclaimedFunds] = useState<{ id: string }[]>([]);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showWithdrawSuccess, setShowWithdrawSuccess] = useState(false);
+  const [withdrawSuccessAmount, setWithdrawSuccessAmount] = useState(0);
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
 
@@ -176,18 +178,37 @@ export default function WalletScreen() {
           payment_account_id: savedAccount.id,
         },
       });
-      if (error) {
-        throw new Error(await getInvokeErrorMessage(error, data));
+
+      const payload = data as {
+        disbursement_id?: string;
+        transfer_ref?: string;
+        amount_cents?: number;
+        success?: boolean;
+        error?: string;
+      } | null;
+
+      const transferSucceeded =
+        payload?.success === true ||
+        !!payload?.disbursement_id ||
+        !!payload?.transfer_ref;
+
+      if (transferSucceeded) {
+        setShowWithdrawModal(false);
+        setWithdrawAmount('');
+        setWithdrawSuccessAmount(payload?.amount_cents ?? amountCents);
+        setShowWithdrawSuccess(true);
+        await load();
+      } else {
+        const msg = error
+          ? await getInvokeErrorMessage(error, data)
+          : payload?.error ?? 'Withdrawal failed. Please try again.';
+        Alert.alert('Withdrawal failed', msg);
       }
-      setShowWithdrawModal(false);
-      setWithdrawAmount('');
+    } catch (e) {
       Alert.alert(
-        'Withdrawal initiated',
-        `Your withdrawal of ${formatMoney(amountCents)} is on its way to your ${savedAccount.bank_name} account.`
+        'Withdrawal failed',
+        e instanceof Error ? e.message : 'Something went wrong. Please try again.'
       );
-      await load();
-    } catch {
-      Alert.alert('Withdrawal failed', 'Something went wrong. Please try again.');
     } finally {
       setWithdrawing(false);
     }
@@ -520,6 +541,48 @@ export default function WalletScreen() {
               </Text>
             </Pressable>
           </Pressable>
+        </Modal>
+
+        <Modal
+          visible={showWithdrawSuccess}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setShowWithdrawSuccess(false)}
+        >
+          <View style={styles.successOverlay}>
+            <View style={styles.successPanel}>
+              <View style={styles.successIconWrap}>
+                <Ionicons name="checkmark" size={36} color="#059669" />
+              </View>
+
+              <Text style={styles.successTitle}>Withdrawal successful</Text>
+              <Text style={styles.successSub}>
+                {withdrawSuccessAmount > 0
+                  ? `${formatMoney(withdrawSuccessAmount)} has been sent to your bank account.`
+                  : 'Your withdrawal has been processed successfully.'}
+              </Text>
+              <Text style={styles.successNote}>
+                Allow 1 to 3 business days for the funds to reflect.
+              </Text>
+
+              <LinearGradient
+                colors={[colors.primary, colors.secondary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.successBtnGrad}
+              >
+                <Pressable
+                  onPress={() => setShowWithdrawSuccess(false)}
+                  style={({ pressed }) => [styles.successBtn, pressed && { opacity: 0.92 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Done"
+                >
+                  <Text style={styles.successBtnTxt}>Done</Text>
+                </Pressable>
+              </LinearGradient>
+            </View>
+          </View>
         </Modal>
 
         <Modal
@@ -900,6 +963,67 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingBottom: spacing.md,
+  },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  successPanel: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  successIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(5,150,105,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successSub: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  successNote: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  successBtnGrad: {
+    width: '100%',
+    borderRadius: 50,
+  },
+  successBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  successBtnTxt: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
   },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
   section: {

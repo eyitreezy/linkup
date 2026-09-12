@@ -9,14 +9,14 @@ import {
   formatGroupSplitCents,
   isGroupSplitPlan,
   planTotalCostCents,
-  projectedHostShareCents,
+  resolveGroupHostShareForPlan,
   remainingGuestSlots,
 } from '@/lib/plans/groupSplitDynamic';
-import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
-import type { DbPlan } from '@/types/database';
+import { supabase } from '@/lib/supabase';
+import type { DbEscrowTransaction, DbPlan, DbPlanOffer } from '@/types/database';
 import { Href, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
@@ -26,7 +26,42 @@ type Props = {
 
 export function GroupSplitHostFooter({ plan, onPlanUpdated }: Props) {
   const groupClosed = !!plan.group_closed_at;
-  const projected = useMemo(() => projectedHostShareCents(plan), [plan]);
+  const [guestEscrows, setGuestEscrows] = useState<
+    Pick<DbEscrowTransaction, 'guest_id' | 'guest_share_cents' | 'amount_cents' | 'guest_funded_at' | 'status'>[]
+  >([]);
+  const [acceptedOffers, setAcceptedOffers] = useState<
+    Pick<DbPlanOffer, 'current_amount_cents' | 'amount_cents'>[]
+  >([]);
+
+  const loadEscrows = useCallback(async () => {
+    const [{ data: esc }, { data: offers }] = await Promise.all([
+      supabase
+        .from('escrow_transactions')
+        .select('guest_id, guest_share_cents, amount_cents, guest_funded_at, status')
+        .eq('plan_id', plan.id)
+        .not('guest_id', 'is', null),
+      supabase
+        .from('plan_offers')
+        .select('current_amount_cents, amount_cents')
+        .eq('plan_id', plan.id)
+        .eq('status', 'accepted'),
+    ]);
+    setGuestEscrows((esc ?? []) as typeof guestEscrows);
+    setAcceptedOffers((offers ?? []) as typeof acceptedOffers);
+  }, [plan.id]);
+
+  useEffect(() => {
+    if (!isGroupSplitPlan(plan)) return;
+    void loadEscrows();
+  }, [loadEscrows, plan, plan.updated_at, plan.accepted_guest_amounts_sum_cents, plan.group_closed_at]);
+
+  const hostShare = useMemo(
+    () =>
+      resolveGroupHostShareForPlan(plan, guestEscrows, {
+        acceptedOffers,
+      }),
+    [acceptedOffers, guestEscrows, plan]
+  );
   const total = useMemo(() => planTotalCostCents(plan), [plan]);
   const openSlots = useMemo(() => remainingGuestSlots(plan), [plan]);
   const acceptedCount = plan.accepted_guest_count ?? 0;
@@ -34,7 +69,7 @@ export function GroupSplitHostFooter({ plan, onPlanUpdated }: Props) {
   const handleCloseGroup = useCallback(() => {
     Alert.alert(
       'Close group?',
-      `You have ${acceptedCount} guest${acceptedCount === 1 ? '' : 's'} confirmed. Your share will be ${formatGroupSplitCents(grossAmountCents(projected), plan.currency)} (includes platform fee). No more guests can join after you close.`,
+      `You have ${acceptedCount} guest${acceptedCount === 1 ? '' : 's'} confirmed. Your share will be ${formatGroupSplitCents(hostShare.paymentCents, plan.currency)} (includes platform fee). No more guests can join after you close.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -51,7 +86,7 @@ export function GroupSplitHostFooter({ plan, onPlanUpdated }: Props) {
         },
       ]
     );
-  }, [acceptedCount, onPlanUpdated, plan.currency, plan.id, projected]);
+  }, [acceptedCount, hostShare.paymentCents, onPlanUpdated, plan.currency, plan.id]);
 
   if (!isGroupSplitPlan(plan)) return null;
 
@@ -74,7 +109,11 @@ export function GroupSplitHostFooter({ plan, onPlanUpdated }: Props) {
     <View style={[negotiationPanelStyles.footer, styles.wrap]}>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Your projected share</Text>
-        <Text style={styles.cardAmount}>{formatGroupSplitCents(projected, plan.currency)}</Text>
+        <Text style={styles.cardAmount}>
+          {hostShare.displayCents > 0
+            ? formatGroupSplitCents(hostShare.displayCents, plan.currency)
+            : 'Calculating…'}
+        </Text>
         <Text style={styles.cardExplainer}>
           {`This is what you will pay when you close the group. It equals the plan total (${formatGroupSplitCents(total, plan.currency)}) minus what your ${acceptedCount} ${acceptedCount === 1 ? 'guest has' : 'guests have'} committed to.`}
         </Text>

@@ -18,6 +18,7 @@ import { LiveLocationButton } from '@/components/plans/LiveLocationButton';
 import { LiveLocationViewer } from '@/components/plans/LiveLocationViewer';
 import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
 import { usePartnerLiveLocationSession } from '@/hooks/usePartnerLiveLocationSession';
+import { isArrivalWindowActive } from '@/lib/plans/meetupCountdown';
 import { ForwardMessageSheet } from '@/components/messages/ForwardMessageSheet';
 import { PinnedMessageBanner } from '@/components/messages/PinnedMessageBanner';
 import { ChatTypingIndicator } from '@/components/presence/ChatTypingIndicator';
@@ -260,7 +261,15 @@ export default function ChatThreadScreen() {
     [linkedMeetup]
   );
 
-  const showLiveLocation = canOpenPlanDispute && !!linkedMeetup?.id && !!user?.id;
+  const showLiveLocation = useMemo(
+    () =>
+      linkedMeetup?.status === 'active' &&
+      isArrivalWindowActive(linkedMeetup.scheduled_at) &&
+      !!linkedMeetup.id &&
+      !!user?.id,
+    [linkedMeetup, user?.id]
+  );
+
   const partnerLiveSessionId = usePartnerLiveLocationSession(
     showLiveLocation ? linkedMeetup!.id : null,
     user?.id
@@ -1541,6 +1550,12 @@ export default function ChatThreadScreen() {
         ) : null}
 
         <View style={styles.threadBody}>
+        {showLiveLocation && linkedMeetup?.id && user?.id ? (
+          <View style={styles.liveLocationRow}>
+            <LiveLocationViewer partnerSessionId={partnerLiveSessionId} />
+            <LiveLocationButton planId={linkedMeetup.id} currentUserId={user.id} />
+          </View>
+        ) : null}
         {loading ? (
           <ChatThreadSkeleton />
         ) : (
@@ -1587,9 +1602,6 @@ export default function ChatThreadScreen() {
                     onPress={() => scrollToMessage(pinnedPreview.messageId)}
                     onUnpin={() => void runUnpinMessage()}
                   />
-                ) : null}
-                {partnerLiveSessionId ? (
-                  <LiveLocationViewer partnerSessionId={partnerLiveSessionId} />
                 ) : null}
               </>
             }
@@ -1671,9 +1683,6 @@ export default function ChatThreadScreen() {
             borderColor={chatPreset.composerBorder}
             onSelect={setText}
           />
-          {showLiveLocation && linkedMeetup?.id && user?.id ? (
-            <LiveLocationButton planId={linkedMeetup.id} currentUserId={user.id} />
-          ) : null}
           <ChatComposer
             preset={chatPreset}
             threadLook={messageInputLook}
@@ -1892,6 +1901,16 @@ const styles = StyleSheet.create({
   },
   listFlex: { flex: 1 },
   threadBody: { flex: 1, justifyContent: 'flex-end' },
+  liveLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   list: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,

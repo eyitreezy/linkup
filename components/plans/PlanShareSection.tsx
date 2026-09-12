@@ -12,8 +12,9 @@ import { usePlanShare } from '@/lib/plans/usePlanShare';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { DbMeetType, DbPlan } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import {
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -27,6 +28,15 @@ import ViewShot from 'react-native-view-shot';
 type HostMini = {
   display_name: string | null;
   verified_badge: boolean | null;
+};
+
+type SharePlatformOption = {
+  key: string;
+  label: string;
+  icon: ComponentProps<typeof Ionicons>['name'];
+  iconColor: string;
+  backgroundColor: string;
+  onPress: () => Promise<void>;
 };
 
 type Props = {
@@ -101,13 +111,61 @@ export function PlanShareSection({
 
   const hostFirstName = hostProfile?.display_name?.trim().split(/\s+/)[0] || 'Host';
 
-  const { cardRef, sharePlan, copyLink, shareToWhatsApp } = usePlanShare({
+  const { cardRef, sharePlan, copyLink, shareToWhatsApp, shareToTwitter, shareToFacebook, shareToInstagram } =
+    usePlanShare({
     planId: plan.id,
     planTitle: plan.title,
     meetTypeName,
     city,
     currentUserId,
   });
+
+  const platformOptions = useMemo<SharePlatformOption[]>(
+    () => [
+      {
+        key: 'whatsapp',
+        label: 'WhatsApp',
+        icon: 'logo-whatsapp',
+        iconColor: '#FFFFFF',
+        backgroundColor: '#25D366',
+        onPress: shareToWhatsApp,
+      },
+      {
+        key: 'twitter',
+        label: 'X',
+        icon: 'logo-twitter',
+        iconColor: '#FFFFFF',
+        backgroundColor: '#0F1419',
+        onPress: shareToTwitter,
+      },
+      {
+        key: 'facebook',
+        label: 'Facebook',
+        icon: 'logo-facebook',
+        iconColor: '#FFFFFF',
+        backgroundColor: '#1877F2',
+        onPress: shareToFacebook,
+      },
+      {
+        key: 'instagram',
+        label: 'Instagram',
+        icon: 'logo-instagram',
+        iconColor: '#FFFFFF',
+        backgroundColor: '#E4405F',
+        onPress: shareToInstagram,
+      },
+    ],
+    [shareToFacebook, shareToInstagram, shareToTwitter, shareToWhatsApp]
+  );
+
+  async function runPlatformShare(option: SharePlatformOption) {
+    setShowShareOptions(false);
+    try {
+      await option.onPress();
+    } catch {
+      Alert.alert('Could not share', 'Try copy link or more options below.');
+    }
+  }
 
   return (
     <>
@@ -163,15 +221,29 @@ export function PlanShareSection({
             <View style={styles.shareHandle} />
             <Text style={styles.shareSheetTitle}>Share this plan</Text>
 
-            <Pressable
-              style={styles.whatsappButton}
-              onPress={async () => {
-                setShowShareOptions(false);
-                await shareToWhatsApp();
-              }}
-            >
-              <Text style={styles.whatsappButtonLabel}>Share on WhatsApp</Text>
-            </Pressable>
+            <View style={styles.shareGrid}>
+              {platformOptions.map((option) => (
+                <Pressable
+                  key={option.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Share on ${option.label}`}
+                  onPress={() => void runPlatformShare(option)}
+                  style={({ pressed }) => [styles.platformTile, pressed && styles.platformTilePressed]}
+                >
+                  <View
+                    style={[
+                      styles.platformIconWrap,
+                      { backgroundColor: option.backgroundColor },
+                    ]}
+                  >
+                    <Ionicons name={option.icon} size={24} color={option.iconColor} />
+                  </View>
+                  <Text style={styles.platformLabel} numberOfLines={1}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
 
             <Pressable
               style={styles.secondaryShareButton}
@@ -180,6 +252,8 @@ export function PlanShareSection({
                 if (success) {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
+                } else {
+                  Alert.alert('Could not copy', 'Please try again.');
                 }
               }}
             >
@@ -273,19 +347,51 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  shareGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.xs,
   },
-  whatsappButton: {
-    backgroundColor: '#25D366',
-    borderRadius: radius.button,
-    paddingVertical: 14,
+  platformTile: {
+    flexBasis: '22%',
+    flexGrow: 1,
+    minWidth: 72,
+    maxWidth: 88,
     alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
   },
-  whatsappButtonLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    fontFamily: fonts.bold,
-    color: '#FFFFFF',
+  platformTilePressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.97 }],
+  },
+  platformIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+  platformLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: fonts.medium,
+    color: colors.text,
+    textAlign: 'center',
+    width: '100%',
   },
   secondaryShareButton: {
     flexDirection: 'row',

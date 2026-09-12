@@ -16,6 +16,7 @@ import { FundingDeadlineUrgencyBanner } from '@/components/escrow/FundingDeadlin
 import { OpenDisputeModal } from '@/components/escrow/OpenDisputeModal';
 import { PaymentMethodSelector } from '@/components/escrow/PaymentMethodSelector';
 import { EscrowPolicySignOffModal } from '@/components/plans/EscrowPolicySignOffModal';
+import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
 import { SafetyCaveatInterstitial } from '@/components/plans/SafetyCaveatInterstitial';
 import { VerificationHardGateModal } from '@/components/kyc/VerificationHardGateModal';
 import { PlanFlowScreenSkeleton } from '@/components/ui/PlanFlowScreenSkeleton';
@@ -71,6 +72,7 @@ import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { formatIsoDateTime } from '@/lib/plans/formatPlanMeta';
 import { subscribeEscrowRealtime } from '@/lib/escrow/subscribeEscrowRealtime';
 import { isGroupSplitPlan, isGroupHostCloseEscrowRow, resolveGroupHostShareCents, resolveGroupPlanTotalCents, resolveAcceptedGuestCommitmentCents } from '@/lib/plans/groupSplitDynamic';
+import { isGhostHostEscrowRow } from '@/lib/plans/groupFundedMemberCount';
 import {
   hasEscrowPolicySignoff,
   needsSafetyCaveatGate,
@@ -147,6 +149,7 @@ export default function EscrowDetailScreen() {
   } | null>(null);
   const [checkAgainBusy, setCheckAgainBusy] = useState(false);
   const [stillProcessingOpen, setStillProcessingOpen] = useState(false);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [activeCheckoutRef, setActiveCheckoutRef] = useState<string | null>(null);
   const confirmingPaymentRef = useRef(false);
   const pendingCheckoutRef = useRef<string | null>(null);
@@ -325,12 +328,34 @@ export default function EscrowDetailScreen() {
     );
   }, [escrow, hostViewingGuestLegEarly, user?.id]);
 
+  const isGhostHostRow = useMemo(() => {
+    if (!escrow || !plan || !user?.id) return false;
+    if (!isGroupSplitPlan(plan)) return false;
+    if (user.id !== escrow.host_id) return false;
+    return isGhostHostEscrowRow(plan, escrow);
+  }, [escrow, plan, user?.id]);
+
+  useEffect(() => {
+    if (!isGhostHostRow || !plan?.host_escrow_id) return;
+    router.replace(`/escrow/${plan.host_escrow_id}` as Href);
+  }, [isGhostHostRow, plan?.host_escrow_id]);
+
   const onEscrowVerified = useCallback(() => {
     setAwaitingFulfillment(false);
     pendingCheckoutRef.current = null;
     setActiveCheckoutRef(null);
+    setShowPaymentSuccess(true);
     void load({ silent: true });
   }, [load]);
+
+  function handlePaymentSuccessContinue() {
+    setShowPaymentSuccess(false);
+    if (escrow?.plan_id) {
+      router.replace(`/plan/${escrow.plan_id}/agreement` as Href);
+    } else {
+      router.replace('/offers' as Href);
+    }
+  }
 
   const { status: confirmationStatus, secondsElapsed, retryVerify } = useEscrowConfirmation(
     supabase,
@@ -858,34 +883,21 @@ export default function EscrowDetailScreen() {
     hostEscrowId: plan?.host_escrow_id ?? null,
     isHostCloseRow: isGroupHostLegRow,
   });
-  const resolvedHostShareCents = Math.max(
-    groupHostShare?.displayCents ?? 0,
-    groupHostShare?.paymentCents ?? 0
-  );
-  const myShareCents =
-    isGroupSplit && isHost
-      ? hostViewingGuestLeg
-        ? Math.max(0, escrow.guest_share_cents ?? escrow.amount_cents ?? 0)
-        : resolvedHostShareCents > 0
-          ? resolvedHostShareCents
-          : currentUserPayCents
-      : currentUserPayCents;
   const myPayShareCents =
     isGroupSplit && isHost && !hostViewingGuestLeg
-      ? resolvedHostShareCents > 0
-        ? resolvedHostShareCents
-        : currentUserPayCents
+      ? (groupHostShare?.paymentCents ?? currentUserPayCents)
       : currentUserPayCents;
   const myLegFunded = isUserEscrowLegFunded(escrow, user.id);
   const canFundThisLeg =
-    fundingUi.canFund ||
-    (isGroupSplit &&
-      isHost &&
-      groupHostShare != null &&
-      myPayShareCents > 0 &&
-      isGroupHostLegRow &&
-      !myLegFunded &&
-      escrow.status === 'pending_funding');
+    !isGhostHostRow &&
+    (fundingUi.canFund ||
+      (isGroupSplit &&
+        isHost &&
+        groupHostShare != null &&
+        myPayShareCents > 0 &&
+        isGroupHostLegRow &&
+        !myLegFunded &&
+        escrow.status === 'pending_funding'));
   const escrowFullyFunded = isEscrowFullyFundedForMeet(escrow);
   const escrowFunded =
     escrowFullyFunded ||
@@ -931,7 +943,10 @@ export default function EscrowDetailScreen() {
         : escrowPaymentConfirmedMessage(escrow, user.id)
       : escrowPaymentConfirmedMessage(escrow, user.id);
   const showPaymentConfirmedFooter =
-    userPaymentConfirmed && escrowCheckoutReturned(escrow) && !escrowFunded;
+    userPaymentConfirmed &&
+    escrowCheckoutReturned(escrow) &&
+    !escrowFunded &&
+    !showPaymentSuccess;
   const paymentPendingConfirmation =
     confirmPaymentEnabled &&
     !userPaymentConfirmed &&
@@ -1291,7 +1306,7 @@ export default function EscrowDetailScreen() {
           showTotalHeld={showSummaryTotalHeld}
         />
 
-        {plan?.is_paid && escrow.amount_cents > 0 ? (
+        {(plan?.is_paid || plan?.is_group_plan) && escrow.amount_cents > 0 ? (
           <View style={styles.feeBreakdownCard}>
             <View style={styles.feeBreakdownRow}>
               <Text style={styles.feeBreakdownLabel}>Plan contribution</Text>
@@ -1455,6 +1470,14 @@ export default function EscrowDetailScreen() {
               hostEscrowId={plan?.host_escrow_id ?? null}
             />
           </>
+        ) : null}
+
+        {isHost && isGroupSplit && plan ? (
+          <PlanGroupGuestsPanel
+            plan={plan}
+            hostUserId={user.id}
+            currentUserId={user.id}
+          />
         ) : null}
 
         {screenContent.showPatternCard &&
@@ -1752,6 +1775,33 @@ export default function EscrowDetailScreen() {
         </View>
       ) : null}
       </View>
+      <Modal visible={showPaymentSuccess} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.successOverlay}>
+          <View style={styles.successPanel}>
+            <View style={styles.successIconWrap}>
+              <Ionicons name="checkmark" size={36} color="#16a34a" />
+            </View>
+            <Text style={styles.successTitle}>Payment confirmed</Text>
+            <Text style={styles.successSub}>
+              Your payment has been verified and your escrow is now funded.
+            </Text>
+            <LinearGradient
+              colors={[colors.primary, colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.successBtnGrad}
+            >
+              <Pressable
+                onPress={handlePaymentSuccessContinue}
+                style={({ pressed }) => [styles.successBtn, pressed && { opacity: 0.92 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.successBtnTxt}>View agreement</Text>
+              </Pressable>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -2133,4 +2183,58 @@ const styles = StyleSheet.create({
   feeBreakdownGoodwill: { fontSize: 14, fontWeight: '900',
     fontFamily: fonts.bold, color: '#047857' },
   feeBreakdownAmountBold: { fontSize: 16, fontWeight: '900', color: colors.text, fontFamily: fonts.bold, },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  successPanel: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  successIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(22,163,74,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successSub: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  successBtnGrad: {
+    width: '100%',
+    borderRadius: 50,
+  },
+  successBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  successBtnTxt: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
 });

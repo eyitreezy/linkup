@@ -16,10 +16,12 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { DbEscrowTransaction, DbUserPaymentAccount } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Href, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -67,6 +69,7 @@ export default function BankTransferScreen() {
   const [copied, setCopied] = useState(false);
   const [countdownMs, setCountdownMs] = useState(0);
   const [isExpired, setIsExpired] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const escrowLeg =
     escrow && user?.id
@@ -150,12 +153,17 @@ export default function BankTransferScreen() {
   }, [load]);
 
   const handleFunded = useCallback(() => {
+    setShowSuccess(true);
+  }, []);
+
+  function handleSuccessContinue() {
+    setShowSuccess(false);
     if (successHref) {
       router.replace(successHref);
     } else {
       goBackOrFallback();
     }
-  }, [successHref]);
+  }
 
   useEffect(() => {
     if (authLoading) return;
@@ -378,6 +386,33 @@ export default function BankTransferScreen() {
       >
         {pageBody}
       </ScrollView>
+      <Modal visible={showSuccess} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.successOverlay}>
+          <View style={styles.successPanel}>
+            <View style={styles.successIconWrap}>
+              <Ionicons name="checkmark" size={36} color="#16a34a" />
+            </View>
+            <Text style={styles.successTitle}>Payment confirmed</Text>
+            <Text style={styles.successSub}>
+              Your bank transfer has been received and your escrow is now funded.
+            </Text>
+            <LinearGradient
+              colors={[colors.primary, colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.successBtnGrad}
+            >
+              <Pressable
+                onPress={handleSuccessContinue}
+                style={({ pressed }) => [styles.successBtn, pressed && { opacity: 0.92 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.successBtnTxt}>Continue</Text>
+              </Pressable>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -558,5 +593,59 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     color: colors.textMuted,
     lineHeight: 21,
+  },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  successPanel: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  successIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(22,163,74,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successSub: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  successBtnGrad: {
+    width: '100%',
+    borderRadius: 50,
+  },
+  successBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  successBtnTxt: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#fff',
   },
 });

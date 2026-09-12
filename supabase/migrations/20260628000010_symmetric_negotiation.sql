@@ -121,6 +121,18 @@ BEGIN
     RAISE EXCEPTION 'plan_not_found';
   END IF;
 
+  IF p_offer_id IS NULL AND v_plan.is_group_plan THEN
+    IF EXISTS (
+      SELECT 1 FROM public.plan_offers
+      WHERE plan_id = p_plan_id
+        AND bidder_id = v_guest_id
+        AND status IN ('pending', 'countered', 'countered_by_host', 'countered_by_guest', 'accepted')
+        AND (expires_at IS NULL OR expires_at > now())
+    ) THEN
+      RAISE EXCEPTION 'You already have an active slot request on this plan.';
+    END IF;
+  END IF;
+
   IF p_offer_id IS NULL THEN
     INSERT INTO public.plan_offers (
       plan_id, bidder_id, amount_cents, current_amount_cents, message,

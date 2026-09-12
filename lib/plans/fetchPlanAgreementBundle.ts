@@ -1,6 +1,6 @@
 import { isGroupSplitPlan } from '@/lib/plans/groupSplitDynamic';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DbEscrowTransaction, DbPlan, DbPlanOffer } from '@/types/database';
+import type { DbEscrowTransaction, DbPlan, DbPlanJoinRequest, DbPlanOffer } from '@/types/database';
 
 export type AgreementProfile = {
   user_id: string;
@@ -118,10 +118,70 @@ async function resolveAgreementOffer(
   return null;
 }
 
+async function resolveAgreementJoinRequest(
+  client: SupabaseClient,
+  plan: DbPlan,
+  opts?: { joinRequestId?: string | null; userId?: string | null }
+): Promise<DbPlanJoinRequest | null> {
+  if (opts?.joinRequestId) {
+    const { data } = await client
+      .from('plan_join_requests')
+      .select('*')
+      .eq('id', opts.joinRequestId)
+      .eq('plan_id', plan.id)
+      .maybeSingle();
+    if (data && (data as DbPlanJoinRequest).status === 'approved') {
+      return data as DbPlanJoinRequest;
+    }
+    return null;
+  }
+  if (opts?.userId && opts.userId !== plan.creator_id) {
+    const { data } = await client
+      .from('plan_join_requests')
+      .select('*')
+      .eq('plan_id', plan.id)
+      .eq('requester_id', opts.userId)
+      .eq('status', 'approved')
+      .maybeSingle();
+    if (data) return data as DbPlanJoinRequest;
+  }
+  if (opts?.userId === plan.creator_id) {
+    const { data } = await client
+      .from('plan_join_requests')
+      .select('*')
+      .eq('plan_id', plan.id)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as DbPlanJoinRequest;
+  }
+  return null;
+}
+
+function joinRequestToSyntheticOffer(plan: DbPlan, joinRequest: DbPlanJoinRequest): DbPlanOffer {
+  const cents = plan.agreed_price_cents ?? plan.starting_price_cents ?? 0;
+  return {
+    id: joinRequest.id,
+    plan_id: plan.id,
+    bidder_id: joinRequest.requester_id,
+    amount_cents: cents,
+    current_amount_cents: cents,
+    message: joinRequest.message,
+    status: 'accepted',
+    round: 1,
+    expires_at: null,
+    proposed_scheduled_at: plan.scheduled_at,
+    proposed_location: null,
+    created_at: joinRequest.created_at,
+    updated_at: joinRequest.updated_at,
+  };
+}
+
 export async function fetchPlanAgreementBundle(
   client: SupabaseClient,
   planId: string,
-  opts?: { offerId?: string | null; userId?: string | null }
+  opts?: { offerId?: string | null; joinRequestId?: string | null; userId?: string | null }
 ): Promise<{ data: PlanAgreementBundle | null; error: string | null }> {
   const { data: planRow, error: planError } = await client
     .from('plans')
@@ -133,9 +193,19 @@ export async function fetchPlanAgreementBundle(
   if (!planRow) return { data: null, error: 'Plan not found' };
 
   const plan = planRow as DbPlan;
-  const offer = await resolveAgreementOffer(client, plan, opts);
-  if (!offer || offer.status !== 'accepted') {
-    return { data: null, error: 'No accepted offer for this plan' };
+  let offer: DbPlanOffer | null = null;
+
+  if (plan.is_negotiable === false) {
+    const joinRequest = await resolveAgreementJoinRequest(client, plan, opts);
+    if (!joinRequest) {
+      return { data: null, error: 'No approved join request for this plan' };
+    }
+    offer = joinRequestToSyntheticOffer(plan, joinRequest);
+  } else {
+    offer = await resolveAgreementOffer(client, plan, opts);
+    if (!offer || offer.status !== 'accepted') {
+      return { data: null, error: 'No accepted offer for this plan' };
+    }
   }
 
   const isParty = opts?.userId === plan.creator_id || opts?.userId === offer.bidder_id;

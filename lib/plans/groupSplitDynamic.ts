@@ -1,5 +1,5 @@
 import type { DbEscrowTransaction, DbPlan, DbPlanOffer } from '@/types/database';
-import { grossAmountCents } from '@/lib/plans/planFinancialConfig';
+import { budgetFromGrossAmountCents, grossAmountCents } from '@/lib/plans/planFinancialConfig';
 
 /** Group plan with pattern B (split) and paid commitment — dynamic per-guest shares. */
 export function isGroupSplitPlan(
@@ -103,16 +103,49 @@ export function projectedHostShareCents(
   return Math.max(0, planTotalCostCents(plan) - (plan.accepted_guest_amounts_sum_cents ?? 0));
 }
 
-type GuestEscrowLeg = Pick<DbEscrowTransaction, 'guest_id' | 'guest_share_cents' | 'amount_cents'>;
+type GuestEscrowLeg = Pick<
+  DbEscrowTransaction,
+  'guest_id' | 'guest_share_cents' | 'amount_cents' | 'guest_funded_at' | 'status'
+>;
 
 type AcceptedOfferAmount = Pick<DbPlanOffer, 'current_amount_cents' | 'amount_cents'>;
 
-/** Sum of locked guest escrow legs (negotiated amounts), deduped per guest. */
+/** Budget (pre-fee) amount for one guest escrow leg — never treat gross amount_cents as budget. */
+function guestEscrowBudgetCents(e: GuestEscrowLeg): number {
+  const budget = Math.max(0, e.guest_share_cents ?? 0);
+  if (budget > 0) return budget;
+  const gross = Math.max(0, e.amount_cents ?? 0);
+  if (gross > 0) return budgetFromGrossAmountCents(gross);
+  return 0;
+}
+
+function isGuestEscrowLegFunded(e: GuestEscrowLeg): boolean {
+  return (
+    !!e.guest_funded_at ||
+    e.status === 'funded' ||
+    e.status === 'active' ||
+    e.status === 'released'
+  );
+}
+
+/** Sum of locked guest escrow legs (negotiated budget amounts), deduped per guest. */
 export function sumAcceptedGuestEscrowCents(escrows: GuestEscrowLeg[]): number {
   const byGuest = new Map<string, number>();
   for (const e of escrows) {
     if (e.guest_id == null) continue;
-    const amt = Math.max(0, e.guest_share_cents ?? e.amount_cents ?? 0);
+    const amt = guestEscrowBudgetCents(e);
+    const prev = byGuest.get(e.guest_id) ?? 0;
+    byGuest.set(e.guest_id, Math.max(prev, amt));
+  }
+  return [...byGuest.values()].reduce((sum, v) => sum + v, 0);
+}
+
+/** Sum of funded guest escrow budget legs only — for live outstanding host share. */
+export function sumFundedGuestEscrowBudgetCents(escrows: GuestEscrowLeg[]): number {
+  const byGuest = new Map<string, number>();
+  for (const e of escrows) {
+    if (e.guest_id == null || !isGuestEscrowLegFunded(e)) continue;
+    const amt = guestEscrowBudgetCents(e);
     const prev = byGuest.get(e.guest_id) ?? 0;
     byGuest.set(e.guest_id, Math.max(prev, amt));
   }
@@ -127,7 +160,7 @@ export function sumAcceptedOfferAmountsCents(offers: AcceptedOfferAmount[]): num
   );
 }
 
-/** Best-effort guest commitment total — prefer server-maintained plan column over escrow rows. */
+/** Best-effort guest commitment total for host-share math (budget amounts, pre-fee). */
 export function resolveAcceptedGuestCommitmentCents(
   plan: Pick<
     DbPlan,
@@ -145,13 +178,43 @@ export function resolveAcceptedGuestCommitmentCents(
   const fromRows = sumAcceptedGuestEscrowCents(guestEscrows);
   const total = planTotalCostCents(plan);
 
+  let guestSum = 0;
   if (fromPlan > 0) {
-    return total > 0 ? Math.min(fromPlan, total) : fromPlan;
+    guestSum = fromPlan;
+  } else if (fromRows > 0) {
+    guestSum = fromRows;
+  } else if (fromOffers > 0) {
+    guestSum = fromOffers;
   }
-  if (fromOffers > 0) {
-    return total > 0 ? Math.min(fromOffers, total) : fromOffers;
+
+  // Escrow rows are fresher when the plan column is stale or zero.
+  if (fromRows > guestSum) {
+    guestSum = fromRows;
   }
-  return total > 0 ? Math.min(fromRows, total) : fromRows;
+
+  if (total > 0) return Math.min(Math.max(0, guestSum), total);
+  return Math.max(0, guestSum);
+}
+
+/** Host remaining budget = plan total minus valid guest commitments (matches close_group RPC). */
+export function resolveHostRemainingBudgetCents(
+  plan: Pick<
+    DbPlan,
+    | 'starting_price_cents'
+    | 'agreed_price_cents'
+    | 'accepted_guest_amounts_sum_cents'
+    | 'budget_min_cents'
+    | 'budget_max_cents'
+    | 'host_escrow_id'
+    | 'group_closed_at'
+  >,
+  guestEscrows: GuestEscrowLeg[] = [],
+  acceptedOffers: AcceptedOfferAmount[] = []
+): number {
+  const total = planTotalCostCents(plan);
+  if (total <= 0) return 0;
+  const guestSum = resolveAcceptedGuestCommitmentCents(plan, guestEscrows, acceptedOffers);
+  return Math.max(0, total - guestSum);
 }
 
 /** Host share from plan budget minus accepted guest commitments. */
@@ -163,14 +226,13 @@ export function hostShareFromGuestCommitments(
     | 'accepted_guest_amounts_sum_cents'
     | 'budget_min_cents'
     | 'budget_max_cents'
+    | 'host_escrow_id'
+    | 'group_closed_at'
   >,
   guestEscrows: GuestEscrowLeg[] = [],
   acceptedOffers: AcceptedOfferAmount[] = []
 ): number {
-  const total = planTotalCostCents(plan);
-  if (total <= 0) return 0;
-  const guestSum = resolveAcceptedGuestCommitmentCents(plan, guestEscrows, acceptedOffers);
-  return Math.max(0, total - guestSum);
+  return resolveHostRemainingBudgetCents(plan, guestEscrows, acceptedOffers);
 }
 
 export function isGroupHostCloseEscrowRow(
@@ -214,29 +276,50 @@ function storedHostGrossCents(
   escrow: Pick<DbEscrowTransaction, 'host_share_cents' | 'guest_share_cents' | 'amount_cents'>
 ): number {
   const budget = storedHostBudgetCents(escrow);
-  const guestBudget = Math.max(0, escrow.guest_share_cents ?? 0);
-  if (budget > 0 && guestBudget > 0) return grossAmountCents(budget);
+  if (budget > 0) return grossAmountCents(budget);
   return Math.max(0, escrow.amount_cents ?? 0);
 }
 
+export type GroupHostSharePlanSlice = Pick<
+  DbPlan,
+  | 'starting_price_cents'
+  | 'agreed_price_cents'
+  | 'accepted_guest_amounts_sum_cents'
+  | 'host_escrow_id'
+  | 'group_closed_at'
+  | 'budget_min_cents'
+  | 'budget_max_cents'
+  | 'currency'
+>;
+
+/**
+ * Authoritative host share for plan-level screens (no active escrow leg context).
+ * displayCents = budget remaining; paymentCents = gross checkout amount.
+ */
+export function resolveGroupHostShareForPlan(
+  plan: GroupHostSharePlanSlice,
+  guestEscrows: GuestEscrowLeg[] = [],
+  options?: ResolveGroupHostShareOptions
+): GroupHostShareResolution {
+  const hostEscrowRow = options?.hostEscrowRow ?? null;
+  const placeholderEscrow = hostEscrowRow ?? {
+    id: plan.host_escrow_id ?? '',
+    guest_id: null,
+    host_share_cents: 0,
+    amount_cents: 0,
+  };
+  return resolveGroupHostShareCents(plan, placeholderEscrow, guestEscrows, options);
+}
+
 export function resolveGroupHostShareCents(
-  plan: Pick<
-    DbPlan,
-    | 'starting_price_cents'
-    | 'agreed_price_cents'
-    | 'accepted_guest_amounts_sum_cents'
-    | 'host_escrow_id'
-    | 'group_closed_at'
-    | 'budget_min_cents'
-    | 'budget_max_cents'
-  >,
+  plan: GroupHostSharePlanSlice,
   escrow: Pick<DbEscrowTransaction, 'id' | 'host_share_cents' | 'amount_cents' | 'guest_id'>,
   guestEscrows: GuestEscrowLeg[] = [],
   options?: ResolveGroupHostShareOptions
 ): GroupHostShareResolution {
   const acceptedOffers = options?.acceptedOffers ?? [];
-  const projected = projectedHostShareCents(plan);
   const live = hostShareFromGuestCommitments(plan, guestEscrows, acceptedOffers);
+  const projected = projectedHostShareCents(plan);
 
   const storedEscrow = isGroupHostCloseEscrowRow(plan, escrow)
     ? escrow
@@ -247,14 +330,14 @@ export function resolveGroupHostShareCents(
   const storedGross = storedEscrow ? storedHostGrossCents(storedEscrow) : 0;
 
   // After close, the locked host escrow row is authoritative.
-  if (plan.group_closed_at && storedGross > 0) {
+  if (plan.group_closed_at && stored > 0) {
     return { displayCents: stored, paymentCents: storedGross };
   }
 
   if (live > 0) {
     return { displayCents: live, paymentCents: grossAmountCents(live) };
   }
-  if (storedGross > 0) {
+  if (stored > 0) {
     return { displayCents: stored, paymentCents: storedGross };
   }
   if (projected > 0) {
@@ -270,3 +353,9 @@ export function formatGroupSplitCents(cents: number | null | undefined, currency
   if (currency === 'NGN') return `₦${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   return `${n.toFixed(0)} ${currency}`;
 }
+
+export {
+  areAllRealGroupEscrowLegsFunded,
+  filterRealGroupEscrowRows,
+  isGhostHostEscrowRow,
+} from '@/lib/plans/groupFundedMemberCount';

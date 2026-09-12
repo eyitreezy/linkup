@@ -144,6 +144,12 @@ export function NegotiationChat({ plan, initialOfferId, openCounterOnMount, onPl
   const [proposedAt, setProposedAt] = useState<Date | null>(plan.scheduled_at ? new Date(plan.scheduled_at) : null);
   /** iOS only — Android uses imperative DateTimePickerAndroid (datetime JSX breaks dismiss on unmount). */
   const [showTime, setShowTime] = useState(false);
+
+  useEffect(() => {
+    if (plan.scheduled_at) {
+      setProposedAt((prev) => prev ?? new Date(plan.scheduled_at!));
+    }
+  }, [plan.scheduled_at]);
   const [sending, setSending] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [dmGateOpen, setDmGateOpen] = useState(false);

@@ -8,10 +8,9 @@ import { isUserEscrowLegFunded } from '@/lib/escrow/splitEscrowFunding';
 import { closeGroupAndCreateHostEscrow } from '@/lib/plans/groupSplitDynamicActions';
 import {
   formatGroupSplitCents,
-  hostShareFromGuestCommitments,
   isGroupSplitPlan,
   planTotalCostCents,
-  projectedHostShareCents,
+  resolveGroupHostShareForPlan,
 } from '@/lib/plans/groupSplitDynamic';
 import { supabase } from '@/lib/supabase';
 import type { DbEscrowTransaction, DbPlan, DbPlanOffer } from '@/types/database';
@@ -105,12 +104,17 @@ export function GroupSplitAgreementPanel({
     () => (plan.host_escrow_id ? escrows.find((e) => e.id === plan.host_escrow_id) ?? null : null),
     [escrows, plan.host_escrow_id]
   );
-  const projected = useMemo(
+  const guestEscrowLegs = useMemo(
+    () => escrows.filter((e) => e.guest_id != null),
+    [escrows]
+  );
+  const hostShare = useMemo(
     () =>
-      escrows.length > 0
-        ? hostShareFromGuestCommitments(plan, escrows)
-        : projectedHostShareCents(plan),
-    [escrows, plan]
+      resolveGroupHostShareForPlan(plan, guestEscrowLegs, {
+        hostEscrowRow: hostEscrow,
+        acceptedOffers,
+      }),
+    [acceptedOffers, guestEscrowLegs, hostEscrow, plan]
   );
   const groupClosed = !!plan.group_closed_at;
 
@@ -118,7 +122,7 @@ export function GroupSplitAgreementPanel({
     const acceptedCount = plan.accepted_guest_count ?? 0;
     Alert.alert(
       'Close group?',
-      `You have ${acceptedCount} guest${acceptedCount === 1 ? '' : 's'} confirmed. Your share will be ${formatGroupSplitCents(projected, plan.currency)}. No more guests can join after you close.`,
+      `You have ${acceptedCount} guest${acceptedCount === 1 ? '' : 's'} confirmed. Your share will be ${formatGroupSplitCents(hostShare.paymentCents, plan.currency)} (includes platform fee). No more guests can join after you close.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -135,7 +139,7 @@ export function GroupSplitAgreementPanel({
         },
       ]
     );
-  }, [onRefresh, plan.accepted_guest_count, plan.currency, plan.id, projected]);
+  }, [hostShare.paymentCents, onRefresh, plan.accepted_guest_count, plan.currency, plan.id]);
 
   if (!isGroupSplitPlan(plan)) return null;
 
@@ -206,14 +210,13 @@ export function GroupSplitAgreementPanel({
       })}
       <View style={styles.hostShareRow}>
         <Text style={styles.escrowLabel}>Your share</Text>
-        {groupClosed && hostEscrow ? (
-          <Text style={styles.escrowAmount}>
-            {formatGroupSplitCents(hostEscrow.host_share_cents ?? hostEscrow.amount_cents, plan.currency)}
+        {hostShare.displayCents > 0 ? (
+          <Text style={groupClosed ? styles.escrowAmount : styles.projectedAmount}>
+            {formatGroupSplitCents(hostShare.displayCents, plan.currency)}
+            {!groupClosed ? ' (projected)' : null}
           </Text>
         ) : (
-          <Text style={styles.projectedAmount}>
-            {formatGroupSplitCents(projected, plan.currency)} (projected)
-          </Text>
+          <Text style={styles.projectedAmount}>Calculating…</Text>
         )}
       </View>
       <View style={styles.totalRow}>
@@ -225,7 +228,7 @@ export function GroupSplitAgreementPanel({
       ) : null}
       {groupClosed && hostEscrow && showPaymentCta && !hostLegFunded ? (
         <AgreementPrimaryCta
-          label={`Complete host payment · ${formatGroupSplitCents(hostEscrow.host_share_cents ?? hostEscrow.amount_cents, plan.currency)}`}
+          label={`Pay your share · ${formatGroupSplitCents(hostShare.displayCents, plan.currency)}`}
           onPress={() => router.push(`/escrow/${hostEscrow.id}` as Href)}
         />
       ) : groupClosed && hostEscrow && hostLegFunded ? (

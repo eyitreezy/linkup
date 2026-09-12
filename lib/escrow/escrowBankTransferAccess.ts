@@ -64,7 +64,5 @@ export function canUserAccessBankTransfer(
   const groupHostShare = resolveGroupHostShareCents(plan, escrow, group.guestEscrowRows ?? [], {
     hostEscrowRow: group.hostEscrowRow ?? null,
   });
-  const myPayShareCents = Math.max(groupHostShare.displayCents, groupHostShare.paymentCents);
-
-  return myPayShareCents > 0;
+  return groupHostShare.paymentCents > 0;
 }

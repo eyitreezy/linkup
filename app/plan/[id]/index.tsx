@@ -10,10 +10,12 @@ import { PlanReportFlagButton, PlanStackScreenHeader } from '@/components/naviga
 import { PlanDetailSkeleton } from '@/components/plans/PlanDetailSkeleton';
 import { ActionButtonsSkeleton } from '@/components/plans/ActionButtonsSkeleton';
 import { PlanOffersListSkeleton } from '@/components/plans/PlanOffersListSkeleton';
+import { OfferStatusBadge } from '@/components/plans/negotiation/OfferStatusBadge';
 import { ReportSheet } from '@/components/trust/ReportSheet';
 import { VerificationBadge } from '@/components/trust/VerificationBadge';
 import { AppShellBackground } from '@/components/ui/AppShellBackground';
-import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
+import { GroupHostCancellationModal } from '@/components/plans/GroupHostCancellationModal';
+import { AppConfirmModal } from '@/components/ui/AppConfirmModal';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { setPendingAuthRedirect } from '@/lib/auth/pendingAuthRedirect';
@@ -22,6 +24,9 @@ import { ExpiredPlanShelfBanner } from '@/components/plans/ExpiredPlanShelfBanne
 import { PlanningTogetherLocationChip } from '@/components/plans/PlanningTogetherLocationChip';
 import { HostRatingBadge } from '@/components/reviews/HostRatingBadge';
 import { formatPlanAppFee, formatPlanCreated, formatPlanPrice, formatPlanWhen } from '@/lib/plans/formatPlanMeta';
+import { formatPlanMeetupStatusLabel } from '@/lib/plans/formatPlanMeetupStatusLabel';
+import { VIEW_AGREEMENT_PAY_LABEL } from '@/lib/plans/confirmedGuestMeetupCopy';
+import { getMeetupCountdown, isArrivalWindowActive } from '@/lib/plans/meetupCountdown';
 import { isPlanMoodWindowClosed, isPlanParticipationClosed, planExpiredAtIso, planExpiryReason } from '@/lib/plans/planExpiry';
 import { ExpiredPlanActionModal } from '@/components/plans/ExpiredPlanActionModal';
 import type { ExpiredPlanAction } from '@/lib/plans/expiredPlanMessages';
@@ -30,6 +35,7 @@ import { isPlanSaved, recordPlanView, setPlanSaved } from '@/lib/plans/planEngag
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 import { PlanBoostControls } from '@/components/plans/PlanBoostControls';
 import { PlanGroupGuestsPanel } from '@/components/plans/PlanGroupGuestsPanel';
+import { ArrivalNudgeButton } from '@/components/plans/ArrivalNudgeButton';
 import { GroupMeetupHostConfirmCard } from '@/components/plans/GroupMeetupHostConfirmCard';
 import { PlanInterestedStrip } from '@/components/plans/PlanInterestedStrip';
 import { peekPlanDetailSeed, prefetchPlanDetail, setPlanDetailSeed } from '@/lib/plans/planDetailSeed';
@@ -42,7 +48,21 @@ import { resolveAgreementOfferId, resolvePlanAgreementHref } from '@/lib/plans/p
 import { isPlanDetailActionReady } from '@/lib/plans/planDetailActionReady';
 import { fetchPlanDetailCore } from '@/lib/plans/fetchPlanDetailCore';
 import { findMyLatestOffer, usePlanViewerContext } from '@/lib/plans/usePlanViewerContext';
-import { fetchMyJoinRequest, submitJoinRequest, fetchGuestEscrowIdForJoinRequest } from '@/lib/plans/joinRequests';
+import { fetchMyJoinRequest, submitJoinRequest, fetchPlanJoinRequests, type JoinRequestWithRequester } from '@/lib/plans/joinRequests';
+import { GuestYourJoinRequestCard } from '@/components/plans/joinRequests/GuestYourJoinRequestCard';
+import {
+  fetchViewerGuestEscrow,
+  type PlanGuestEscrowSnapshot,
+} from '@/lib/plans/planPayShare';
+import { countGroupFundedMembers } from '@/lib/plans/groupFundedMemberCount';
+import {
+  formatGroupSplitCents,
+  isGroupSplitPlan,
+  resolveGroupHostShareForPlan,
+} from '@/lib/plans/groupSplitDynamic';
+import { getEscrowFundingUiState } from '@/lib/escrow/escrowFundingUi';
+import { resolveJoinRequestSlotCentsLabel } from '@/lib/plans/joinRequestSlotDisplay';
+import { isOfferExpired } from '@/lib/plans/offerRules';
 import { RequestJoinSheet } from '@/components/plans/joinRequests/RequestJoinSheet';
 import { InviteGuestsSheet } from '@/components/plans/InviteGuestsSheet';
 import {
@@ -59,7 +79,12 @@ import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { createGroupChat } from '@/lib/messaging/createGroupChat';
 import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
+import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { PLATFORM_FEE_REFUND_OPT_OUT_MESSAGE } from '@/lib/plans/platformFeeRefundCopy';
+import {
+  canGuestOptOutOfGroupPlan,
+  canHostCancelGroupPlan,
+} from '@/lib/plans/groupPlanMembership';
 import { isSupabaseConfigured, removeSupabaseChannel, supabase } from '@/lib/supabase';
 import { requiresVerificationGate } from '@/lib/verification/access';
 import type { DbPlan, DbPlanOffer, JoinRequestStatus, OfferStatus } from '@/types/database';
@@ -182,16 +207,9 @@ function PlanSaveButtonContent({ saved }: { saved: boolean }) {
     );
   }
   return (
-    <LinearGradient
-      colors={[...SAVE_BTN_GRADIENT]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
-      style={styles.dualSaveGradientRing}
-    >
-      <View style={styles.dualSaveInner}>
-        <Text style={styles.dualSaveLabel}>Save plan</Text>
-      </View>
-    </LinearGradient>
+    <View style={styles.dualSaveOutline}>
+      <Text style={styles.dualSaveLabel}>Save plan</Text>
+    </View>
   );
 }
 
@@ -218,6 +236,15 @@ export default function PlanOverviewScreen() {
     id: string;
     status: JoinRequestStatus;
   } | null>(null);
+  const [myGuestEscrow, setMyGuestEscrow] = useState<PlanGuestEscrowSnapshot | null>(null);
+  const [hostEscrow, setHostEscrow] = useState<PlanGuestEscrowSnapshot | null>(null);
+  const [planGuestEscrows, setPlanGuestEscrows] = useState<
+    Pick<
+      PlanGuestEscrowSnapshot,
+      'guest_id' | 'guest_share_cents' | 'amount_cents' | 'guest_funded_at' | 'status'
+    >[]
+  >([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequestWithRequester[]>([]);
   const [requestSheetOpen, setRequestSheetOpen] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
   const [requestSubmitting, setRequestSubmitting] = useState(false);
@@ -241,11 +268,98 @@ export default function PlanOverviewScreen() {
   const [groupMaxCount, setGroupMaxCount] = useState(4);
   const [hasOptedOut, setHasOptedOut] = useState(false);
   const [isOptingOut, setIsOptingOut] = useState(false);
+  const [invitationAccepted, setInvitationAccepted] = useState(false);
+  const [optOutConfirmOpen, setOptOutConfirmOpen] = useState(false);
+  const [optOutBlockedOpen, setOptOutBlockedOpen] = useState(false);
+  const [optOutBlockedMessage, setOptOutBlockedMessage] = useState('');
+  const [groupCancelOpen, setGroupCancelOpen] = useState(false);
+  const [myNudgedAt, setMyNudgedAt] = useState<string | null>(null);
+  const [partnerNudgedAt, setPartnerNudgedAt] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const offersLoadedRef = useRef(offersLoaded);
   offersLoadedRef.current = offersLoaded;
 
   const actionContextReady = isPlanDetailActionReady(plan, offers, offersLoaded);
+  const [actionButtonsReady, setActionButtonsReady] = useState(() =>
+    isPlanDetailActionReady(
+      id ? peekPlanDetailSeed(id) : null,
+      id ? peekPlanDetailOffersSeed(id) ?? [] : [],
+      Boolean(id && (peekPlanDetailSeed(id) || peekPlanDetailOffersSeed(id)))
+    )
+  );
+
+  useEffect(() => {
+    setActionButtonsReady(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (actionContextReady) setActionButtonsReady(true);
+  }, [actionContextReady]);
+
+  const meetupIsoForUi = plan?.agreed_scheduled_at ?? plan?.scheduled_at ?? null;
+
+  useEffect(() => {
+    if (plan?.status !== 'active') return;
+    const timer = setInterval(() => setNowTick(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, [plan?.status]);
+
+  const countdown = useMemo(() => {
+    if (plan?.status !== 'active') return null;
+    void nowTick;
+    return getMeetupCountdown(meetupIsoForUi);
+  }, [plan?.status, meetupIsoForUi, nowTick]);
+
+  const canReview = useMemo(
+    () =>
+      !!(
+        plan?.review_unlock_at &&
+        new Date(plan.review_unlock_at) <= new Date() &&
+        (plan.status === 'completed' || plan.status === 'active')
+      ),
+    [plan?.review_unlock_at, plan?.status]
+  );
+
+  const refreshArrivalNudges = useCallback(async (planId: string, uid: string) => {
+    const { data } = await supabase
+      .from('plan_arrival_nudges')
+      .select('user_id, nudged_at')
+      .eq('plan_id', planId);
+    const rows = (data ?? []) as { user_id: string; nudged_at: string }[];
+    const mine = rows.find((r) => r.user_id === uid);
+    const partner = rows.find((r) => r.user_id !== uid);
+    setMyNudgedAt(mine?.nudged_at ?? null);
+    setPartnerNudgedAt(partner?.nudged_at ?? null);
+  }, []);
+
+  useEffect(() => {
+    if (!plan?.id || plan.status !== 'active' || !user?.id || !isSupabaseConfigured) return;
+    void refreshArrivalNudges(plan.id, user.id);
+    const channel = supabase
+      .channel(`arrival-nudges-plan-${plan.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'plan_arrival_nudges',
+          filter: `plan_id=eq.${plan.id}`,
+        },
+        (payload) => {
+          const row = payload.new as { user_id?: string; nudged_at?: string };
+          if (row.user_id === user.id) {
+            setMyNudgedAt(row.nudged_at ?? null);
+          } else {
+            setPartnerNudgedAt(row.nudged_at ?? null);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      removeSupabaseChannel(channel);
+    };
+  }, [plan?.id, plan?.status, user?.id, refreshArrivalNudges]);
 
   const isCreatorEarly = !!(plan && user?.id && plan.creator_id === user.id);
   const { allowed: canSeeInterest } = usePermission('plans.see_all_likes', {
@@ -299,6 +413,12 @@ export default function PlanOverviewScreen() {
       if (acc) idSet.add(acc.bidder_id);
       for (const off of offerList) idSet.add(off.bidder_id);
 
+      let hostJoinRequests: JoinRequestWithRequester[] = [];
+      if (user?.id && pl.creator_id === user.id && pl.is_negotiable === false) {
+        hostJoinRequests = await fetchPlanJoinRequests(id);
+        for (const req of hostJoinRequests) idSet.add(req.requester_id);
+      }
+
       const { data: profs } = await supabase
         .from('profiles')
         .select(
@@ -346,23 +466,53 @@ export default function PlanOverviewScreen() {
         setMyJoinRequest(null);
       }
 
+      if (user?.id && pl.creator_id !== user.id && pl.is_paid) {
+        const escrow = await fetchViewerGuestEscrow(supabase, id, user.id);
+        setMyGuestEscrow(escrow);
+      } else {
+        setMyGuestEscrow(null);
+      }
+
+      if (user?.id && pl.creator_id === user.id && pl.is_negotiable === false) {
+        setJoinRequests(hostJoinRequests);
+      } else {
+        setJoinRequests([]);
+      }
+
       if (user?.id && pl.creator_id === user.id) {
-        const [interestRes, slots, pendingInvites] = await Promise.all([
+        const [interestRes, pendingInvites] = await Promise.all([
           supabase
             .from('plan_engagements')
             .select('*', { count: 'exact', head: true })
             .eq('plan_id', id)
             .in('kind', ['view', 'save']),
-          pl.is_group_plan ? getPlanAvailableSlots(id) : Promise.resolve(0),
           pl.is_group_plan ? countPendingInvitations(id) : Promise.resolve(0),
         ]);
         setInterestCount(interestRes.count ?? 0);
-        setAvailableSlots(slots);
         setPendingInvitationCount(pendingInvites);
       } else {
         setInterestCount(0);
-        setAvailableSlots(0);
         setPendingInvitationCount(0);
+      }
+
+      if (pl.is_group_plan) {
+        const slots = await getPlanAvailableSlots(id);
+        setAvailableSlots(slots);
+      } else {
+        setAvailableSlots(0);
+      }
+
+      if (user?.id && pl.creator_id !== user.id && pl.is_group_plan) {
+        const { data: inv } = await supabase
+          .from('plan_invitations')
+          .select('id')
+          .eq('plan_id', id)
+          .eq('invitee_user_id', user.id)
+          .eq('status', 'accepted')
+          .maybeSingle();
+        setInvitationAccepted(!!inv);
+      } else {
+        setInvitationAccepted(false);
       }
     },
     [id, user?.id]
@@ -492,7 +642,35 @@ export default function PlanOverviewScreen() {
         () => {
           if (user?.id) {
             void fetchMyJoinRequest(id, user.id).then(setMyJoinRequest);
+            void fetchViewerGuestEscrow(supabase, id, user.id).then(setMyGuestEscrow);
+            if (plan?.creator_id === user.id && plan.is_negotiable === false) {
+              void fetchPlanJoinRequests(id).then(setJoinRequests);
+            }
           }
+          void getPlanAvailableSlots(id).then(setAvailableSlots).catch(() => setAvailableSlots(0));
+          void loadRef.current({ silent: true });
+        }
+      )
+      .subscribe();
+    return () => {
+      removeSupabaseChannel(channel);
+    };
+  }, [id, user?.id, plan?.creator_id, plan?.is_negotiable]);
+
+  useEffect(() => {
+    if (!id || !isSupabaseConfigured || !user?.id) return;
+    const channel = supabase
+      .channel(`plan-guest-escrow-${id}:${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'escrow_transactions',
+          filter: `plan_id=eq.${id}`,
+        },
+        () => {
+          void fetchViewerGuestEscrow(supabase, id, user.id).then(setMyGuestEscrow);
         }
       )
       .subscribe();
@@ -500,6 +678,13 @@ export default function PlanOverviewScreen() {
       removeSupabaseChannel(channel);
     };
   }, [id, user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!id || !user?.id || !plan?.is_paid || plan.creator_id === user.id) return;
+      void fetchViewerGuestEscrow(supabase, id, user.id).then(setMyGuestEscrow);
+    }, [id, user?.id, plan?.is_paid, plan?.creator_id])
+  );
 
   useEffect(() => {
     if (!id || !isSupabaseConfigured || !user?.id) return;
@@ -518,13 +703,24 @@ export default function PlanOverviewScreen() {
           void countPendingInvitations(id)
             .then(setPendingInvitationCount)
             .catch(() => setPendingInvitationCount(0));
+          if (user?.id && plan?.creator_id !== user.id) {
+            void supabase
+              .from('plan_invitations')
+              .select('id')
+              .eq('plan_id', id)
+              .eq('invitee_user_id', user.id)
+              .eq('status', 'accepted')
+              .maybeSingle()
+              .then(({ data }) => setInvitationAccepted(!!data));
+          }
+          void loadRef.current({ silent: true });
         }
       )
       .subscribe();
     return () => {
       removeSupabaseChannel(channel);
     };
-  }, [id, user?.id]);
+  }, [id, user?.id, plan?.creator_id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -553,6 +749,10 @@ export default function PlanOverviewScreen() {
     planExpired: plan ? isPlanParticipationClosed(plan) : false,
     completionSelfAcked,
     myJoinRequest,
+    myGuestEscrow,
+    hasOptedOut,
+    invitationAccepted,
+    availableSlots: plan?.is_group_plan ? availableSlots : null,
   });
 
   const acceptedOffersSeed = useMemo(
@@ -560,14 +760,51 @@ export default function PlanOverviewScreen() {
     [offers]
   );
 
+  const loadFundedMemberCount = useCallback(async () => {
+    if (!plan?.id || !plan.is_group_plan) return;
+    const { data } = await supabase
+      .from('escrow_transactions')
+      .select(
+        'id, guest_id, host_id, payer_id, status, escrow_pattern, host_funded_at, guest_funded_at, host_share_cents, guest_share_cents, amount_cents'
+      )
+      .eq('plan_id', plan.id);
+    const funded = countGroupFundedMembers(
+      { creator_id: plan.creator_id, host_escrow_id: plan.host_escrow_id ?? null },
+      data ?? []
+    );
+    setGroupMemberCount(funded);
+
+    const guestRows = (data ?? []).filter((row) => row.guest_id != null);
+    if (plan.creator_id === user?.id) {
+      setPlanGuestEscrows(guestRows);
+    }
+
+    if (plan.creator_id === user?.id && plan.host_escrow_id) {
+      const hostRow = (data ?? []).find((row) => row.id === plan.host_escrow_id);
+      setHostEscrow((hostRow as PlanGuestEscrowSnapshot | undefined) ?? null);
+    }
+  }, [plan?.id, plan?.is_group_plan, plan?.creator_id, plan?.host_escrow_id, user?.id]);
+
   useEffect(() => {
     if (!plan?.id || !plan.is_group_plan) return;
 
-    setGroupMemberCount((plan.accepted_guest_count ?? 0) + 1);
     setGroupMaxCount((plan.max_guests ?? 0) + 1);
+    void loadFundedMemberCount();
 
     const channel = supabase
-      .channel(`plan-members-${plan.id}`)
+      .channel(`plan-funded-members-${plan.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'escrow_transactions',
+          filter: `plan_id=eq.${plan.id}`,
+        },
+        () => {
+          void loadFundedMemberCount();
+        }
+      )
       .on(
         'postgres_changes',
         {
@@ -578,15 +815,22 @@ export default function PlanOverviewScreen() {
         },
         (payload) => {
           const row = payload.new as {
-            accepted_guest_count?: number;
             max_guests?: number;
+            accepted_guest_amounts_sum_cents?: number;
+            host_escrow_id?: string | null;
+            group_closed_at?: string | null;
           };
-          if (typeof row.accepted_guest_count === 'number') {
-            setGroupMemberCount(row.accepted_guest_count + 1);
-          }
           if (typeof row.max_guests === 'number') {
             setGroupMaxCount(row.max_guests + 1);
           }
+          if (
+            row.accepted_guest_amounts_sum_cents != null ||
+            row.host_escrow_id !== undefined ||
+            row.group_closed_at !== undefined
+          ) {
+            void load();
+          }
+          void loadFundedMemberCount();
         }
       )
       .subscribe();
@@ -594,7 +838,31 @@ export default function PlanOverviewScreen() {
     return () => {
       removeSupabaseChannel(channel);
     };
-  }, [plan?.id, plan?.is_group_plan, plan?.accepted_guest_count, plan?.max_guests]);
+  }, [load, plan?.id, plan?.is_group_plan, plan?.max_guests, loadFundedMemberCount]);
+
+  const hostShareResolution = useMemo(() => {
+    if (!plan || plan.creator_id !== user?.id || !isGroupSplitPlan(plan)) return null;
+    return resolveGroupHostShareForPlan(plan, planGuestEscrows, {
+      hostEscrowRow: hostEscrow,
+      acceptedOffers: acceptedOffersSeed,
+    });
+  }, [acceptedOffersSeed, hostEscrow, plan, planGuestEscrows, user?.id]);
+
+  const hostPayShareEscrowId = useMemo(() => {
+    if (
+      !plan ||
+      plan.creator_id !== user?.id ||
+      !plan.is_group_plan ||
+      !plan.host_escrow_id ||
+      !hostEscrow ||
+      !user?.id
+    ) {
+      return null;
+    }
+    const funding = getEscrowFundingUiState(hostEscrow, user.id);
+    if (!funding.canFund) return null;
+    return plan.host_escrow_id;
+  }, [plan, hostEscrow, user?.id]);
 
   useEffect(() => {
     if (!plan?.id || !user?.id || !plan.is_group_plan || plan.creator_id === user.id) {
@@ -678,14 +946,76 @@ export default function PlanOverviewScreen() {
   }
 
   const isCreator = plan.creator_id === user?.id;
-  const isAcceptedGuest =
-    !isCreator &&
-    !!user?.id &&
-    offers.some((o) => o.bidder_id === user.id && o.status === 'accepted');
-  const meetupIso = plan.agreed_scheduled_at ?? plan.scheduled_at ?? null;
+  const meetupIso = meetupIsoForUi;
+  const arrivalWindowActive = isArrivalWindowActive(meetupIso);
+  const isPlanParticipant = isCreator || !!ctx?.isMatchedGuest;
+  const nudgePartnerUserId = isCreator
+    ? offers.find((o) => o.status === 'accepted')?.bidder_id ?? null
+    : plan.creator_id;
   const hoursUntilMeetup = meetupIso
     ? (new Date(meetupIso).getTime() - Date.now()) / (1000 * 60 * 60)
     : -1;
+  const guestOptOutEligibility = canGuestOptOutOfGroupPlan(plan, ctx?.guestMembership ?? 'none', {
+    hasOptedOut,
+    hoursUntilMeetup,
+  });
+  const showGuestOptOut =
+    !isCreator &&
+    plan.is_group_plan &&
+    guestOptOutEligibility.allowed;
+  const showHostCancelPlan = canHostCancelGroupPlan(plan, user?.id);
+
+  async function executeGuestOptOut() {
+    if (!id || isOptingOut) return;
+    setIsOptingOut(true);
+    const { data, error } = await supabase.rpc('submit_guest_opt_out', { p_plan_id: id });
+    setIsOptingOut(false);
+    setOptOutConfirmOpen(false);
+
+    if (error) {
+      const msg = error.message.includes('opt_out_window_closed')
+        ? 'The opt-out window has closed. You can no longer opt out of this plan.'
+        : error.message.includes('not_a_participant')
+          ? 'You are not a confirmed guest on this plan.'
+          : error.message;
+      showFeedback('error', 'Cannot opt out', msg);
+      return;
+    }
+
+    setHasOptedOut(true);
+    const payload = data as { triggered_minimum_cancel?: boolean };
+
+    if (payload?.triggered_minimum_cancel) {
+      showFeedback(
+        'warning',
+        'Plan cancelled',
+        'Your opt-out caused the group to fall below the minimum of 5 members. The plan has been cancelled and all contributions have been refunded to each member, including the platform fee.'
+      );
+      void load();
+    } else {
+      showFeedback('success', 'Opted out', PLATFORM_FEE_REFUND_OPT_OUT_MESSAGE);
+      void load();
+    }
+  }
+
+  function openGuestOptOutConfirm() {
+    const eligibility = canGuestOptOutOfGroupPlan(plan, ctx?.guestMembership ?? 'none', {
+      hasOptedOut,
+      hoursUntilMeetup,
+    });
+    if (!eligibility.allowed) {
+      const msg =
+        eligibility.reason === 'opt_out_window_closed'
+          ? 'The opt-out window closes 48 hours before the meetup. You can no longer opt out.'
+          : eligibility.reason === 'not_a_participant'
+            ? 'Only confirmed guests can opt out of this group plan.'
+            : 'Opt out is not available for this plan right now.';
+      setOptOutBlockedMessage(msg);
+      setOptOutBlockedOpen(true);
+      return;
+    }
+    setOptOutConfirmOpen(true);
+  }
   const showInviteEligible = isCreator && plan.is_group_plan;
   const showPromoteCard =
     isCreator &&
@@ -702,36 +1032,6 @@ export default function PlanOverviewScreen() {
     plan.boosted_until != null && new Date(plan.boosted_until).getTime() > Date.now();
   const canCalendar = planCanAddToCalendar(plan);
 
-  async function handleGuestOptOut() {
-    if (!id || isOptingOut) return;
-    setIsOptingOut(true);
-    const { data, error } = await supabase.rpc('submit_guest_opt_out', { p_plan_id: id });
-    setIsOptingOut(false);
-
-    if (error) {
-      Alert.alert(
-        'Cannot opt out',
-        error.message.includes('opt_out_window_closed')
-          ? 'The opt-out window has closed. You can no longer opt out of this plan.'
-          : error.message
-      );
-      return;
-    }
-
-    setHasOptedOut(true);
-    const payload = data as { triggered_minimum_cancel?: boolean };
-
-    if (payload?.triggered_minimum_cancel) {
-      Alert.alert(
-        'Plan cancelled',
-        'Your opt-out caused the group to fall below the minimum of 5 members. The plan has been cancelled and all contributions have been refunded to each member, including the platform fee.',
-        [{ text: 'OK', onPress: () => router.replace('/(tabs)' as Href) }]
-      );
-    } else {
-      Alert.alert('Opted out', PLATFORM_FEE_REFUND_OPT_OUT_MESSAGE);
-    }
-  }
-
   function goViewOffer() {
     if (!id || !ctx?.myOffer) return;
     if (plan && id) setPlanDetailSeed(id, plan);
@@ -741,6 +1041,14 @@ export default function PlanOverviewScreen() {
   function goNegotiate() {
     if (planExpired) {
       setExpiredModalAction('offer');
+      return;
+    }
+    if (!isCreator && ctx?.guestParticipationBlockReason === 'already_guest') {
+      showFeedback('warning', 'Already a guest', 'You are already confirmed on this plan.');
+      return;
+    }
+    if (!isCreator && ctx?.guestParticipationBlockReason === 'group_filled') {
+      showFeedback('warning', 'Group filled', 'This group plan is not accepting new offers.');
       return;
     }
     if (!isCreator && requiresVerificationGate(dbUser?.verification_status)) {
@@ -798,27 +1106,67 @@ export default function PlanOverviewScreen() {
       const msg = err instanceof Error ? err.message : '';
       if (msg === 'PLAN_EXPIRED') {
         setExpiredModalAction('join');
+      } else if (msg.includes('plan_full')) {
+        showFeedback('warning', 'Group filled', 'This group plan is not accepting new join requests.');
+      } else if (msg.includes('guest_already_confirmed') || msg.includes('guest_already_has_escrow')) {
+        showFeedback('warning', 'Already a guest', 'You are already confirmed on this plan.');
+        void loadRef.current({ silent: true });
+      } else if (msg.includes('request_already_exists')) {
+        showFeedback('warning', 'Request pending', 'You already have a join request on this plan.');
       } else {
-        Alert.alert('Something went wrong', 'Please try again.');
+        showFeedback('error', 'Something went wrong', 'Please try again.');
       }
     } finally {
       setRequestSubmitting(false);
     }
   }
 
-  function goAgreement(offerId?: string) {
-    if (!plan || !id) return;
-    if (myJoinRequest?.status === 'approved' && user?.id) {
-      void fetchGuestEscrowIdForJoinRequest(id, user.id).then((escrowId) => {
-        if (escrowId) {
-          router.push(`/escrow/${escrowId}` as Href);
-          return;
-        }
-        router.push(`/plan/${id}/agreement` as Href);
-      });
+  function openJoinRequestSheet() {
+    if (planExpired) {
+      setExpiredModalAction('join');
       return;
     }
-    const resolvedOfferId = resolveAgreementOfferId(plan, user?.id, offers, offerId);
+    if (ctx?.guestParticipationBlockReason === 'already_guest') {
+      showFeedback('warning', 'Already a guest', 'You are already confirmed on this plan.');
+      return;
+    }
+    if (ctx?.guestParticipationBlockReason === 'group_filled') {
+      showFeedback('warning', 'Group filled', 'This group plan is not accepting new join requests.');
+      return;
+    }
+    if (!ctx?.showRequestToJoin) {
+      showFeedback('warning', 'Not available', 'Join requests are not open for this plan.');
+      return;
+    }
+    if (requiresVerificationGate(dbUser?.verification_status)) {
+      setGateOpen(true);
+      return;
+    }
+    setRequestSheetOpen(true);
+  }
+
+  function goPayShare() {
+    if (ctx?.payShareEscrowId) {
+      router.push(`/escrow/${ctx.payShareEscrowId}` as Href);
+    }
+  }
+
+  function goAgreement(offerIdOrJoinRequestId?: string) {
+    if (!plan || !id) return;
+
+    if (plan.is_negotiable === false) {
+      const joinRequestId = offerIdOrJoinRequestId ?? myJoinRequest?.id ?? null;
+      router.push(
+        resolvePlanAgreementHref(plan, {
+          joinRequestId,
+          userId: user?.id,
+          offers,
+        })
+      );
+      return;
+    }
+
+    const resolvedOfferId = resolveAgreementOfferId(plan, user?.id, offers, offerIdOrJoinRequestId);
     router.push(
       resolvePlanAgreementHref(plan, {
         offerId: resolvedOfferId,
@@ -1026,6 +1374,46 @@ export default function PlanOverviewScreen() {
           submitting={requestSubmitting}
         />
       ) : null}
+      {plan && id ? (
+        <GroupHostCancellationModal
+          planId={id}
+          visible={groupCancelOpen}
+          onDismiss={() => setGroupCancelOpen(false)}
+          onCancelled={() => {
+            setGroupCancelOpen(false);
+            void load();
+          }}
+        />
+      ) : null}
+      <AppConfirmModal
+        visible={optOutConfirmOpen}
+        onClose={() => !isOptingOut && setOptOutConfirmOpen(false)}
+        kicker="Group plan"
+        title="Opt out of this plan?"
+        message={
+          'You are leaving this group plan. Your participation will end and any funded contribution will be refunded to your LinkUp wallet in full, including the platform fee.\n\nIf the group falls below the minimum membership after you leave, the plan may be cancelled and all members refunded.'
+        }
+        iconVariant="danger"
+        primaryLabel="Keep plan"
+        onPrimary={() => setOptOutConfirmOpen(false)}
+        secondaryLabel="Opt Out"
+        onSecondary={() => void executeGuestOptOut()}
+        secondaryTone="danger"
+        busyOn="secondary"
+        dismissOnBackdrop={!isOptingOut}
+      />
+      <AppConfirmModal
+        visible={optOutBlockedOpen}
+        onClose={() => setOptOutBlockedOpen(false)}
+        kicker="Group plan"
+        title="Opt out unavailable"
+        message={optOutBlockedMessage}
+        iconVariant="warning"
+        primaryLabel="OK"
+        onPrimary={() => setOptOutBlockedOpen(false)}
+        secondaryLabel="Close"
+        onSecondary={() => setOptOutBlockedOpen(false)}
+      />
       {plan && showInviteEligible ? (
         <InviteGuestsSheet
           visible={inviteSheetOpen}
@@ -1144,10 +1532,49 @@ export default function PlanOverviewScreen() {
             end={{ x: 1, y: 0 }}
             style={styles.statusPill}
           >
-            <Text style={styles.statusText}>Status · {plan.status}</Text>
+            <Text style={styles.statusText}>Status · {formatPlanMeetupStatusLabel(plan)}</Text>
           </LinearGradient>
         </View>
       </View>
+
+      {countdown ? (
+        <View style={styles.countdownBanner}>
+          <View style={styles.countdownIconWrap}>
+            <Ionicons name="time-outline" size={20} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.countdownLabel}>{countdown}</Text>
+            {meetupIso ? (
+              <Text style={styles.countdownSub}>
+                {new Date(meetupIso).toLocaleDateString('en-NG', {
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {canReview ? (
+        <Pressable
+          onPress={() => router.push(`/plan/${id}/review` as Href)}
+          style={({ pressed }) => [styles.reviewBanner, pressed && { opacity: 0.88 }]}
+          accessibilityRole="button"
+        >
+          <View style={styles.reviewIconWrap}>
+            <Ionicons name="star" size={20} color="#D97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reviewTitle}>Leave a review</Text>
+            <Text style={styles.reviewSub}>Share your experience to help the community</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#D97706" />
+        </Pressable>
+      ) : null}
 
       {isCreator && plan.is_mood_plan && !moodClosed && (plan.status === 'negotiating' || plan.status === 'agreed') ? (
         <Pressable
@@ -1198,25 +1625,46 @@ export default function PlanOverviewScreen() {
           ) : null}
         </View>
       ) : null}
-      {isAcceptedGuest &&
-      plan.is_group_plan &&
-      hoursUntilMeetup >= 48 &&
-      !hasOptedOut &&
-      plan.status !== 'cancelled' ? (
+      {hostPayShareEscrowId ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(`/escrow/${hostPayShareEscrowId}` as Href)}
+          style={({ pressed }) => [styles.hostPayCta, pressed && { opacity: 0.92 }]}
+        >
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.hostPayCtaGrad}
+          >
+            <Ionicons name="wallet-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.hostPayCtaTxt}>
+              {hostShareResolution && hostShareResolution.displayCents > 0
+                ? `Pay your share · ${formatGroupSplitCents(hostShareResolution.displayCents, plan.currency)}`
+                : 'Pay your share to activate the plan'}
+            </Text>
+          </LinearGradient>
+        </Pressable>
+      ) : null}
+      {showGuestOptOut ? (
         <View style={styles.optOutSection}>
           <Text style={styles.optOutBody}>
-            You may opt out of this Group Plan up to 48 hours before the meetup. Your contribution
-            will be refunded in full including the platform fee.
+            You may opt out up to 48 hours before the meetup. Your contribution will be refunded
+            in full including the platform fee.
           </Text>
           <Pressable
-            style={[styles.optOutButton, isOptingOut && styles.optOutButtonDisabled]}
-            onPress={() => void handleGuestOptOut()}
-            disabled={isOptingOut}
+            style={({ pressed }) => [
+              styles.optOutButton,
+              (isOptingOut || optOutConfirmOpen) && styles.optOutButtonDisabled,
+              pressed && !isOptingOut && !optOutConfirmOpen && { opacity: 0.92 },
+            ]}
+            onPress={() => openGuestOptOutConfirm()}
+            disabled={isOptingOut || optOutConfirmOpen}
           >
             {isOptingOut ? (
-              <ActivityIndicator size="small" color={colors.danger} />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.optOutButtonLabel}>Opt out of this plan</Text>
+              <Text style={styles.optOutButtonLabel}>Opt Out</Text>
             )}
           </Pressable>
         </View>
@@ -1255,7 +1703,7 @@ export default function PlanOverviewScreen() {
         <PlanInterestedStrip planId={plan.id} hostUserId={plan.creator_id} currentUserId={user.id} />
       ) : null}
 
-      {!actionContextReady && !showInviteEligible ? <ActionButtonsSkeleton /> : null}
+      {!actionButtonsReady && !showInviteEligible ? <ActionButtonsSkeleton /> : null}
 
       {showPromoteCard ? (
         <View style={styles.planActionsCard}>
@@ -1380,65 +1828,149 @@ export default function PlanOverviewScreen() {
         </View>
       ) : null}
 
-      {actionContextReady ? (
+      {actionButtonsReady ? (
         <>
-      {isCreator && ctx?.showGroupGuestAgreements ? (
+      {isCreator &&
+      (ctx?.showGroupGuestAgreements ||
+        (plan.is_negotiable === false &&
+          joinRequests.some((request) => request.status === 'approved'))) ? (
         <View style={styles.guestAgreementCard}>
           <Text style={styles.guestAgreementTitle}>Accepted guests</Text>
-          {ctx.acceptedGuests.map((guest) => {
-            const prof = profilesById[guest.userId];
-            const name = prof?.display_name?.trim() || 'Guest';
-            return (
-              <View key={guest.offerId} style={styles.guestAgreementRow}>
-                <Avatar uri={prof?.avatar_url} name={name} size={40} />
-                <Text style={styles.guestAgreementName} numberOfLines={1}>
-                  {name}
-                </Text>
-                <View style={styles.guestAgreementActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`View agreement for ${name}`}
-                    onPress={() => goAgreement(guest.offerId)}
-                    style={({ pressed }) => [styles.guestAgreementBtnOuter, pressed && { opacity: 0.92 }]}
-                  >
-                    <LinearGradient
-                      colors={[colors.primary, colors.secondary]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.guestAgreementBtnRing}
-                    >
-                      <View style={styles.guestAgreementBtnInner}>
-                        <Ionicons name="document-text-outline" size={14} color={colors.primary} />
-                        <Text style={styles.guestAgreementBtnTxt}>Agreement</Text>
+          {plan.is_negotiable !== false
+            ? ctx.acceptedGuests.map((guest) => {
+                const prof = profilesById[guest.userId];
+                const name = prof?.display_name?.trim() || 'Guest';
+                return (
+                  <View key={guest.offerId} style={styles.guestAgreementRow}>
+                    <Avatar uri={prof?.avatar_url} name={name} size={40} />
+                    <Text style={styles.guestAgreementName} numberOfLines={1}>
+                      {name}
+                    </Text>
+                    <View style={styles.guestAgreementActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`View agreement for ${name}`}
+                        onPress={() => goAgreement(guest.offerId)}
+                        style={({ pressed }) => [
+                          styles.guestAgreementBtnOuter,
+                          pressed && { opacity: 0.92 },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={[colors.primary, colors.secondary]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.guestAgreementBtnRing}
+                        >
+                          <View style={styles.guestAgreementBtnInner}>
+                            <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+                            <Text style={styles.guestAgreementBtnTxt}>Agreement</Text>
+                          </View>
+                        </LinearGradient>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Message ${name}`}
+                        onPress={async () => {
+                          if (!user) return;
+                          try {
+                            await openDirectChat(supabase, user.id, guest.userId, {
+                              skipOfferGate: true,
+                            });
+                          } catch (e) {
+                            showFeedback(
+                              'error',
+                              'Chat',
+                              e instanceof Error ? e.message : 'Could not open chat'
+                            );
+                          }
+                        }}
+                        style={({ pressed }) => [
+                          styles.guestMessageBtnOuter,
+                          pressed && { opacity: 0.92 },
+                        ]}
+                      >
+                        <LinearGradient
+                          colors={[colors.primary, colors.secondary]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={styles.guestMessageBtnGrad}
+                        >
+                          <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
+                        </LinearGradient>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })
+            : joinRequests
+                .filter((request) => request.status === 'approved')
+                .map((request) => {
+                  const requester = profilesById[request.requester_id] ?? request.requester;
+                  const name = requester?.display_name?.trim() || 'Guest';
+                  return (
+                    <View key={request.id} style={styles.guestAgreementRow}>
+                      <Avatar uri={requester?.avatar_url ?? null} name={name} size={40} />
+                      <Text style={styles.guestAgreementName} numberOfLines={1}>
+                        {name}
+                      </Text>
+                      <View style={styles.guestAgreementActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`View agreement for ${name}`}
+                          onPress={() => goAgreement(request.id)}
+                          style={({ pressed }) => [
+                            styles.guestAgreementBtnOuter,
+                            pressed && { opacity: 0.92 },
+                          ]}
+                        >
+                          <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.guestAgreementBtnRing}
+                          >
+                            <View style={styles.guestAgreementBtnInner}>
+                              <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+                              <Text style={styles.guestAgreementBtnTxt}>Agreement</Text>
+                            </View>
+                          </LinearGradient>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Message ${name}`}
+                          onPress={async () => {
+                            if (!user) return;
+                            try {
+                              await openDirectChat(supabase, user.id, request.requester_id, {
+                                skipOfferGate: true,
+                              });
+                            } catch (e) {
+                              showFeedback(
+                                'error',
+                                'Chat',
+                                e instanceof Error ? e.message : 'Could not open chat'
+                              );
+                            }
+                          }}
+                          style={({ pressed }) => [
+                            styles.guestMessageBtnOuter,
+                            pressed && { opacity: 0.92 },
+                          ]}
+                        >
+                          <LinearGradient
+                            colors={[colors.primary, colors.secondary]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.guestMessageBtnGrad}
+                          >
+                            <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
+                          </LinearGradient>
+                        </Pressable>
                       </View>
-                    </LinearGradient>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Message ${name}`}
-                    onPress={async () => {
-                      if (!user) return;
-                      try {
-                        await openDirectChat(supabase, user.id, guest.userId, { skipOfferGate: true });
-                      } catch (e) {
-                        showFeedback('error', 'Chat', e instanceof Error ? e.message : 'Could not open chat');
-                      }
-                    }}
-                    style={({ pressed }) => [styles.guestMessageBtnOuter, pressed && { opacity: 0.92 }]}
-                  >
-                    <LinearGradient
-                      colors={[colors.primary, colors.secondary]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.guestMessageBtnGrad}
-                    >
-                      <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
-                    </LinearGradient>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
+                    </View>
+                  );
+                })}
         </View>
       ) : null}
 
@@ -1484,17 +2016,36 @@ export default function PlanOverviewScreen() {
       ) : null}
 
       {isCreator && ctx?.showMessage && ctx.showGroupGuestAgreements ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => void openHostMessage()}
-          disabled={groupChatBusy}
-          style={({ pressed }) => [styles.groupChatBtn, pressed && { opacity: 0.92 }]}
-        >
-          <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
-          <Text style={styles.groupChatLabel}>
-            {groupChatBusy ? 'Opening…' : 'Message group'}
-          </Text>
-        </Pressable>
+        <View style={styles.hostGroupActionRow}>
+          {showHostCancelPlan ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setGroupCancelOpen(true)}
+              style={({ pressed }) => [
+                styles.hostCancelBtn,
+                pressed && { opacity: 0.92 },
+              ]}
+            >
+              <Text style={styles.hostCancelBtnTxt}>Cancel plan</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void openHostMessage()}
+            disabled={groupChatBusy}
+            style={({ pressed }) => [
+              styles.hostMessageBtn,
+              showHostCancelPlan ? styles.hostMessageBtnHalf : styles.hostMessageBtnFull,
+              groupChatBusy && styles.hostMessageBtnDisabled,
+              pressed && !groupChatBusy && { opacity: 0.92 },
+            ]}
+          >
+            <Ionicons name="chatbubbles-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.hostMessageBtnTxt}>
+              {groupChatBusy ? 'Opening…' : 'Message group'}
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {isCreator && plan.active_expires_at && !plan.is_mood_plan ? (
@@ -1615,26 +2166,45 @@ export default function PlanOverviewScreen() {
         </View>
       </LinearGradient>
 
-      {actionContextReady ? (
+      {actionButtonsReady ? (
         <>
+      {plan.status === 'active' &&
+      arrivalWindowActive &&
+      user?.id &&
+      isPlanParticipant ? (
+        <ArrivalNudgeButton
+          planId={id!}
+          currentUserId={user.id}
+          myNudgedAt={myNudgedAt}
+          partnerNudgedAt={partnerNudgedAt}
+          partnerUserId={nudgePartnerUserId}
+          onNudged={() => {
+            if (id && user?.id) void refreshArrivalNudges(id, user.id);
+          }}
+        />
+      ) : null}
+
+      {!isCreator && ctx?.isBrowsingGuest && ctx.guestParticipationBlockReason === 'group_filled' ? (
+        <View style={styles.groupFilledBanner}>
+          <Ionicons name="people-outline" size={18} color={colors.primary} />
+          <Text style={styles.groupFilledBannerTxt}>Group filled</Text>
+        </View>
+      ) : null}
+
       {!isCreator && ctx?.showSave && ctx.showMakeOffer ? (
         <View style={styles.dualActionRow}>
           <Pressable
             accessibilityRole="button"
             onPress={() => void toggleSave()}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
+            style={styles.dualActionFlex}
           >
-            <PlanSaveButtonContent key={saved ? 'saved' : 'outline'} saved={saved} />
+            <PlanSaveButtonContent saved={saved} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={goNegotiate}
             disabled={planExpired}
-            style={({ pressed }) => [
-              styles.dualActionFlex,
-              planExpired && styles.dualOfferMuted,
-              pressed && !planExpired && { opacity: 0.92 },
-            ]}
+            style={styles.dualActionFlex}
           >
             <LinearGradient
               colors={
@@ -1652,82 +2222,19 @@ export default function PlanOverviewScreen() {
         </View>
       ) : null}
 
-      {!isCreator && ctx?.showSave && ctx.showRequestToJoin ? (
-        <View style={styles.dualActionRow}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void toggleSave()}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
-          >
-            <PlanSaveButtonContent key={saved ? 'saved' : 'outline'} saved={saved} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setRequestSheetOpen(true)}
-            disabled={planExpired}
-            style={({ pressed }) => [
-              styles.dualActionFlex,
-              planExpired && styles.dualOfferMuted,
-              pressed && !planExpired && { opacity: 0.92 },
-            ]}
-          >
-            <LinearGradient
-              colors={
-                planExpired ? [colors.border, colors.border] : [colors.primary, colors.secondary]
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.dualOfferGradient}
-            >
-              <Ionicons name="person-add-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={[styles.dualOfferLabel, planExpired && styles.dualOfferLabelMuted]}>
-                Request to join
-              </Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {!isCreator && ctx?.showSave && ctx.showViewRequest ? (
-        <View style={styles.dualActionRow}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void toggleSave()}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
-          >
-            <PlanSaveButtonContent key={saved ? 'saved' : 'outline'} saved={saved} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={goViewJoinRequest}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
-          >
-            <LinearGradient
-              colors={[colors.primary, colors.secondary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.dualOfferGradient}
-            >
-              <Ionicons name="time-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-              <Text style={styles.dualOfferLabel}>View request</Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
-      ) : null}
-
       {!isCreator && ctx?.showSave && ctx.showViewOffer ? (
         <View style={styles.dualActionRow}>
           <Pressable
             accessibilityRole="button"
             onPress={() => void toggleSave()}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
+            style={styles.dualActionFlex}
           >
-            <PlanSaveButtonContent key={saved ? 'saved' : 'outline'} saved={saved} />
+            <PlanSaveButtonContent saved={saved} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={goViewOffer}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
+            style={styles.dualActionFlex}
           >
             <LinearGradient
               colors={[colors.primary, colors.secondary]}
@@ -1779,9 +2286,9 @@ export default function PlanOverviewScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={() => void toggleSave()}
-            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
+            style={styles.dualActionFlex}
           >
-            <PlanSaveButtonContent key={saved ? 'saved' : 'outline'} saved={saved} />
+            <PlanSaveButtonContent saved={saved} />
           </Pressable>
         </View>
       ) : null}
@@ -1792,14 +2299,39 @@ export default function PlanOverviewScreen() {
       !ctx.showViewOffer &&
       !ctx.showRequestToJoin &&
       !ctx.showViewRequest &&
+      !ctx.showPayShare &&
       !guestCalendarSaveRow ? (
         <View style={styles.primaryBtn}>
           <Pressable
             accessibilityRole="button"
             onPress={() => void toggleSave()}
-            style={({ pressed }) => [styles.dualSaveFullWidth, pressed && { opacity: 0.92 }]}
+            style={styles.dualSaveFullWidth}
           >
-            <PlanSaveButtonContent key={saved ? 'saved' : 'outline'} saved={saved} />
+            <PlanSaveButtonContent saved={saved} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {!isCreator && ctx?.showViewAgreement && !ctx.showMessage ? (
+        <View style={styles.dualActionRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => goAgreement()}
+            style={({ pressed }) => [styles.dualActionFlex, pressed && { opacity: 0.92 }]}
+          >
+            <LinearGradient
+              colors={[colors.primary, colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.dualSaveGradientRing, styles.agreementRingFill]}
+            >
+              <View style={styles.agreementOutlineInner}>
+                <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+                <Text style={styles.agreementOutlineTxt} numberOfLines={2}>
+                  {VIEW_AGREEMENT_PAY_LABEL}
+                </Text>
+              </View>
+            </LinearGradient>
           </Pressable>
         </View>
       ) : null}
@@ -1820,7 +2352,7 @@ export default function PlanOverviewScreen() {
               <View style={styles.agreementOutlineInner}>
                 <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                 <Text style={styles.agreementOutlineTxt} numberOfLines={2}>
-                  View agreement
+                  {VIEW_AGREEMENT_PAY_LABEL}
                 </Text>
               </View>
             </LinearGradient>
@@ -1854,29 +2386,141 @@ export default function PlanOverviewScreen() {
           pill
         />
       ) : null}
+
+      {(plan.status === 'active' || plan.status === 'completed') &&
+      user?.id &&
+      isPlanParticipant ? (
+        <Pressable
+          onPress={() => router.push(`/plan/${id}/exigency` as Href)}
+          style={({ pressed }) => [styles.reportIssueBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+        >
+          <Ionicons name="warning-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.reportIssueTxt}>Report an issue</Text>
+        </Pressable>
+      ) : null}
         </>
       ) : null}
 
+      {plan.is_negotiable === false && !isCreator ? (
+        !actionContextReady || !ctx ? (
+          <View style={styles.offersSectionWrap}>
+            <PlanOffersListSkeleton />
+          </View>
+        ) : (
+          <GuestYourJoinRequestCard
+            plan={plan}
+            ctx={ctx}
+            myJoinRequest={myJoinRequest}
+            planExpired={planExpired}
+            onOpenRequestSheet={openJoinRequestSheet}
+            onPayShare={goPayShare}
+          />
+        )
+      ) : (
       <View style={styles.offersSectionWrap}>
         <View style={styles.offersSectionCard}>
           <View style={styles.offersSectionHeader}>
             <View style={styles.offersSectionTitleRow}>
-              <Text style={styles.offersSectionTitle}>Recent offers</Text>
-              {actionContextReady && offers.length > 0 ? (
+              <Text style={styles.offersSectionTitle}>
+                {plan.is_negotiable === false ? 'Recent requests' : 'Recent offers'}
+              </Text>
+              {actionContextReady && plan.is_negotiable !== false && offers.length > 0 ? (
                 <View style={styles.offersCountPill}>
                   <Text style={styles.offersCountPillText}>{offers.length}</Text>
                 </View>
               ) : null}
+              {actionContextReady && plan.is_negotiable === false && joinRequests.length > 0 ? (
+                <View style={styles.offersCountPill}>
+                  <Text style={styles.offersCountPillText}>{joinRequests.length}</Text>
+                </View>
+              ) : null}
             </View>
             <Text style={styles.offersSectionSubtitle}>
-              {isCreator
-                ? 'Everyone who has put forward an offer on this plan.'
-                : 'Latest activity from people interested in this plan.'}
+              {plan.is_negotiable === false
+                ? 'Guests who asked to join this plan at the listed price.'
+                : isCreator
+                  ? 'Everyone who has put forward an offer on this plan.'
+                  : 'Latest activity from people interested in this plan.'}
             </Text>
           </View>
 
           {!actionContextReady ? (
             <PlanOffersListSkeleton />
+          ) : plan.is_negotiable === false ? (
+            joinRequests.length === 0 ? (
+              <View style={styles.offersEmpty}>
+                <LinearGradient
+                  colors={[colors.primary, colors.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.offersEmptyIconGrad}
+                >
+                  <Ionicons name="people-outline" size={30} color="#FFFFFF" />
+                </LinearGradient>
+                <Text style={styles.offersEmptyTitle}>No requests yet</Text>
+                <Text style={styles.offersEmptyBody}>
+                  When guests request to join at your listed price, they appear here.
+                </Text>
+                {isCreator && ctx?.showManageRequests ? (
+                  <Button
+                    title="Manage requests"
+                    onPress={() => router.push(`/plan/${plan.id}/requests` as Href)}
+                    pill
+                    style={styles.hostJoinManageBtn}
+                  />
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.offersList}>
+                {joinRequests.map((request, index) => {
+                  const chip = offerStatusChip(
+                    request.status === 'approved'
+                      ? 'accepted'
+                      : request.status === 'declined'
+                        ? 'declined'
+                        : 'pending'
+                  );
+                  const requester = profilesById[request.requester_id] ?? request.requester;
+                  const name = requester?.display_name?.trim() || 'Guest';
+                  const slotLabel = resolveJoinRequestSlotCentsLabel(plan);
+                  return (
+                    <View key={request.id}>
+                      {index > 0 ? <View style={styles.offerRowDivider} /> : null}
+                      <View style={styles.offerRow}>
+                        <Avatar uri={requester?.avatar_url ?? null} name={name} size={44} />
+                        <View style={styles.offerRowBody}>
+                          <View style={styles.offerRowTop}>
+                            <Text style={styles.offerRowName} numberOfLines={1}>
+                              {name}
+                            </Text>
+                          </View>
+                          {slotLabel ? (
+                            <Text style={styles.offerRowAmount} numberOfLines={1}>
+                              {slotLabel}
+                            </Text>
+                          ) : null}
+                          {request.message?.trim() ? (
+                            <Text style={styles.offerRowMessage} numberOfLines={3}>
+                              {request.message.trim()}
+                            </Text>
+                          ) : null}
+                          <View style={[styles.offerStatusPill, { backgroundColor: chip.bg }]}>
+                            <Text style={[styles.offerStatusPillText, { color: chip.color }]}>
+                              {request.status === 'pending'
+                                ? 'Pending'
+                                : request.status === 'approved'
+                                  ? 'Approved'
+                                  : 'Declined'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )
           ) : offers.length === 0 ? (
             <View style={styles.offersEmpty}>
               <LinearGradient
@@ -1897,7 +2541,7 @@ export default function PlanOverviewScreen() {
           ) : (
             <View style={styles.offersList}>
               {offers.map((item, index) => {
-                const chip = offerStatusChip(item.status);
+                const offerExpired = isOfferExpired(item);
                 const matched = plan.accepted_offer_id === item.id;
                 const prof = profilesById[item.bidder_id];
                 const bidderName =
@@ -1931,11 +2575,7 @@ export default function PlanOverviewScreen() {
                           <Text style={styles.offerRowAmount} numberOfLines={1}>
                             {amountLabel}
                           </Text>
-                          <View style={[styles.offerStatusPill, { backgroundColor: chip.bg }]}>
-                            <Text style={[styles.offerStatusPillText, { color: chip.color }]}>
-                              {chip.label}
-                            </Text>
-                          </View>
+                          <OfferStatusBadge status={item.status} expired={offerExpired} />
                         </View>
                         {matched ? (
                           <LinearGradient
@@ -1970,6 +2610,7 @@ export default function PlanOverviewScreen() {
           )}
         </View>
       </View>
+      )}
     </ScrollView>
   );
 
@@ -2124,6 +2765,82 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 13, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.primary, textTransform: 'capitalize' },
+  countdownBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(108,99,255,0.08)',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(108,99,255,0.2)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  countdownIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(108,99,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countdownLabel: {
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  countdownSub: {
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#FFFBEB',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  reviewIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewTitle: {
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  reviewSub: {
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    color: '#B45309',
+    marginTop: 1,
+  },
+  reportIssueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.sm,
+  },
+  reportIssueTxt: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+  },
   peopleSectionBorder: {
     borderRadius: radius.xl,
     padding: 2,
@@ -2245,6 +2962,15 @@ const styles = StyleSheet.create({
   agreementMessageTxt: { fontSize: 14, fontWeight: '800',
     fontFamily: fonts.bold, color: '#FFFFFF', letterSpacing: -0.2 },
   primaryBtn: { marginBottom: spacing.sm },
+  payShareHint: {
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    lineHeight: 18,
+  },
   planActionsCard: {
     marginBottom: spacing.md,
     borderRadius: radius.xl,
@@ -2536,12 +3262,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dualSaveFilled: {
+    flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
     minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
     paddingVertical: 14,
     paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: PLAN_DUAL_CTA_RADIUS,
+  },
+  dualSaveOutline: {
+    flex: 1,
+    alignSelf: 'stretch',
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(94, 82, 255, 0.25)',
+    borderRadius: PLAN_DUAL_CTA_RADIUS,
+    minHeight: PLAN_DUAL_CTA_MIN_HEIGHT,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dualSaveLabel: {
     fontSize: 15,
@@ -2574,7 +3317,6 @@ const styles = StyleSheet.create({
   dualOfferLabelMuted: {
     color: colors.textMuted,
   },
-  dualOfferMuted: { opacity: 0.55 },
   offersSectionWrap: {
     marginTop: spacing.xl + spacing.sm,
     paddingTop: spacing.lg,
@@ -2669,6 +3411,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   offersList: { marginTop: spacing.xs },
+  hostJoinManageBtn: { marginTop: spacing.md, alignSelf: 'stretch' },
   offerRowDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'rgba(94, 82, 255, 0.1)',
@@ -2791,6 +3534,26 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     color: '#B45309',
   },
+  hostPayCta: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: 50,
+    overflow: 'hidden',
+  },
+  hostPayCtaGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
+  },
+  hostPayCtaTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+  },
   optOutSection: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
@@ -2809,16 +3572,79 @@ const styles = StyleSheet.create({
   },
   optOutButton: {
     borderRadius: radius.button,
-    paddingVertical: spacing.sm,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.danger,
+    justifyContent: 'center',
+    backgroundColor: colors.danger,
+    minHeight: 50,
   },
   optOutButtonDisabled: { opacity: 0.6 },
   optOutButtonLabel: {
     fontSize: 15,
     fontWeight: '800',
     fontFamily: fonts.bold,
-    color: colors.danger,
+    color: '#FFFFFF',
+  },
+  hostGroupActionRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  hostCancelBtn: {
+    flex: 1,
+    borderRadius: radius.button,
+    backgroundColor: colors.danger,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  hostCancelBtnTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+  },
+  hostMessageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.button,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    minHeight: 50,
+    backgroundColor: colors.primary,
+  },
+  hostMessageBtnHalf: { flex: 1 },
+  hostMessageBtnFull: { flex: 1, marginHorizontal: spacing.md, marginBottom: spacing.md },
+  hostMessageBtnDisabled: { opacity: 0.6 },
+  hostMessageBtnTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: '#FFFFFF',
+  },
+  groupFilledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(94, 82, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(94, 82, 255, 0.14)',
+  },
+  groupFilledBannerTxt: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: fonts.bold,
+    color: colors.text,
   },
 });
