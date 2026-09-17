@@ -26,7 +26,9 @@
 - Card swipe: physics-based follow with resistance at edges
 - Micro-interactions: `200ms` ease-in-out for state changes (button press, icon tap)
 
-**Tab icon:** Heart symbol inside a ring glyph. Label: **MatchMaker**. MatchMaker accent `#9B1B4B` when active, muted when inactive.
+**Tab icon:** Flat SVG — heart shape with an elliptical orbital ring crossing in front and behind it. Same stroke weight as existing Ionicons tab icons (1.5pt inactive, 2pt active). No fill on heart in inactive state; `#9B1B4B` fill at 15% opacity on heart in active state. Orbital ring back arc at 35% opacity. Both arcs and heart stroke use `currentColor`.
+
+Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Active colour: `#9B1B4B`. Inactive: standard tab inactive muted colour.
 
 
 ---
@@ -157,21 +159,35 @@ Gate check runs in sequence (server-side, single round trip):
 The FIRST failing gate is shown. User resolves it and returns.
 ```
 
-**Subscription gate screen:**
-- Background: MatchMaker warm `#FDF8F4`
-- Icon: ring-heart glyph in `#9B1B4B`, 48pt, centred
-- Heading: "MatchMaker is a Gold feature"
-- Body: "Upgrade your LinkUp subscription to access intentional matchmaking designed for people serious about a long-term relationship."
-- CTA primary: "Upgrade to Gold" → navigates to subscription screen
-- CTA secondary: "Learn more about Gold" → subscription benefits sheet
-- Back chevron top-left — returns to previous tab
+**Gate pattern — ALL gates (subscription, KYC, cooldown, suspension):**
 
-**KYC gate screen:**
-- Icon: shield with checkmark in `#6C63FF`
-- Heading: "Verify your identity first"
-- Body: "MatchMaker is built on trust. We verify every member before they enter the pool — to protect you and everyone else."
-- CTA primary: "Complete verification" → /kyc
-- CTA secondary: "Why is this required?" → inline expandable explanation
+The MatchMaker tab is always accessible in the navigation. When a gate is not met:
+1. User lands on the MatchMaker screen
+2. Real pool profiles (up to 6) are fetched and rendered beneath a blur
+3. A non-closeable modal sits above the blur with dynamic content
+4. Blurred content has pointer-events disabled — cannot be interacted with
+5. Intent Declaration and Values Setup use full-screen overlays (no blur)
+
+**Modal content by gate state:**
+
+| Gate | Icon | Heading | Body | CTA |
+|---|---|---|---|---|
+| Subscription | Ring-heart `#9B1B4B` | "MatchMaker is a Gold feature and above" | "Upgrade to Gold or a subscription plan higher than Gold to access intentional matchmaking designed for people serious about finding a long-term relationship." | "Upgrade to Gold" → /subscription |
+| KYC | Shield checkmark `#6C63FF` | "Verify your identity first" | "MatchMaker requires identity verification before you enter the pool — to protect you and every other member." | "Complete verification" → /kyc |
+| Cooldown | Clock `#7B6E65` | "MatchMaker is paused for [N] days" | "MatchMaker is built for intentional connections. Your access resumes on [date]." | "Got it" → modal collapses to persistent banner |
+| Suspension | Warning `#9B1B4B` | "MatchMaker access suspended" | "Your MatchMaker access is suspended for [N] days due to a contact-sharing policy violation. All other LinkUp features remain accessible." | "Got it" → modal collapses to persistent banner |
+
+**After "Got it" (cooldown/suspension):**
+Modal collapses. A persistent amber banner appears at the top of the still-blurred screen:
+`[Clock icon]  "MatchMaker resumes in [N] days"  [Days pill]`
+Pool stays blurred and non-interactive.
+
+**Modal rules:**
+- No X button
+- No dismiss gesture
+- No tap-outside-to-close
+- `onRequestClose` is intentionally empty (mobile)
+- Subscription and KYC modals: not dismissible under any circumstance — user must take the CTA action
 
 ---
 

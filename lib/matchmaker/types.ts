@@ -2,18 +2,22 @@ export type MatchMakerGate =
   | 'subscription'
   | 'kyc'
   | 'cooldown'
+  | 'suspended'
   | 'intent'
   | 'values'
   | 'reflection'
   | 'healing'
   | 'reentry'
   | 'connection'
-  | 'pool';
+  | 'pool'
+  | 'open';
 
 export type MatchMakerGateState = {
   gate: MatchMakerGate;
   connection_id?: string;
+  connection_status?: string;
   cooldown_until?: string;
+  suspension_until?: string;
   reason?: string;
 };
 

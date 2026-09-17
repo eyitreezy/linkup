@@ -35,6 +35,20 @@ export async function passMatchMakerInterest(_toUserId: string): Promise<void> {
   // Server-side pass can be added later; client removes card locally for MVP.
 }
 
+/** Blurred gate backdrop — real profiles, no dealbreaker filters for gated users. */
+export async function fetchMatchMakerPoolPreview(limit = 6): Promise<MatchMakerPoolProfile[]> {
+  const { data, error } = await supabase.rpc('matchmaker_get_pool_preview', {
+    p_limit: limit,
+  });
+  if (error) throw error;
+  const rows = Array.isArray(data)
+    ? data
+    : typeof data === 'string'
+      ? (JSON.parse(data) as unknown[])
+      : [];
+  return rows.map((row) => normalizePoolRow(row as Record<string, unknown>));
+}
+
 function normalizePoolRow(row: Record<string, unknown>): MatchMakerPoolProfile {
   const preferences = row.preferences as { interests?: string[] } | null | undefined;
   const interests = Array.isArray(row.interests)

@@ -70,7 +70,9 @@ export default function TabsLayout() {
         options={{
           headerShown: false,
           tabBarLabel: 'MatchMaker',
-          tabBarIcon: ({ color, size }) => <MatchMakerTabIcon color={color} size={size} />,
+          tabBarIcon: ({ color, focused }) => (
+            <MatchMakerTabIcon size={24} color={focused ? '#9B1B4B' : color} active={focused} />
+          ),
         }}
       />
       <Tabs.Screen

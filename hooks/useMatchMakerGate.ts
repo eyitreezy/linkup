@@ -29,6 +29,6 @@ export function useMatchMakerGate() {
     loading,
     error,
     refresh,
-    route: state ? gateRouteFor(state) : '/matchmaker/pool',
+    route: state ? gateRouteFor(state) : null,
   };
 }

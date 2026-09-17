@@ -15,7 +15,7 @@ export default function MatchMakerReentryScreen() {
       <Text style={styles.body}>
         We have updated your MatchMaker profile based on what you shared. Your pool is waiting.
       </Text>
-      <Pressable onPress={() => router.replace('/matchmaker/pool' as Href)} style={{ marginTop: spacing.xl, width: '100%', paddingHorizontal: spacing.lg }}>
+      <Pressable onPress={() => router.replace('/matchmaker' as Href)} style={{ marginTop: spacing.xl, width: '100%', paddingHorizontal: spacing.lg }}>
         <LinearGradient colors={[...MM_CTA_GRADIENT]} style={styles.cta}>
           <Text style={styles.ctaText}>Enter MatchMaker</Text>
         </LinearGradient>
