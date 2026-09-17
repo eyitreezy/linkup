@@ -204,6 +204,11 @@ export default function ProfileScreen() {
                 onPress={() => router.push('/settings/edit-profile' as Href)}
               />
               <ProfileSettingsRow
+                icon="bookmark-outline"
+                label="Saved plans"
+                onPress={() => router.push('/(tabs)/saved' as Href)}
+              />
+              <ProfileSettingsRow
                 icon="shield-checkmark-outline"
                 label="Verification status"
                 subtitle={dbUser?.verification_status}

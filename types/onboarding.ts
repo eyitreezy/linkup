@@ -1,6 +1,7 @@
 /**
  * Client-side onboarding draft (maps to profiles + preferences JSONB).
  */
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import type { ProfilePreferences } from '@/types/database';
 import type { PrimaryPhotoRef } from '@/lib/profile/media/types';
 
@@ -52,6 +53,8 @@ export type OnboardingDraft = {
   adultConfirmed: boolean;
   /** Optional step 4 */
   skipContactsImport: boolean;
+  /** MatchMaker pre-population — optional in onboarding */
+  communicationStyle: string | null;
 };
 
 export function defaultOnboardingDraft(partial?: Partial<OnboardingDraft>): OnboardingDraft {
@@ -81,6 +84,7 @@ export function defaultOnboardingDraft(partial?: Partial<OnboardingDraft>): Onbo
     safetyTipsAcknowledged: false,
     adultConfirmed: false,
     skipContactsImport: true,
+    communicationStyle: null,
     ...partial,
   };
 }
@@ -96,7 +100,7 @@ export function preferencesFromDraft(draft: OnboardingDraft): ProfilePreferences
       answer,
     })),
     show_me: draft.showMe,
-    self_gender: draft.selfGender ?? undefined,
+    self_gender: normalizeProfileGender(draft.selfGender) ?? undefined,
     distance_unit: 'km',
     safety_tips_acknowledged: draft.safetyTipsAcknowledged,
     adult_confirmed: draft.adultConfirmed || undefined,

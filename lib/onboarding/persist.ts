@@ -9,6 +9,7 @@ import type { OnboardingDraft } from '@/types/onboarding';
 import { preferencesFromDraft } from '@/types/onboarding';
 import { ONBOARDING_TOTAL_STEPS } from '@/lib/onboarding/constants';
 import { getOnboardingFinishBlocker } from '@/lib/onboarding/validation';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import type { ProfilePreferences } from '@/types/database';
 
@@ -112,7 +113,7 @@ export async function saveOnboardingStep(args: {
       display_name: draft.displayName.trim(),
       bio: draft.bio.trim() || null,
       birth_date: birthIso(draft.birthDate),
-      gender: draft.selfGender,
+      gender: normalizeProfileGender(draft.selfGender),
       photo_urls,
       primary_photo_url,
       avatar_url,
@@ -120,6 +121,7 @@ export async function saveOnboardingStep(args: {
       age_max: draft.ageMax,
       radius_km: draft.radiusKm,
       is_profile_public: draft.profilePublic,
+      communication_style: draft.communicationStyle,
       ...profileLocationFromDraft(draft),
       preferences: mergedPrefs,
       ...(typeof screeningTrust === 'number' ? { ai_trust_score: screeningTrust } : {}),
@@ -216,7 +218,7 @@ export async function finalizeOnboarding(args: {
       display_name: draft.displayName.trim(),
       bio: draft.bio.trim() || null,
       birth_date: birthIso(draft.birthDate),
-      gender: draft.selfGender,
+      gender: normalizeProfileGender(draft.selfGender),
       photo_urls,
       primary_photo_url,
       avatar_url,
@@ -224,6 +226,7 @@ export async function finalizeOnboarding(args: {
       age_max: draft.ageMax,
       radius_km: draft.radiusKm,
       is_profile_public: draft.profilePublic,
+      communication_style: draft.communicationStyle,
       ...profileLocationFromDraft(draft),
       onboarding_status: mode === 'publish' ? 'complete' : 'pending',
       ...(typeof finalizeTrust === 'number' ? { ai_trust_score: finalizeTrust } : {}),

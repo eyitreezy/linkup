@@ -245,6 +245,37 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     router.push('/subscription' as Href);
     return;
   }
+  if (t === 'matchmaker_mutual_connection' && data?.connection_id) {
+    router.push(`/matchmaker/connection/${data.connection_id}` as Href);
+    return;
+  }
+  if (t === 'matchmaker_activity_revealed' && data?.connection_id) {
+    router.push(`/matchmaker/connection/${data.connection_id}/activity` as Href);
+    return;
+  }
+  if (t === 'matchmaker_ready_signal' && data?.conversation_id) {
+    router.push(`/chat/${data.conversation_id}` as Href);
+    return;
+  }
+  if (t === 'matchmaker_plan_unlocked' && data?.connection_id) {
+    router.push(`/matchmaker/connection/${data.connection_id}` as Href);
+    return;
+  }
+  if (t === 'matchmaker_connection_ended') {
+    router.push('/matchmaker/reflect' as Href);
+    return;
+  }
+  if (t === 'matchmaker_day10_nudge' && data?.connection_id) {
+    router.push(`/matchmaker/connection/${data.connection_id}` as Href);
+    return;
+  }
+  if (t === 'matchmaker_contact_sharing_suspension') {
+    router.push('/matchmaker' as Href);
+    return;
+  }
+  if (t === 'matchmaker_pool_removal') {
+    return;
+  }
   if (t === 'report_submitted' || t === 'moderation_flagged' || t === 'meet_type_submitted') {
     const adminTab =
       data && typeof data === 'object' && typeof (data as { adminTab?: string }).adminTab === 'string'

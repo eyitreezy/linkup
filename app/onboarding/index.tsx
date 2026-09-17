@@ -56,6 +56,7 @@ import {
   type OnboardingValidationFocus,
 } from '@/lib/onboarding/validation';
 import { userFacingOnboardingSaveError } from '@/lib/onboarding/userFacingError';
+import { PROFILE_GENDER_OPTIONS } from '@/lib/profile/gender';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { markSoftKycPromptPending } from '@/lib/verification/softPromptStorage';
 import { linkInvitationAfterSignup } from '@/lib/plans/planInvitations';
@@ -680,6 +681,47 @@ export default function OnboardingScreen() {
                   }))
                 }
               />
+              <View style={styles.commStyleSection}>
+                <View style={styles.sectionDivider} />
+                <Text style={styles.commStyleHeading}>How do you prefer to communicate?</Text>
+                <Text style={styles.commStyleSub}>Helps us personalise your LinkUp experience</Text>
+                {[
+                  { value: 'daily', label: 'Daily contact', sub: 'I like staying in touch regularly' },
+                  { value: 'few_times_week', label: 'A few times a week', sub: 'Regular but not every day' },
+                  { value: 'flexible', label: 'Flexible', sub: 'I go with the flow' },
+                ].map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        communicationStyle: d.communicationStyle === opt.value ? null : opt.value,
+                      }))
+                    }
+                    style={({ pressed }) => [
+                      styles.commStyleOption,
+                      draft.communicationStyle === opt.value && styles.commStyleOptionSelected,
+                      pressed && { opacity: 0.88 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.commStyleRadio,
+                        draft.communicationStyle === opt.value && styles.commStyleRadioSelected,
+                      ]}
+                    >
+                      {draft.communicationStyle === opt.value ? (
+                        <View style={styles.commStyleRadioDot} />
+                      ) : null}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.commStyleOptionLabel}>{opt.label}</Text>
+                      <Text style={styles.commStyleOptionSub}>{opt.sub}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+                <Text style={styles.commStyleOptional}>Optional — you can update this anytime</Text>
+              </View>
               <TagSelector
                 label="Languages"
                 options={LANGUAGE_OPTIONS}
@@ -740,8 +782,10 @@ export default function OnboardingScreen() {
               />
               <Text style={[authSoftLabelStyle, styles.fieldLabelSpacing]}>I am</Text>
               <View style={styles.intentRow}>
-                {['Woman', 'Man', 'Non-binary', 'Prefer not to say'].map((g) =>
-                  renderChoiceChip(g, draft.selfGender === g, () => setDraft((d) => ({ ...d, selfGender: g })))
+                {PROFILE_GENDER_OPTIONS.map(({ value, label }) =>
+                  renderChoiceChip(label, draft.selfGender === value, () =>
+                    setDraft((d) => ({ ...d, selfGender: d.selfGender === value ? null : value }))
+                  )
                 )}
               </View>
               <Text style={[authSoftLabelStyle, styles.fieldLabelSpacing]}>Show me</Text>
@@ -1095,6 +1139,42 @@ const styles = StyleSheet.create({
   },
   secondaryBtnTxt: { fontSize: 15, fontWeight: '800',
     fontFamily: fonts.bold, color: colors.primary },
+  commStyleSection: { marginTop: spacing.md },
+  sectionDivider: { height: 1, backgroundColor: colors.border, marginBottom: spacing.md },
+  commStyleHeading: { fontSize: 15, fontFamily: fonts.bold, color: colors.text, marginBottom: 2 },
+  commStyleSub: { fontSize: 12, fontFamily: fonts.regular, color: colors.textMuted, marginBottom: spacing.md },
+  commStyleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: 8,
+  },
+  commStyleOptionSelected: { borderColor: '#6C63FF', backgroundColor: '#EEEDFF' },
+  commStyleRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commStyleRadioSelected: { borderColor: '#6C63FF', backgroundColor: '#6C63FF' },
+  commStyleRadioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
+  commStyleOptionLabel: { fontSize: 14, fontFamily: fonts.bold, color: colors.text },
+  commStyleOptionSub: { fontSize: 11, fontFamily: fonts.regular, color: colors.textMuted },
+  commStyleOptional: {
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 6,
+  },
   footer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,

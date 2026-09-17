@@ -2,11 +2,12 @@
  * Main tab navigation — Plans, Messages, Profile.
  */
 import { LinkUpTabBar } from '@/components/navigation/LinkUpTabBar';
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { TabBarVisibilityProvider } from '@/contexts/TabBarVisibilityContext';
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, Tabs, type Href } from 'expo-router';
+import { Redirect, Tabs, router, type Href } from 'expo-router';
 import { View } from 'react-native';
 
 export default function TabsLayout() {
@@ -59,6 +60,20 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="matchmaker"
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/matchmaker' as Href);
+          },
+        }}
+        options={{
+          headerShown: false,
+          tabBarLabel: 'MatchMaker',
+          tabBarIcon: ({ color, size }) => <MatchMakerTabIcon color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="meetr"
         options={{
           headerShown: false,
@@ -79,24 +94,22 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="saved"
         options={{
+          href: null,
           headerShown: false,
-          tabBarLabel: 'Saved',
-          tabBarIcon: ({ color, size }) => <Ionicons name="bookmark" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="offers"
         options={{
+          href: null,
           headerShown: false,
-          tabBarLabel: 'Offers',
-          tabBarIcon: ({ color, size }) => <Ionicons name="pricetag" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           headerShown: false,
-          tabBarLabel: 'Profile',
+          tabBarLabel: 'Account',
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />

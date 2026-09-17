@@ -12,6 +12,8 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const INACTIVE_TAB = 'rgba(26, 29, 38, 0.42)';
+const MM_ACTIVE = '#9B1B4B';
+const MM_INACTIVE = '#C8BDB8';
 const INDICATOR_HEIGHT = 3;
 const INDICATOR_WIDTH = 28;
 /** Matches screen shell — keeps bar visually merged with blush backdrop. */
@@ -59,7 +61,14 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
         {visibleRoutes.map((route) => {
           const { options } = descriptors[route.key];
           const focused = route.key === focusedRouteKey;
-          const tint = focused ? colors.primary : INACTIVE_TAB;
+          const isMatchMaker = route.name === 'matchmaker';
+          const tint = isMatchMaker
+            ? focused
+              ? MM_ACTIVE
+              : MM_INACTIVE
+            : focused
+              ? colors.primary
+              : INACTIVE_TAB;
 
           const onPress = () => {
             const event = navigation.emit({

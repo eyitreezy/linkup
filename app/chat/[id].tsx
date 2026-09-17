@@ -206,6 +206,7 @@ export default function ChatThreadScreen() {
   const [safetySheetOpen, setSafetySheetOpen] = useState(false);
   const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
   const contactBlockFromSendRef = useRef(false);
+  const matchmakerConnectionIdRef = useRef<string | null>(null);
   const listRef = useRef<FlatList<UiMessage>>(null);
   const {
     listFooterStyle,
@@ -524,10 +525,12 @@ export default function ChatThreadScreen() {
     (async () => {
       const { data: conv, error } = await supabase
         .from('conversations')
-        .select('user_a, user_b')
+        .select('user_a, user_b, matchmaker_connection_id')
         .eq('id', conversationId)
         .maybeSingle();
       if (error || !conv) return;
+      matchmakerConnectionIdRef.current =
+        typeof conv.matchmaker_connection_id === 'string' ? conv.matchmaker_connection_id : null;
       const other = conv.user_a === user.id ? conv.user_b : conv.user_a;
       const { data: prof } = await supabase
         .from('profiles')
@@ -844,6 +847,13 @@ export default function ChatThreadScreen() {
       contentId: sentRow.id,
       textSample: body,
     });
+
+    const mmConnectionId = matchmakerConnectionIdRef.current;
+    if (mmConnectionId) {
+      void supabase.rpc('matchmaker_record_first_message', {
+        p_connection_id: mmConnectionId,
+      });
+    }
 
     setMessages((p) => {
       const without = p.filter((m) => m.tempKey !== tempKey);

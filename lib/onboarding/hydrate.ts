@@ -3,6 +3,7 @@
  */
 import { orderPhotoUrls, uniquePhotoUrls } from '@/lib/profile/media/photoOrder';
 import { fetchProfileVideos } from '@/lib/profile/media/profileVideo';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import type { DbProfile } from '@/types/database';
 import { defaultOnboardingDraft, type OnboardingDraft, type PromptAnswer } from '@/types/onboarding';
 
@@ -43,7 +44,8 @@ export function draftFromProfile(p: DbProfile | null): OnboardingDraft {
     d.locationLongitude = p.longitude;
   }
   d.profilePublic = p.is_profile_public;
-  if (p.gender) d.selfGender = p.gender;
+  if (p.gender) d.selfGender = normalizeProfileGender(p.gender);
+  if (p.communication_style) d.communicationStyle = p.communication_style;
 
   const pref = p.preferences ?? {};
   if (Array.isArray(pref.languages)) d.languages = pref.languages as string[];
@@ -59,7 +61,9 @@ export function draftFromProfile(p: DbProfile | null): OnboardingDraft {
   if (pref.show_me === 'everyone' || pref.show_me === 'women' || pref.show_me === 'men') {
     d.showMe = pref.show_me;
   }
-  if (typeof pref.self_gender === 'string') d.selfGender = pref.self_gender;
+  if (typeof pref.self_gender === 'string') {
+    d.selfGender = normalizeProfileGender(pref.self_gender) ?? d.selfGender;
+  }
 
   const raw = pref.prompt_answers;
   if (Array.isArray(raw)) {

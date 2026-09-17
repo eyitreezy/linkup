@@ -2,6 +2,7 @@
  * Inbox row — bold card, avatar-first layout, warm preview line.
  */
 import { Avatar } from '@/components/Avatar';
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { GroupAvatar } from '@/components/messages/GroupAvatar';
 import { colors, radius, spacing, fonts } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ export type ConversationCardProps = {
   groupAvatarUrl?: string | null;
   memberCount?: number;
   memberPreviews?: { avatarUrl: string | null; name: string }[];
+  isMatchMaker?: boolean;
   onPress: () => void;
 };
 
@@ -35,6 +37,7 @@ export function ConversationCard({
   groupAvatarUrl,
   memberCount,
   memberPreviews,
+  isMatchMaker,
   onPress,
 }: ConversationCardProps) {
   return (
@@ -72,6 +75,9 @@ export function ConversationCard({
                 <Text style={styles.name} numberOfLines={1}>
                   {name}
                 </Text>
+                {isMatchMaker ? (
+                  <MatchMakerTabIcon color="#9B1B4B" size={16} />
+                ) : null}
                 {verified ? (
                   <Ionicons name="checkmark-circle" size={17} color={colors.primary} style={styles.verified} />
                 ) : null}

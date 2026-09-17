@@ -28,6 +28,7 @@ import {
   mergeDraftAfterSave,
 } from '@/lib/onboarding/hydrate';
 import { ProfileLocationSection } from '@/components/profile/ProfileLocationSection';
+import { PROFILE_GENDER_OPTIONS } from '@/lib/profile/gender';
 import { hasValidProfileLocation } from '@/lib/profile/profileLocation';
 import { saveEditProfile } from '@/lib/profile/saveEditProfile';
 import { persistModerationAfterSend } from '@/lib/trust/persistModeration';
@@ -384,12 +385,14 @@ export default function EditProfileScreen() {
               />
               <Text style={[authSoftLabelStyle, styles.labelFirstInCard]}>I am</Text>
               <View style={styles.chipRow}>
-                {['Woman', 'Man', 'Non-binary', 'Prefer not to say'].map((g) => (
+                {PROFILE_GENDER_OPTIONS.map(({ value, label }) => (
                   <GradientChip
-                    key={g}
-                    label={g}
-                    selected={draft.selfGender === g}
-                    onPress={() => setDraft((d) => ({ ...d, selfGender: g }))}
+                    key={value}
+                    label={label}
+                    selected={draft.selfGender === value}
+                    onPress={() =>
+                      setDraft((d) => ({ ...d, selfGender: d.selfGender === value ? null : value }))
+                    }
                   />
                 ))}
               </View>

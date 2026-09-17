@@ -192,6 +192,8 @@ export interface DbProfile {
   guest_score_punctuality?: number | null;
   guest_score_conduct?: number | null;
   completed_meetup_count?: number;
+  /** MatchMaker — daily / few_times_week / flexible */
+  communication_style?: string | null;
 }
 
 export type EscrowPattern = 'A' | 'B' | 'C';

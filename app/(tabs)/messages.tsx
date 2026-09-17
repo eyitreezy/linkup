@@ -39,6 +39,7 @@ type InboxRow = {
   groupAvatarUrl?: string | null;
   memberCount?: number;
   memberPreviews?: { avatarUrl: string | null; name: string }[];
+  isMatchMaker?: boolean;
 };
 
 function previewForLast(
@@ -119,7 +120,9 @@ export default function MessagesInboxScreen() {
       const groupConvIds = [...new Set((groupMemberships ?? []).map((r) => r.conversation_id as string))];
 
       const dmFilter = `user_a.eq.${user.id},user_b.eq.${user.id}`;
-      let convQuery = supabase.from('conversations').select('id, user_a, user_b, created_at, is_group_chat, group_name, group_avatar_url, plan_id');
+      let convQuery = supabase
+        .from('conversations')
+        .select('id, user_a, user_b, created_at, is_group_chat, group_name, group_avatar_url, plan_id, matchmaker_connection_id');
       if (groupConvIds.length > 0) {
         convQuery = convQuery.or(`${dmFilter},id.in.(${groupConvIds.join(',')})`);
       } else {
@@ -280,6 +283,7 @@ export default function MessagesInboxScreen() {
           groupAvatarUrl: c.group_avatar_url ?? null,
           memberCount: groupMemberCounts.get(c.id),
           memberPreviews: groupMemberPreviews.get(c.id),
+          isMatchMaker: !!c.matchmaker_connection_id,
         };
       });
 
@@ -414,6 +418,7 @@ export default function MessagesInboxScreen() {
             groupAvatarUrl={item.groupAvatarUrl}
             memberCount={item.memberCount}
             memberPreviews={item.memberPreviews}
+            isMatchMaker={item.isMatchMaker}
             onPress={() =>
               router.push(
                 (item.isGroupChat ? `/chat/group/${item.id}` : `/chat/${item.id}`) as Href

@@ -4,6 +4,7 @@
 import { ageFromBirthDate } from '@/lib/onboarding/hydrate';
 import { runInitialProfileScreening } from '@/lib/onboarding/profileScreening';
 import { persistProfileMediaFromDraft } from '@/lib/profile/media/persist';
+import { normalizeProfileGender } from '@/lib/profile/gender';
 import { hasValidProfileLocation, profileLocationFromDraft } from '@/lib/profile/profileLocation';
 import { supabase } from '@/lib/supabase';
 import type { ProfilePreferences } from '@/types/database';
@@ -89,7 +90,7 @@ export async function saveEditProfile(args: {
       display_name: draft.displayName.trim(),
       bio: draft.bio.trim() || null,
       birth_date: birthIso(draft.birthDate),
-      gender: draft.selfGender,
+      gender: normalizeProfileGender(draft.selfGender),
       photo_urls,
       primary_photo_url,
       avatar_url,
