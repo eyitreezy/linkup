@@ -1,11 +1,11 @@
-import { MM, MM_CTA_GRADIENT, fonts, radius, spacing } from '@/constants/matchmakerTheme';
+import { Button } from '@/components/Button';
+import { ChoiceChip, ChoiceChipRow } from '@/components/matchmaker/ChoiceChip';
+import { MM, fonts, radius, spacing } from '@/constants/matchmakerTheme';
 import { useMatchMakerActivity } from '@/hooks/useMatchMakerActivity';
 import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
 import { useAuth } from '@/contexts/AuthContext';
-import { partnerUserId } from '@/lib/matchmaker/connection';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -54,7 +54,14 @@ export default function MatchMakerActivityScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: MM.bg }} contentContainerStyle={{ paddingTop: insets.top + spacing.md, paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + spacing.lg }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: MM.bg }}
+      contentContainerStyle={{
+        paddingTop: insets.top + spacing.md,
+        paddingHorizontal: spacing.lg,
+        paddingBottom: insets.bottom + spacing.lg,
+      }}
+    >
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={24} color={MM.text} />
@@ -74,30 +81,37 @@ export default function MatchMakerActivityScreen() {
             <Text style={styles.answerText}>{String(theirAnswers ?? '')}</Text>
           </View>
           <Text style={styles.revealHint}>You have both answered. Talk about it.</Text>
-          <Pressable onPress={() => router.back()}>
-            <LinearGradient colors={[...MM_CTA_GRADIENT]} style={styles.cta}>
-              <Text style={styles.ctaText}>Open chat</Text>
-            </LinearGradient>
-          </Pressable>
+          <Button title="Open chat" onPress={() => router.back()} gradient pill fullWidth />
         </View>
       ) : phase === 'waiting' ? (
         <View style={styles.waiting}>
           <Text style={styles.question}>What does your ideal Sunday look like?</Text>
-          <Text style={styles.waitingBody}>We will reveal both answers the moment they submit theirs.</Text>
+          <Text style={styles.waitingBody}>
+            We will reveal both answers the moment they submit theirs.
+          </Text>
         </View>
       ) : (
         <>
           <Text style={styles.question}>What does your ideal Sunday look like?</Text>
-          {OPTIONS.map((opt) => (
-            <Pressable key={opt} onPress={() => setSelected(opt)} style={[styles.option, selected === opt && styles.optionOn]}>
-              <Text style={styles.optionText}>{opt}</Text>
-            </Pressable>
-          ))}
-          <Pressable disabled={!selected} onPress={() => void submit()} style={{ marginTop: spacing.lg }}>
-            <LinearGradient colors={[...MM_CTA_GRADIENT]} style={styles.cta}>
-              <Text style={styles.ctaText}>Submit my answer</Text>
-            </LinearGradient>
-          </Pressable>
+          <ChoiceChipRow>
+            {OPTIONS.map((opt) => (
+              <ChoiceChip
+                key={opt}
+                label={opt}
+                selected={selected === opt}
+                onPress={() => setSelected(opt)}
+              />
+            ))}
+          </ChoiceChipRow>
+          <Button
+            title="Submit my answer"
+            onPress={() => void submit()}
+            disabled={!selected}
+            gradient
+            pill
+            fullWidth
+            style={{ marginTop: spacing.lg }}
+          />
         </>
       )}
     </ScrollView>
@@ -105,18 +119,30 @@ export default function MatchMakerActivityScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
   title: { fontSize: 18, fontFamily: fonts.bold, color: MM.text },
-  question: { fontSize: 20, fontFamily: fonts.bold, color: MM.text, lineHeight: 28, marginBottom: spacing.lg },
-  option: { borderWidth: 1, borderColor: MM.border, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm, backgroundColor: MM.surface },
-  optionOn: { borderColor: MM.primary, backgroundColor: '#EEEDFF' },
-  optionText: { fontFamily: fonts.medium, color: MM.text },
-  cta: { borderRadius: radius.full, paddingVertical: 14, alignItems: 'center' },
-  ctaText: { color: '#fff', fontFamily: fonts.bold },
+  question: {
+    fontSize: 20,
+    fontFamily: fonts.bold,
+    color: MM.text,
+    lineHeight: 28,
+    marginBottom: spacing.lg,
+  },
   waiting: { paddingTop: spacing.xl },
   waitingBody: { fontFamily: fonts.regular, color: MM.muted, lineHeight: 20 },
   reveal: { gap: spacing.md },
-  answerCard: { backgroundColor: MM.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: MM.border, padding: spacing.md },
+  answerCard: {
+    backgroundColor: MM.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: MM.border,
+    padding: spacing.md,
+  },
   answerLabel: { fontFamily: fonts.medium, color: MM.muted, fontSize: 12 },
   answerText: { marginTop: spacing.sm, fontFamily: fonts.bold, color: MM.text, fontSize: 16 },
   revealHint: { textAlign: 'center', fontStyle: 'italic', color: MM.muted, fontFamily: fonts.regular },

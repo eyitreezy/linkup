@@ -1,8 +1,9 @@
+import { Input } from '@/components/Input';
 import { MM, fonts, radius, spacing } from '@/constants/matchmakerTheme';
 import { supabase } from '@/lib/supabase';
 import { router, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -32,12 +33,29 @@ export default function MatchMakerReflectScreen() {
   }, [user?.id]);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: MM.bg }} contentContainerStyle={{ paddingTop: insets.top + 60, paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: MM.bg }}
+      contentContainerStyle={{
+        paddingTop: insets.top + 60,
+        paddingHorizontal: spacing.lg,
+        paddingBottom: insets.bottom + spacing.xl,
+      }}
+    >
       <Text style={styles.title}>Take a moment.</Text>
-      <Text style={styles.body}>Reflect on what you experienced. We will be here when you are ready.</Text>
+      <Text style={styles.body}>
+        Reflect on what you experienced. We will be here when you are ready.
+      </Text>
       <View style={styles.card}>
         <Text style={styles.cardLabel}>What did you learn from this connection?</Text>
-        <TextInput value={text} onChangeText={setText} multiline style={styles.input} placeholder="Private reflection" placeholderTextColor={MM.muted} />
+        <Input
+          value={text}
+          onChangeText={setText}
+          multiline
+          variant="onboarding"
+          placeholder="Private reflection"
+          emojiAccessory={false}
+          style={styles.input}
+        />
         <Pressable onPress={() => setText('')} style={styles.skip}>
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
@@ -50,12 +68,31 @@ export default function MatchMakerReflectScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontFamily: fonts.bold, color: MM.text, textAlign: 'center' },
-  body: { marginTop: spacing.sm, fontFamily: fonts.regular, color: MM.muted, textAlign: 'center', lineHeight: 22 },
-  card: { marginTop: spacing.xl, backgroundColor: MM.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: MM.border, padding: spacing.md },
+  body: {
+    marginTop: spacing.sm,
+    fontFamily: fonts.regular,
+    color: MM.muted,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  card: {
+    marginTop: spacing.xl,
+    backgroundColor: MM.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: MM.border,
+    padding: spacing.md,
+  },
   cardLabel: { fontFamily: fonts.medium, color: MM.text, marginBottom: spacing.sm },
-  input: { minHeight: 100, textAlignVertical: 'top', fontFamily: fonts.regular, color: MM.text },
+  input: { minHeight: 100, textAlignVertical: 'top' },
   skip: { marginTop: spacing.sm, alignSelf: 'flex-end' },
   skipText: { color: MM.muted, fontFamily: fonts.regular },
   progress: { marginTop: spacing.lg, textAlign: 'center', color: MM.muted, fontFamily: fonts.regular },
-  note: { marginTop: spacing.sm, textAlign: 'center', color: MM.muted, fontSize: 12, fontFamily: fonts.regular },
+  note: {
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    color: MM.muted,
+    fontSize: 12,
+    fontFamily: fonts.regular,
+  },
 });

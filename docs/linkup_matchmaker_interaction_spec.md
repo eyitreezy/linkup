@@ -26,9 +26,9 @@
 - Card swipe: physics-based follow with resistance at edges
 - Micro-interactions: `200ms` ease-in-out for state changes (button press, icon tap)
 
-**Tab icon:** Flat SVG — heart shape with an elliptical orbital ring crossing in front and behind it. Same stroke weight as existing Ionicons tab icons (1.5pt inactive, 2pt active). No fill on heart in inactive state; `#9B1B4B` fill at 15% opacity on heart in active state. Orbital ring back arc at 35% opacity. Both arcs and heart stroke use `currentColor`.
+**Tab icon:** Flat SVG — filled heart with an elliptical orbital ring crossing in front and behind it. Heart is **always solid-filled** via `currentColor`. Orbital ring back arc at 35% opacity. Uses the **same active/inactive tab colours as all other nav icons** (not MatchMaker accent in the tab bar).
 
-Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Active colour: `#9B1B4B`. Inactive: standard tab inactive muted colour.
+Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Web: inactive `text-muted` / sidebar inactive, active `text-primary` (bottom nav) or `text-white` (sidebar active pill). Mobile: same tint as other tab icons via `tabBarActiveTintColor` / `tabBarInactiveTintColor`. MatchMaker accent `#9B1B4B` is reserved for in-feature moments (gate modal, chips), not the tab icon.
 
 
 ---

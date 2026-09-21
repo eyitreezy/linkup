@@ -37,7 +37,7 @@ export function MatchMakerGateModal({
     kyc: {
       icon: <Ionicons name="shield-checkmark" size={48} color={MM.primary} />,
       heading: 'Verify your identity first',
-      body: 'MatchMaker requires identity verification before you enter the pool — to protect you and every other member.',
+      body: 'MatchMaker requires identity verification before you enter the pool, to protect you and every other member.',
       cta: 'Complete verification',
       ctaType: 'gradient' as const,
       onCta: () => router.push('/kyc' as Href),

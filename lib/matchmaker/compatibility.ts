@@ -23,7 +23,7 @@ export function buildCompatibilitySignals(
 ): string[] {
   const signals: string[] = [];
   if (profile.distance_km != null && profile.distance_km <= 15) {
-    signals.push(`Close in location${profile.distance_km <= 10 ? ` (${profile.distance_km} km)` : ''}`);
+    signals.push(`Close by, ${profile.distance_km} km away`);
   }
   if (viewerCommStyle && profile.communication_style === viewerCommStyle) {
     signals.push(COMM_LABELS[profile.communication_style] ?? 'Similar communication style');

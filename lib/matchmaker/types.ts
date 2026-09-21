@@ -21,6 +21,18 @@ export type MatchMakerGateState = {
   reason?: string;
 };
 
+export type MatchMakerPoolEmptyReason =
+  | 'gender_not_set'
+  | 'dealbreakers_strict'
+  | 'location_narrow'
+  | 'genuinely_empty'
+  | null;
+
+export type MatchMakerPoolResult = {
+  profiles: MatchMakerPoolProfile[];
+  emptyReason: MatchMakerPoolEmptyReason;
+};
+
 export type MatchMakerPoolProfile = {
   user_id: string;
   display_name: string | null;

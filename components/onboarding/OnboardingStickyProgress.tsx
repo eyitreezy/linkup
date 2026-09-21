@@ -13,11 +13,17 @@ import { StyleSheet, Text, View } from 'react-native';
 type Props = {
   step: number;
   total?: number;
+  /** Override default onboarding step labels (e.g. MatchMaker values setup). */
+  stepLabels?: string[];
 };
 
-export function OnboardingStickyProgress({ step, total = ONBOARDING_TOTAL_STEPS }: Props) {
+export function OnboardingStickyProgress({
+  step,
+  total = ONBOARDING_TOTAL_STEPS,
+  stepLabels,
+}: Props) {
   const idx = Math.max(0, Math.min(step, total - 1));
-  const label = ONBOARDING_STEP_LABELS[idx] ?? `Step ${idx + 1}`;
+  const label = stepLabels?.[idx] ?? ONBOARDING_STEP_LABELS[idx] ?? `Step ${idx + 1}`;
 
   return (
     <View style={styles.stickyWrap}>

@@ -124,7 +124,7 @@ export default function MatchMakerRootScreen() {
             {gateState === 'cooldown'
               ? `MatchMaker resumes in ${daysUntilGate(gateMeta.cooldownUntil)} days`
               : gateState === 'suspended'
-                ? `MatchMaker suspended — ${daysUntilGate(gateMeta.suspensionUntil)} days remaining`
+                ? `MatchMaker suspended, ${daysUntilGate(gateMeta.suspensionUntil)} days remaining`
                 : gateState === 'subscription'
                   ? 'Upgrade to Gold to access MatchMaker'
                   : 'Complete verification to access MatchMaker'}

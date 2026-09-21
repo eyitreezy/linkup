@@ -1,8 +1,9 @@
 import { MatchMakerPoolCard } from '@/components/matchmaker/MatchMakerPoolCard';
+import { MatchMakerPoolEmptyState } from '@/components/matchmaker/MatchMakerPoolEmptyState';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/lib/matchmaker/pool';
-import type { MatchMakerPoolProfile } from '@/lib/matchmaker/types';
+import type { MatchMakerPoolEmptyReason, MatchMakerPoolProfile } from '@/lib/matchmaker/types';
 import { MM, MM_CTA_GRADIENT, fonts, spacing } from '@/constants/matchmakerTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +36,7 @@ export function MatchMakerPool() {
   const insets = useSafeAreaInsets();
   const { profile } = useAuth();
   const [profiles, setProfiles] = useState<MatchMakerPoolProfile[]>([]);
+  const [emptyReason, setEmptyReason] = useState<MatchMakerPoolEmptyReason>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const translateX = useSharedValue(0);
@@ -42,8 +44,9 @@ export function MatchMakerPool() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await fetchMatchMakerPool();
+      const { profiles: rows, emptyReason: reason } = await fetchMatchMakerPool();
       setProfiles(rows);
+      setEmptyReason(reason);
     } catch (e) {
       Alert.alert('MatchMaker', e instanceof Error ? e.message : 'Could not load pool');
     } finally {
@@ -115,9 +118,8 @@ export function MatchMakerPool() {
       {loading ? (
         <ActivityIndicator color={MM.accent} style={{ marginTop: 40 }} />
       ) : !top ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No profiles right now</Text>
-          <Text style={styles.emptyBody}>Check back soon. Your match may be joining the pool.</Text>
+        <View style={styles.emptyWrap}>
+          <MatchMakerPoolEmptyState reason={emptyReason} />
         </View>
       ) : (
         <View style={styles.deck}>
@@ -161,6 +163,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   headerTitle: { fontSize: 18, fontFamily: fonts.bold, fontWeight: '800', color: MM.text },
+  emptyWrap: { flex: 1 },
   deck: { flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   cardWrap: { flex: 1 },
   actions: {
@@ -188,7 +191,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  emptyTitle: { fontSize: 18, fontFamily: fonts.bold, color: MM.text },
-  emptyBody: { marginTop: 8, fontSize: 14, fontFamily: fonts.regular, color: MM.muted, textAlign: 'center' },
 });

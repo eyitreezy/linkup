@@ -1,18 +1,24 @@
 import { supabase } from '@/lib/supabase';
-import type { MatchMakerPoolProfile } from '@/lib/matchmaker/types';
+import type {
+  MatchMakerPoolEmptyReason,
+  MatchMakerPoolProfile,
+  MatchMakerPoolResult,
+} from '@/lib/matchmaker/types';
 
-/** Uses linkup-web RPC: `matchmaker_get_pool(p_limit)` → JSONB array. */
-export async function fetchMatchMakerPool(limit = 20): Promise<MatchMakerPoolProfile[]> {
+const EMPTY_REASONS = [
+  'gender_not_set',
+  'dealbreakers_strict',
+  'location_narrow',
+  'genuinely_empty',
+] as const;
+
+/** Uses linkup-web RPC: `matchmaker_get_pool(p_limit)` → JSONB envelope. */
+export async function fetchMatchMakerPool(limit = 20): Promise<MatchMakerPoolResult> {
   const { data, error } = await supabase.rpc('matchmaker_get_pool', {
     p_limit: limit,
   });
   if (error) throw error;
-  const rows = Array.isArray(data)
-    ? data
-    : typeof data === 'string'
-      ? (JSON.parse(data) as unknown[])
-      : [];
-  return rows.map((row) => normalizePoolRow(row as Record<string, unknown>));
+  return parsePoolRpcEnvelope(data);
 }
 
 export async function expressMatchMakerInterest(toUserId: string): Promise<{
@@ -41,12 +47,44 @@ export async function fetchMatchMakerPoolPreview(limit = 6): Promise<MatchMakerP
     p_limit: limit,
   });
   if (error) throw error;
-  const rows = Array.isArray(data)
-    ? data
-    : typeof data === 'string'
-      ? (JSON.parse(data) as unknown[])
-      : [];
-  return rows.map((row) => normalizePoolRow(row as Record<string, unknown>));
+  const { profiles } = parsePoolRpcEnvelope(data);
+  return profiles;
+}
+
+function parsePoolRpcEnvelope(data: unknown): MatchMakerPoolResult {
+  if (data == null) {
+    return { profiles: [], emptyReason: null };
+  }
+
+  let payload: unknown = data;
+  if (typeof data === 'string') {
+    payload = JSON.parse(data) as unknown;
+  }
+
+  if (payload && typeof payload === 'object' && !Array.isArray(payload) && 'profiles' in payload) {
+    const envelope = payload as Record<string, unknown>;
+    const rows = Array.isArray(envelope.profiles) ? envelope.profiles : [];
+    return {
+      profiles: rows.map((row) => normalizePoolRow(row as Record<string, unknown>)),
+      emptyReason: normalizeEmptyReason(envelope.empty_reason),
+    };
+  }
+
+  if (Array.isArray(payload)) {
+    return {
+      profiles: payload.map((row) => normalizePoolRow(row as Record<string, unknown>)),
+      emptyReason: null,
+    };
+  }
+
+  return { profiles: [], emptyReason: null };
+}
+
+function normalizeEmptyReason(value: unknown): MatchMakerPoolEmptyReason {
+  if (typeof value !== 'string') return null;
+  return EMPTY_REASONS.includes(value as (typeof EMPTY_REASONS)[number])
+    ? (value as MatchMakerPoolEmptyReason)
+    : null;
 }
 
 function normalizePoolRow(row: Record<string, unknown>): MatchMakerPoolProfile {
@@ -62,6 +100,14 @@ function normalizePoolRow(row: Record<string, unknown>): MatchMakerPoolProfile {
     (row.primary_photo_url as string | null) ??
     (Array.isArray(photoUrls) ? photoUrls[0] : null);
 
+  const distanceRaw = row.distance_km;
+  const distance_km =
+    typeof distanceRaw === 'number'
+      ? distanceRaw
+      : typeof distanceRaw === 'string' && distanceRaw.trim() !== ''
+        ? Number(distanceRaw)
+        : null;
+
   return {
     user_id: String(row.user_id),
     display_name: (row.display_name as string | null) ?? null,
@@ -72,6 +118,6 @@ function normalizePoolRow(row: Record<string, unknown>): MatchMakerPoolProfile {
     bio: (row.bio as string | null) ?? null,
     interests,
     communication_style: (row.communication_style as string | null) ?? null,
-    distance_km: null,
+    distance_km: Number.isFinite(distance_km) ? distance_km : null,
   };
 }

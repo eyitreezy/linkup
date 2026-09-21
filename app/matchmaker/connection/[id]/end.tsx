@@ -1,9 +1,10 @@
-import { MM, MM_CTA_GRADIENT, fonts, radius, spacing } from '@/constants/matchmakerTheme';
+import { Button } from '@/components/Button';
+import { ChoiceChip, ChoiceChipRow } from '@/components/matchmaker/ChoiceChip';
+import { MM, fonts, spacing } from '@/constants/matchmakerTheme';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const REASONS = ['Not compatible', 'Moving too slowly', 'Not feeling it', 'Personal reasons', 'Other'];
@@ -28,42 +29,47 @@ export default function MatchMakerEndConnectionScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: MM.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + spacing.lg, paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + spacing.lg }}
+      contentContainerStyle={{
+        paddingTop: insets.top + spacing.lg,
+        paddingHorizontal: spacing.lg,
+        paddingBottom: insets.bottom + spacing.lg,
+      }}
     >
       <Text style={styles.title}>End your connection?</Text>
       <Text style={styles.body}>This cannot be undone. No reason will be shared with them.</Text>
-      {REASONS.map((r) => (
-        <Pressable key={r} onPress={() => setReason(r)} style={[styles.reason, reason === r && styles.reasonOn]}>
-          <Text style={[styles.reasonText, reason === r && styles.reasonTextOn]}>{r}</Text>
-        </Pressable>
-      ))}
-      <Pressable disabled={!reason || busy} onPress={() => void endConnection()} style={{ marginTop: spacing.lg }}>
-        <LinearGradient colors={[MM.accent, MM.accent]} style={styles.cta}>
-          <Text style={styles.ctaText}>{busy ? 'Ending…' : 'End connection'}</Text>
-        </LinearGradient>
-      </Pressable>
-      <Pressable onPress={() => router.back()} style={{ marginTop: spacing.md, alignSelf: 'center' }}>
-        <Text style={styles.back}>Go back</Text>
-      </Pressable>
+      <ChoiceChipRow>
+        {REASONS.map((r) => (
+          <ChoiceChip key={r} label={r} selected={reason === r} onPress={() => setReason(r)} />
+        ))}
+      </ChoiceChipRow>
+      <Button
+        title="End connection"
+        onPress={() => void endConnection()}
+        loading={busy}
+        disabled={!reason}
+        gradient
+        pill
+        fullWidth
+        style={{ marginTop: spacing.lg }}
+      />
+      <Button
+        title="Go back"
+        onPress={() => router.back()}
+        variant="ghost"
+        fullWidth
+        style={{ marginTop: spacing.md }}
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   title: { fontSize: 22, fontFamily: fonts.bold, color: MM.text },
-  body: { marginTop: spacing.sm, fontFamily: fonts.regular, color: MM.muted, lineHeight: 20, marginBottom: spacing.lg },
-  reason: {
-    borderWidth: 1,
-    borderColor: MM.border,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    backgroundColor: MM.surface,
+  body: {
+    marginTop: spacing.sm,
+    fontFamily: fonts.regular,
+    color: MM.muted,
+    lineHeight: 20,
+    marginBottom: spacing.lg,
   },
-  reasonOn: { borderColor: MM.accent, backgroundColor: '#FDEDF3' },
-  reasonText: { fontFamily: fonts.medium, color: MM.text },
-  reasonTextOn: { fontFamily: fonts.bold, color: MM.accent },
-  cta: { borderRadius: radius.full, paddingVertical: 14, alignItems: 'center' },
-  ctaText: { color: '#fff', fontFamily: fonts.bold },
-  back: { color: MM.muted, fontFamily: fonts.regular },
 });
