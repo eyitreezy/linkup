@@ -116,7 +116,9 @@ export function MatchMakerPool() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={MM.accent} style={{ marginTop: 40 }} />
+        <View style={styles.emptyWrap}>
+          <ActivityIndicator color={MM.accent} />
+        </View>
       ) : !top ? (
         <View style={styles.emptyWrap}>
           <MatchMakerPoolEmptyState reason={emptyReason} />

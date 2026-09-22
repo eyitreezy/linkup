@@ -26,9 +26,9 @@
 - Card swipe: physics-based follow with resistance at edges
 - Micro-interactions: `200ms` ease-in-out for state changes (button press, icon tap)
 
-**Tab icon:** Flat SVG — filled heart with an elliptical orbital ring crossing in front and behind it. Heart is **always solid-filled** via `currentColor`. Orbital ring back arc at 35% opacity. Uses the **same active/inactive tab colours as all other nav icons** (not MatchMaker accent in the tab bar).
+**Tab icon:** Flat SVG — heart shape with an elliptical orbital ring crossing in front and behind it. Same stroke weight as existing Ionicons tab icons (1.5pt inactive, 2pt active). No fill on heart in inactive state; `#9B1B4B` fill at 15% opacity on heart in active state. Orbital ring back arc at 35% opacity. Both arcs and heart stroke use `currentColor`.
 
-Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Web: inactive `text-muted` / sidebar inactive, active `text-primary` (bottom nav) or `text-white` (sidebar active pill). Mobile: same tint as other tab icons via `tabBarActiveTintColor` / `tabBarInactiveTintColor`. MatchMaker accent `#9B1B4B` is reserved for in-feature moments (gate modal, chips), not the tab icon.
+Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Active colour: `#9B1B4B`. Inactive: standard tab inactive muted colour.
 
 
 ---
@@ -67,9 +67,9 @@ The existing LinkUp 5-step onboarding collects the following fields that MatchMa
 - Heading: "How do you prefer to communicate?"
 - Sub-label: "Helps us personalise your LinkUp experience" — no MatchMaker mention
 - Options (single select, stored as string values):
-  - `"daily"` → "Daily contact — I like staying in touch regularly"
-  - `"few_times_week"` → "A few times a week — Regular but not every day"
-  - `"flexible"` → "Flexible — I go with the flow"
+  - `"daily"` → "Daily contact, I like staying in touch regularly"
+  - `"few_times_week"` → "A few times a week, Regular but not every day"
+  - `"flexible"` → "Flexible, I go with the flow"
 
 **Behaviour:**
 - Selection is optional — user can tap Continue without selecting
@@ -173,7 +173,7 @@ The MatchMaker tab is always accessible in the navigation. When a gate is not me
 | Gate | Icon | Heading | Body | CTA |
 |---|---|---|---|---|
 | Subscription | Ring-heart `#9B1B4B` | "MatchMaker is a Gold feature and above" | "Upgrade to Gold or a subscription plan higher than Gold to access intentional matchmaking designed for people serious about finding a long-term relationship." | "Upgrade to Gold" → /subscription |
-| KYC | Shield checkmark `#6C63FF` | "Verify your identity first" | "MatchMaker requires identity verification before you enter the pool — to protect you and every other member." | "Complete verification" → /kyc |
+| KYC | Shield checkmark `#6C63FF` | "Verify your identity first" | "MatchMaker requires identity verification before you enter the pool, to protect you and every other member." | "Complete verification" → /kyc |
 | Cooldown | Clock `#7B6E65` | "MatchMaker is paused for [N] days" | "MatchMaker is built for intentional connections. Your access resumes on [date]." | "Got it" → modal collapses to persistent banner |
 | Suspension | Warning `#9B1B4B` | "MatchMaker access suspended" | "Your MatchMaker access is suspended for [N] days due to a contact-sharing policy violation. All other LinkUp features remain accessible." | "Got it" → modal collapses to persistent banner |
 
@@ -256,110 +256,194 @@ Slides in. Warm background. No header navigation bar — this screen demands ful
 
 ### 1.3 Values & Dealbreaker Setup (first time only)
 
-Multi-step flow. Progress bar at top. Back navigation available on all steps.
+Multi-step flow. 4 steps. Back navigation available on all steps.
 
-**Header:**
-```
-[Back chevron]  [Progress bar — 4 segments]  [Step N of 4]
-```
+**Container:**
+- Web: each step renders inside a `FormCard` component — `rounded-3xl p-[2px] linkup-gradient-primary` outer ring, `rounded-[22px] bg-white p-5` inner. Same component used in onboarding and settings.
+- Mobile: each step renders inside a `stepCard` — `backgroundColor: onboarding.cardBg`, `borderRadius: radius.xl`, `padding: spacing.md`, `borderWidth: 1`, `borderColor: onboarding.glassBorder`, shadow from `onboarding.shadow`.
 
-Progress bar uses primary `#6C63FF`. Fills segment by segment as steps complete.
+**Progress indicator:**
+- Web: `StepProgress` component (same as KYC wizard) — "Step N of 4" left, percentage right, `h-2 rounded-full bg-[#EDE8FF]` track + `linkup-gradient-primary` fill bar.
+- Mobile: `OnboardingStickyProgress` component — same as main onboarding.
 
-**Step 1 — Faith & Religion**
-```
-[Spacing: 40pt from top]
+---
 
-"Does faith matter to you in a relationship?"
-[22pt — bold]
+**Step 1: Faith and Religion**
 
-[Spacing: 8pt]
-
-"This is private and never shown to others."
-[13pt — muted]
-
-[Spacing: 32pt]
-
-[Selection cards — full width — stacked — 12pt gap]
-
-  [Card] "Yes — faith is important to me"
-         → tap to expand: faith selector (dropdown or pill group)
-         Available: Christianity, Islam, Other faith, Prefer not to specify
-
-  [Card] "Open — faith is not a deciding factor"
-
-  [Card] "Prefer not to say"
-
-[Selection: tap card → border changes to #6C63FF, background to #F0EEFF]
-
-[Spacing: auto]
-
-[CTA — "Continue" — active when selection made]
-```
-
-**Step 2 — Family Goals**
-```
-"What are your goals around children?"
-
-[Spacing: 8pt]
-
-"Private. Never shown publicly."
-
-[Stacked selection cards — single select]
-
-  "Yes — I want children"
-  "Open to it"
-  "No — I do not want children"
-  "I have children and am open to more"
-  "I have children and I am not open to more"
-```
-
-**Step 3 — Pace Preference**
-```
-"How long after connecting do you expect to meet?"
-
-[Stacked selection cards — single select]
-
-  "As soon as the platform allows (21 days minimum)"
-  "1 to 2 months"
-  "3 to 6 months"
-  "I take my time — 6 months or more"
-```
-
-**Step 4 — Dealbreakers**
-```
-"Are there absolute dealbreakers for you?"
-
-[Spacing: 8pt]
-
-"These are private hard filters. Profiles that don't
- meet them are silently excluded before you see them.
- They are never disclosed to anyone."
-
-[Spacing: 24pt]
-
-[Toggle rows — each toggleable on/off]
-
-  Faith alignment must match          [Toggle]
-  Family goals must align             [Toggle]
-  Must be within [N] km              [Toggle + distance slider when on]
-  Must be within age range            [Toggle + min/max age input when on]
-
-[Spacing: 32pt]
-
-[CTA — "Save and enter MatchMaker"]
-  On tap: brief haptic, warm loading state,
-  then MatchMaker main screen slides in.
-```
-
-**Pre-population behaviour:**
-- Communication style pre-populated from onboarding answer. Shown as a review card at the start of Step 1 before the faith question:
+Pre-population review card (shown above question if `profiles.communication_style` is set):
+- Web: `div` with `rounded-2xl bg-[#F5F6FA] px-4 py-3 flex items-center justify-between mb-4`
+  ```tsx
+  <div className="flex items-center justify-between rounded-2xl bg-[#F5F6FA] px-4 py-3 mb-4">
+    <div>
+      <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted">From your LinkUp profile</p>
+      <p className="text-[14px] font-extrabold text-foreground">Communication style: [value]</p>
+    </div>
+    <button className="text-[12px] font-extrabold text-primary">Edit</button>
+  </div>
   ```
-  [Review card — muted tone]
-  "From your profile: You prefer [communication style]
-   You can update this in MatchMaker settings anytime."
-  [Small edit link]
+- Mobile: `stepCard` with reduced padding, `rowBetween` layout inside:
+  ```tsx
+  <View style={[styles.stepCard, { padding: spacing.sm, marginBottom: spacing.md }]}>
+    <View style={styles.rowBetween}>
+      <View>
+        <Text style={{ fontSize: 10, fontFamily: fonts.bold, color: colors.textMuted, textTransform: 'uppercase' }}>
+          FROM YOUR LINKUP PROFILE
+        </Text>
+        <Text style={{ fontSize: 13, fontFamily: fonts.bold, color: colors.text }}>
+          Communication style: [value]
+        </Text>
+      </View>
+      <Pressable onPress={handleEditCommStyle}>
+        <Text style={{ fontSize: 12, fontFamily: fonts.bold, color: colors.primary }}>Edit</Text>
+      </Pressable>
+    </View>
+  </View>
   ```
 
+Question heading: `font-display text-[18px] font-extrabold text-foreground` (web) / `fontSize: 18, fontFamily: fonts.bold, color: colors.text` (mobile)
+Question text: "Does faith matter to you in a relationship?"
+
+Private label beneath heading: `text-[13px] font-semibold text-muted` (web) / `fontSize: 14, fontFamily: fonts.medium, color: colors.textMuted` (mobile)
+Private label text: "This is private and never shown to others."
+
+Options use the SAME chip pattern as `meetingIntent` in onboarding:
+- Web: `GradientChip` component — `rounded-full border-2 px-4 py-2 text-[13px] font-extrabold`. Selected: `border-transparent linkup-gradient-primary text-white`. Idle: `border-border bg-white text-primary`. Wrapped in `flex flex-wrap gap-2`.
+- Mobile: `renderChoiceChip` — selected: `LinearGradient([colors.primary, '#8B7CE8', colors.secondary])`. Idle: `backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1.5, borderColor: 'rgba(94,82,255,0.22)'`. Wrapped in `intentRow` style.
+
+Options:
+```
+"Yes, faith is important to me"   [expands faith-type chips below when selected]
+"Open, faith is not a deciding factor for me"
+"Prefer not to say"
+```
+
+When "Yes, faith is important to me" selected, second chip group expands below in new wrapped row:
+```
+"Christianity"   "Islam"   "Other faith"   "Prefer not to specify"
+```
+
+When "Other faith" is selected from this second row:
+- A text input appears immediately below the chips
+- Web: standard `Input` component using `onboardingFieldClass`
+- Mobile: `Input` with `variant="onboarding"`
+- Label: "Please specify your faith" (12px, muted, extrabold)
+- Placeholder: "e.g. Hinduism, Buddhism, Sikhism..."
+- Max 50 characters. Character counter shown right-aligned below input: "[N]/50"
+- Mandatory: Continue is blocked until this field has at least 1 character
+- Saved as `other:[user text]` in the faith value field
+
+CTA: `Continue` — `linkup-gradient-primary rounded-full min-h-[48px] w-full font-extrabold` (web) / `Button gradient pill` (mobile). Active only when a primary option is selected.
+
+---
+
+**Step 2: Family Goals**
+
+Same chip pattern as Step 1. Single select only.
+Question: "What are your goals around children?"
+Private label: "Private. Never shown publicly."
+
+Options (chips, wrapped row):
+```
+"Yes, I want children"
+"Open to it"
+"No, I do not want children"
+"I have children and am open to more"
+"I have children, but I am not open to more"
+```
+
+CTA: `Continue` — active when one chip is selected.
+
+---
+
+**Step 3: Pace Preference**
+
+Same chip pattern. Single select.
+Question: "How long after connecting do you expect to meet?"
+Private label: "Private. Used for compatibility weighting only."
+
+Options (chips, wrapped row):
+```
+"As soon as the platform allows (21 day minimum)"
+"1 to 2 months"
+"3 to 6 months"
+"I take my time, 6 months or more"
+```
+
+CTA: `Continue` — active when one chip is selected.
+
+---
+
+**Step 4: Dealbreakers**
+
+IMPORTANT: This step is NOT optional and must always render after Step 3. Do not gate or skip it.
+
+Question: "Are there absolute dealbreakers for you?"
+Sub-label: "Private hard filters. Profiles that do not meet them are silently excluded before you see them. Never disclosed to anyone."
+
+Uses toggle pattern — same as `ToggleRow` (web) / `rowBetween` + `Switch` (mobile) used in onboarding:
+
+- Web: `ToggleRow` component for each item
+  ```tsx
+  // flex items-center justify-between gap-4 border-b border-border/50 py-3.5
+  // ToggleSwitch: h-7 w-12 rounded-full, linkup-gradient-primary when on, bg-[#E8E4F5] when off
+  <ToggleRow label="Faith alignment must match" checked={db.faith} onChange={v => setDb(d => ({...d, faith: v}))} />
+  <ToggleRow label="Family goals must align" checked={db.family} onChange={v => setDb(d => ({...d, family: v}))} />
+  <ToggleRow label="Must be within distance range" checked={db.location} onChange={v => setDb(d => ({...d, location: v}))} />
+  <ToggleRow label="Must be within age range" checked={db.age} onChange={v => setDb(d => ({...d, age: v}))} />
+  ```
+  When "Must be within distance range" is toggled on: distance input or slider appears below.
+  When "Must be within age range" is toggled on: min/max age number inputs appear below.
+
+- Mobile: `rowBetween` + native `Switch`
+  ```tsx
+  // rowBetween: flexDirection: 'row', alignItems: 'center',
+  //             justifyContent: 'space-between', marginBottom: spacing.lg
+  // switchLabel: fontSize: 15, fontWeight: '700', fontFamily: fonts.medium,
+  //              color: colors.text, flex: 1
+  // Switch trackColor={{ true: colors.primary }}
+  <View style={styles.rowBetween}>
+    <Text style={styles.switchLabel}>Faith alignment must match</Text>
+    <Switch value={db.faith} onValueChange={v => setDb(d => ({...d, faith: v}))}
+      trackColor={{ true: colors.primary }} />
+  </View>
+  // Repeat for family, location, age
+  ```
+
+**Other dealbreakers (tag-input):**
+
+After the four standard toggle rows, an "Other dealbreakers" toggle is shown:
+```
+Other dealbreakers     [Toggle]
+Add your own specific requirements
+```
+
+When toggled on, a tag-input container appears below:
+```
+[Container — warm surface #FBF5F0, border #EDE0D4, rounded-2xl]
+
+"Your dealbreakers"
+"Add specific requirements that matter to you. Max 10."
+
+[Tags row — chips with X delete button, pill style]
+  [Tag 1: "Must not smoke" [x]]
+  [Tag 2: "Must be employed" [x]]
+
+[Input field + Add button row]
+  [Input — "e.g. Must not smoke..."] [Add]
+  [Character counter right: 0/60]
+
+[When max 10 reached: "Maximum of 10 dealbreakers reached." — no input shown]
+```
+
+Tag behaviour:
+- Type in input, press Enter (mobile: submit keyboard) or tap Add to create tag
+- Each tag is a pill chip with a close/remove button (IoClose / Ionicons close)
+- Max 10 tags total
+- Max 60 characters per tag
+- Duplicate tags not allowed (Add disabled if tag already exists)
+- Saved as `dealbreakers.other: [array of strings]` in the values payload
+
+CTA: "Save and enter MatchMaker" — always active (dealbreakers are optional). `linkup-gradient-primary rounded-full min-h-[48px] w-full font-extrabold` (web) / `Button gradient pill fullWidth` (mobile).
 ---
 
 ## PART 2 — POOL STATE
@@ -628,7 +712,7 @@ The central screen for the entire connection journey. Slides in once and persist
 
 [Connection status bar]
   [Warm card — rounded 12pt — border #EDE0D4]
-  🟢 Connected · Day [N]
+  🟢 Connected, Day [N]
   [If clock running]: "Plan window opens in [X] days"
   [If clock not started]: "Send the first message to start
                            your 21-day journey"
@@ -968,7 +1052,7 @@ From connection screen: tap "End this connection" (text link, bottom).
 [Spacing: 24pt]
 
 [CTA — "End connection" — #9B1B4B — only active when reason selected]
-[Link — "Go back — keep this connection"]
+[Link — "Go back, keep this connection"]
 ```
 
 On confirm:
@@ -1074,7 +1158,7 @@ Slightly warmer visual tone — signals forward movement.
   [Update dealbreakers — expandable panel]
   [Update values — expandable panel]
   [CTA — "Save and finish" → completes healing period]
-  [Link — "Skip all — I will update later"]
+  [Link — "Skip all, I will update later"]
 
 [Progress indicator]
   "Healing period · Day [N] of 3"
@@ -1291,9 +1375,9 @@ No step counter change — it is part of Step 4, not a new Step 6. This keeps th
 "Helps us personalise your LinkUp experience"
 
 **Options (single select, pill/card style):**
-- "Daily contact — I like staying in touch regularly"
-- "A few times a week — Regular but not every day"
-- "Flexible — I go with the flow"
+- "Daily contact, I like staying in touch regularly"
+- "A few times a week, Regular but not every day"
+- "Flexible, I go with the flow"
 
 **Behaviour:**
 - Selection optional — user can skip by tapping Continue without selecting

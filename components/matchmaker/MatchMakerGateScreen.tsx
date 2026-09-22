@@ -30,7 +30,7 @@ export function MatchMakerGateScreen({
     <View style={[styles.root, { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg }]}>
       {onBack ? (
         <Pressable onPress={onBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={24} color={MM.text} />
+          <Ionicons name="arrow-back" size={22} color={MM.text} />
         </Pressable>
       ) : null}
       <View style={styles.content}>

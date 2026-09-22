@@ -1,4 +1,5 @@
 import { Button } from '@/components/Button';
+import { authSoftLabelStyle, Input } from '@/components/Input';
 import { ChoiceChip, ChoiceChipRow } from '@/components/matchmaker/ChoiceChip';
 import { OnboardingStickyProgress } from '@/components/onboarding/OnboardingStickyProgress';
 import { onboarding } from '@/components/onboarding/onboardingTheme';
@@ -29,13 +30,22 @@ const PACE_OPTIONS: { value: string; label: string }[] = [
   { value: 'six_plus_months', label: 'I take my time, 6 months or more' },
 ];
 
-const FAITH_TYPES = ['Christianity', 'Islam', 'Other faith', 'Prefer not to specify'];
+const FAITH_TYPES: { value: string; label: string }[] = [
+  { value: 'Christianity', label: 'Christianity' },
+  { value: 'Islam', label: 'Islam' },
+  { value: 'other', label: 'Other faith' },
+  { value: 'Prefer not to specify', label: 'Prefer not to specify' },
+];
 
 type DealbreakersDraft = {
   faith: boolean;
   family: boolean;
   location: boolean;
+  locationKm: number;
   age: boolean;
+  ageMin: number;
+  ageMax: number;
+  other: boolean;
 };
 
 export default function MatchMakerValuesScreen() {
@@ -44,13 +54,20 @@ export default function MatchMakerValuesScreen() {
   const [step, setStep] = useState(0);
   const [faith, setFaith] = useState<'yes' | 'open' | 'skip' | null>(null);
   const [faithType, setFaithType] = useState<string | null>(null);
+  const [otherFaithText, setOtherFaithText] = useState('');
   const [familyGoals, setFamilyGoals] = useState<string | null>(null);
   const [pace, setPace] = useState<string | null>(null);
+  const [otherDealbreakers, setOtherDealbreakers] = useState<string[]>([]);
+  const [otherDbInput, setOtherDbInput] = useState('');
   const [dealbreakers, setDealbreakers] = useState<DealbreakersDraft>({
     faith: false,
     family: false,
     location: false,
+    locationKm: 25,
     age: false,
+    ageMin: 22,
+    ageMax: 40,
+    other: false,
   });
   const [busy, setBusy] = useState(false);
 
@@ -60,20 +77,31 @@ export default function MatchMakerValuesScreen() {
     if (step === 0) {
       if (!faith) return false;
       if (faith === 'yes' && !faithType) return false;
+      if (faith === 'yes' && faithType === 'other' && !otherFaithText.trim()) return false;
       return true;
     }
     if (step === 1) return familyGoals != null;
     if (step === 2) return pace != null;
     return true;
-  }, [step, faith, faithType, familyGoals, pace]);
+  }, [step, faith, faithType, otherFaithText, familyGoals, pace]);
+
+  function addOtherDealbreakerTag() {
+    const trimmed = otherDbInput.trim();
+    if (!trimmed || otherDealbreakers.includes(trimmed) || otherDealbreakers.length >= 10) return;
+    setOtherDealbreakers((prev) => [...prev, trimmed]);
+    setOtherDbInput('');
+  }
 
   async function saveAndEnter() {
     if (!user?.id || busy) return;
     setBusy(true);
 
     let faithValue: string | null = null;
-    if (faith === 'yes' && faithType) faithValue = faithType;
-    else if (faith === 'skip') faithValue = 'prefer_not_to_say';
+    if (faith === 'yes' && faithType) {
+      faithValue = faithType === 'other' ? `other:${otherFaithText.trim()}` : faithType;
+    } else if (faith === 'skip') {
+      faithValue = 'prefer_not_to_say';
+    }
 
     await supabase.from('matchmaker_values').upsert({
       user_id: user.id,
@@ -86,6 +114,7 @@ export default function MatchMakerValuesScreen() {
         family_goals_align: dealbreakers.family,
         within_distance: dealbreakers.location,
         within_age_range: dealbreakers.age,
+        other: dealbreakers.other ? otherDealbreakers : [],
       },
       updated_at: new Date().toISOString(),
     });
@@ -106,8 +135,14 @@ export default function MatchMakerValuesScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
         {step > 0 ? (
-          <Pressable onPress={() => setStep((s) => s - 1)} hitSlop={12} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <Pressable
+            onPress={() => setStep((s) => s - 1)}
+            hitSlop={12}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </Pressable>
         ) : (
           <View style={styles.backBtn} />
@@ -118,11 +153,10 @@ export default function MatchMakerValuesScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingBottom: insets.bottom + spacing.xl,
-        }}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.stepCard}>
           {step === 0 ? (
@@ -144,6 +178,7 @@ export default function MatchMakerValuesScreen() {
                   onPress={() => {
                     setFaith('yes');
                     setFaithType(null);
+                    setOtherFaithText('');
                   }}
                 />
                 <ChoiceChip
@@ -152,6 +187,7 @@ export default function MatchMakerValuesScreen() {
                   onPress={() => {
                     setFaith('open');
                     setFaithType(null);
+                    setOtherFaithText('');
                   }}
                 />
                 <ChoiceChip
@@ -160,20 +196,39 @@ export default function MatchMakerValuesScreen() {
                   onPress={() => {
                     setFaith('skip');
                     setFaithType(null);
+                    setOtherFaithText('');
                   }}
                 />
               </ChoiceChipRow>
               {faith === 'yes' ? (
                 <ChoiceChipRow>
-                  {FAITH_TYPES.map((f) => (
+                  {FAITH_TYPES.map(({ value, label }) => (
                     <ChoiceChip
-                      key={f}
-                      label={f}
-                      selected={faithType === f}
-                      onPress={() => setFaithType(f)}
+                      key={value}
+                      label={label}
+                      selected={faithType === value}
+                      onPress={() => {
+                        setFaithType(value);
+                        if (value !== 'other') setOtherFaithText('');
+                      }}
                     />
                   ))}
                 </ChoiceChipRow>
+              ) : null}
+              {faithType === 'other' ? (
+                <View style={{ marginTop: spacing.md }}>
+                  <Text style={authSoftLabelStyle}>Please specify your faith</Text>
+                  <Input
+                    value={otherFaithText}
+                    onChangeText={(t) => setOtherFaithText(t.slice(0, 50))}
+                    placeholder="e.g. Hinduism, Buddhism, Sikhism..."
+                    maxLength={50}
+                    variant="onboarding"
+                    autoFocus
+                    returnKeyType="done"
+                  />
+                  <Text style={styles.charCounter}>{otherFaithText.length}/50</Text>
+                </View>
               ) : null}
             </>
           ) : null}
@@ -250,27 +305,116 @@ export default function MatchMakerValuesScreen() {
                   trackColor={{ false: '#E8E4F5', true: colors.primary }}
                 />
               </View>
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.switchLabel}>Other dealbreakers</Text>
+                  <Text style={styles.switchHint}>Add your own specific requirements</Text>
+                </View>
+                <Switch
+                  value={dealbreakers.other}
+                  onValueChange={(v) => setDealbreakers((d) => ({ ...d, other: v }))}
+                  trackColor={{ false: '#E8E4F5', true: colors.primary }}
+                />
+              </View>
+              {dealbreakers.other ? (
+                <View style={styles.otherDbContainer}>
+                  <Text style={styles.otherDbHeading}>Your dealbreakers</Text>
+                  <Text style={styles.otherDbSub}>
+                    Add specific requirements that matter to you. Max 10.
+                  </Text>
+
+                  {otherDealbreakers.length > 0 ? (
+                    <View style={styles.tagRow}>
+                      {otherDealbreakers.map((tag) => (
+                        <View key={tag} style={styles.tag}>
+                          <Text style={styles.tagText}>{tag}</Text>
+                          <Pressable
+                            onPress={() =>
+                              setOtherDealbreakers((prev) => prev.filter((t) => t !== tag))
+                            }
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${tag}`}
+                            style={({ pressed }) => [styles.tagRemove, pressed && { opacity: 0.7 }]}
+                          >
+                            <Ionicons name="close" size={12} color={colors.textMuted} />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {otherDealbreakers.length < 10 ? (
+                    <View style={styles.otherDbInputRow}>
+                      <View style={{ flex: 1 }}>
+                        <Input
+                          value={otherDbInput}
+                          onChangeText={(t) => setOtherDbInput(t.slice(0, 60))}
+                          placeholder="e.g. Must not smoke"
+                          maxLength={60}
+                          variant="onboarding"
+                          returnKeyType="done"
+                          onSubmitEditing={addOtherDealbreakerTag}
+                        />
+                        <Text style={styles.charCounter}>{otherDbInput.length}/60</Text>
+                      </View>
+                      <Pressable
+                        onPress={addOtherDealbreakerTag}
+                        disabled={
+                          !otherDbInput.trim() ||
+                          otherDealbreakers.includes(otherDbInput.trim())
+                        }
+                        style={({ pressed }) => [
+                          styles.addBtn,
+                          pressed && { opacity: 0.88 },
+                          (!otherDbInput.trim() ||
+                            otherDealbreakers.includes(otherDbInput.trim())) && { opacity: 0.4 },
+                        ]}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.addBtnText}>Add</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Text style={styles.otherDbMaxNote}>Maximum of 10 dealbreakers reached.</Text>
+                  )}
+                </View>
+              ) : null}
             </>
           ) : null}
-
-          <Button
-            title={step < 3 ? 'Continue' : 'Save and enter MatchMaker'}
-            onPress={handleNext}
-            loading={busy}
-            disabled={step < 3 && !stepValid}
-            gradient
-            pill
-            fullWidth
-            style={{ marginTop: spacing.lg }}
-          />
         </View>
       </ScrollView>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+        <Button
+          title={step < 3 ? 'Continue' : 'Save and enter MatchMaker'}
+          onPress={handleNext}
+          loading={busy}
+          disabled={step < 3 && !stepValid}
+          gradient
+          pill
+          fullWidth
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: MM.bg },
+  scroll: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    backgroundColor: MM.bg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(237, 224, 212, 0.6)',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -322,5 +466,92 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
     paddingRight: spacing.sm,
+  },
+  switchHint: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  charCounter: {
+    fontSize: 11,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  otherDbContainer: {
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: MM.border,
+    backgroundColor: MM.surfaceWarm,
+    padding: spacing.md,
+  },
+  otherDbHeading: {
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  otherDbSub: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: MM.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  tagText: {
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  tagRemove: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(107,114,128,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otherDbInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  addBtn: {
+    marginTop: 2,
+    borderRadius: radius.button,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnText: {
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    color: '#fff',
+  },
+  otherDbMaxNote: {
+    fontSize: 12,
+    fontFamily: fonts.medium,
+    color: colors.textMuted,
   },
 });
