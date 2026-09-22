@@ -1,11 +1,18 @@
+import { MatchMakerFilterSheet } from '@/components/matchmaker/MatchMakerFilterSheet';
 import { MatchMakerPoolCard } from '@/components/matchmaker/MatchMakerPoolCard';
 import { MatchMakerPoolEmptyState } from '@/components/matchmaker/MatchMakerPoolEmptyState';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
+import { MM, MM_CTA_GRADIENT, fonts, spacing } from '@/constants/matchmakerTheme';
+import { colors, radius } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
 import { buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
+import {
+  defaultMatchMakerFilter,
+  type MatchMakerFilterState,
+} from '@/lib/matchmaker/filterState';
 import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/lib/matchmaker/pool';
 import type { MatchMakerPoolEmptyReason, MatchMakerPoolProfile } from '@/lib/matchmaker/types';
-import { MM, MM_CTA_GRADIENT, fonts, spacing } from '@/constants/matchmakerTheme';
-import { useAuth } from '@/contexts/AuthContext';
+import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, type Href } from 'expo-router';
@@ -34,17 +41,25 @@ const SWIPE_THRESHOLD = W * 0.4;
 
 export function MatchMakerPool() {
   const insets = useSafeAreaInsets();
-  const { profile } = useAuth();
+  const { profile, dbUser } = useAuth();
   const [profiles, setProfiles] = useState<MatchMakerPoolProfile[]>([]);
   const [emptyReason, setEmptyReason] = useState<MatchMakerPoolEmptyReason>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filter, setFilter] = useState<MatchMakerFilterState>(defaultMatchMakerFilter());
   const translateX = useSharedValue(0);
 
-  const load = useCallback(async () => {
+  const baseRadiusKm = profile?.radius_km ? Number(profile.radius_km) : 50;
+  const effectiveTier = resolveClientEffectiveTier(dbUser);
+
+  const load = useCallback(async (activeFilter: MatchMakerFilterState) => {
     setLoading(true);
     try {
-      const { profiles: rows, emptyReason: reason } = await fetchMatchMakerPool();
+      const { profiles: rows, emptyReason: reason } = await fetchMatchMakerPool(20, {
+        maxDistanceKm: activeFilter.maxDistanceKm,
+        sortBy: activeFilter.sortBy,
+      });
       setProfiles(rows);
       setEmptyReason(reason);
     } catch (e) {
@@ -55,9 +70,10 @@ export function MatchMakerPool() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(filter);
+  }, [filter, load]);
 
+  const poolCount = profiles.length;
   const top = profiles[0] ?? null;
   const signals = useMemo(
     () => (top ? buildCompatibilitySignals(top, profile?.communication_style) : []),
@@ -115,6 +131,30 @@ export function MatchMakerPool() {
         </Pressable>
       </View>
 
+      <View style={styles.toolbar}>
+        <Text style={styles.poolCount}>
+          {poolCount} member{poolCount === 1 ? '' : 's'} in your pool
+          {filter.filterActive ? ' · filtered' : ''}
+        </Text>
+        <Pressable
+          onPress={() => setFilterOpen(true)}
+          style={({ pressed }) => [
+            styles.filterBtn,
+            filter.filterActive && styles.filterBtnActive,
+            pressed && { opacity: 0.75 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Filter pool"
+        >
+          <Ionicons
+            name="options-outline"
+            size={18}
+            color={filter.filterActive ? MM.accent : colors.text}
+          />
+          {filter.filterActive ? <View style={styles.filterDot} /> : null}
+        </Pressable>
+      </View>
+
       {loading ? (
         <View style={styles.emptyWrap}>
           <ActivityIndicator color={MM.accent} />
@@ -151,6 +191,15 @@ export function MatchMakerPool() {
           </LinearGradient>
         </Pressable>
       </View>
+
+      <MatchMakerFilterSheet
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        filter={filter}
+        baseRadiusKm={baseRadiusKm}
+        effectiveTier={effectiveTier}
+        onApply={setFilter}
+      />
     </View>
   );
 }
@@ -165,6 +214,47 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   headerTitle: { fontSize: 18, fontFamily: fonts.bold, fontWeight: '800', color: MM.text },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  poolCount: {
+    fontFamily: fonts.bold,
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    flex: 1,
+  },
+  filterBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  filterBtnActive: {
+    borderColor: MM.accent,
+    backgroundColor: '#FDF8F4',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: MM.accent,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
+  },
   emptyWrap: { flex: 1 },
   deck: { flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   cardWrap: { flex: 1 },

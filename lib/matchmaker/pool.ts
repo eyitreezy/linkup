@@ -1,3 +1,4 @@
+import type { MatchMakerPoolFetchFilter } from '@/lib/matchmaker/filterState';
 import { supabase } from '@/lib/supabase';
 import type {
   MatchMakerPoolEmptyReason,
@@ -12,10 +13,15 @@ const EMPTY_REASONS = [
   'genuinely_empty',
 ] as const;
 
-/** Uses linkup-web RPC: `matchmaker_get_pool(p_limit)` → JSONB envelope. */
-export async function fetchMatchMakerPool(limit = 20): Promise<MatchMakerPoolResult> {
+/** Uses linkup-web RPC: `matchmaker_get_pool(...)` → JSONB envelope. */
+export async function fetchMatchMakerPool(
+  limit = 20,
+  filter?: MatchMakerPoolFetchFilter
+): Promise<MatchMakerPoolResult> {
   const { data, error } = await supabase.rpc('matchmaker_get_pool', {
     p_limit: limit,
+    p_max_distance_km: filter?.maxDistanceKm ?? null,
+    p_sort_by: filter?.sortBy ?? 'best_match',
   });
   if (error) throw error;
   return parsePoolRpcEnvelope(data);

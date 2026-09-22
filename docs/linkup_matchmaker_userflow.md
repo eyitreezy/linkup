@@ -234,6 +234,51 @@ MatchMaker operates heterosexual/straight only. Women see men. Men see women.
 **Re-match rule:**
 Users who previously had a MatchMaker connection are permanently excluded from each other's discovery pool. This is enforced at the server level before compatibility scoring.
 
+
+### 2.1b Pool Filter
+
+**Philosophy:** MatchMaker filters are deliberately minimal. The algorithm, dealbreakers, and values setup already do the heavy lifting. Only logistical and ordering filters are exposed — not preference filters that duplicate the values system or encourage shallow browsing.
+
+**Two filters only:**
+
+1. **Distance** — Maximum distance radius (km). Soft filter, not a hard dealbreaker. Session-level only — resets on next app open (same behaviour as Discover). Users without location set cannot use this filter.
+
+2. **Sort by** — Toggle between:
+   - "Best match" (default) — compatibility signal overlap, same as current pool sort
+   - "Recently joined" — profiles who joined MatchMaker most recently shown first. Surfaces fresh faces and prevents the pool feeling stale.
+
+**Filter state shape:**
+```typescript
+type MatchMakerFilterState = {
+  maxDistanceKm: number | null;   // null = no cap
+  sortBy: 'best_match' | 'recently_joined';
+  filterActive: boolean;          // true when any non-default value is set
+};
+```
+
+**Default state:**
+```typescript
+{
+  maxDistanceKm: null,
+  sortBy: 'best_match',
+  filterActive: false,
+}
+```
+
+**Position and styling:** Identical to the Discover filter — filter icon button in the toolbar above the pool, same `DiscoverFilterIconButton` style (web) / same `PlansFilterSheet` modal pattern (mobile). When `filterActive` is true, the button shows the same active indicator as Discover.
+
+**Filter sheet copy:**
+- Heading: "Filter MatchMaker"
+- Distance section: same slider as Discover
+- Sort section: two-chip toggle ("Best match" / "Recently joined")
+- Footer note: "These filters affect what you see today. Your dealbreakers always apply."
+- Clear button: "Clear filters" — resets to defaults
+- Apply button: "Apply" — primary gradient CTA
+
+**Important:** Filters are session-level only. They are NOT persisted to the user profile or database. On next session, pool defaults to "Best match" with no distance cap.
+
+---
+
 ### 2.2 Express Interest Flow
 
 ```
