@@ -231,6 +231,28 @@ MatchMaker operates heterosexual/straight only. Women see men. Men see women.
 - Incomplete profiles (missing required fields) excluded via `matchmaker_get_pool` RPC pre-filter
 - Sexual orientation dealbreaker stored in JSONB for future-proofing but NOT applied in pool query for MVP
 
+**Pool eligibility (`matchmaker_profile_is_pool_eligible`):**
+A candidate profile must pass ALL of the following to appear in anyone's pool:
+- `matchmaker_pool_gender(gender)` returns `'male'` or `'female'` (not null)
+- `display_name` is non-empty
+- `bio` is non-empty
+- `latitude` and `longitude` are not null (location must be set)
+- `photo_urls` array has at least one entry
+- `preferences->'interests'` is a non-empty JSON array
+
+These are hard server-side requirements enforced by `matchmaker_profile_is_pool_eligible`.
+A profile that fails any condition is excluded silently — no error shown to either party.
+
+**Gender collection in onboarding:**
+- Mobile: collected on Step 0 (basic info) alongside display name, birthday, and photos. Required — user cannot proceed without selecting gender. Saved to `profiles.gender` via `normalizeProfileGender()`.
+- Web: collected on Step 0 using `GradientChip` selection. Required — `stepValid` blocks Continue until a selection is made. Saved directly to `profiles.gender`.
+- The field label is "I am" with options: Woman / Man / Non-binary / Prefer not to say
+- Canonical stored values: `'female'` / `'male'` / `'non_binary'` / `'prefer_not_to_say'`
+- Only `'female'` and `'male'` enter the MatchMaker pool — the others complete onboarding normally but see `gender_not_set` if they reach MatchMaker
+
+**Existing users with NULL gender:**
+Users who completed onboarding before gender was required will see the `gender_not_set` gate modal when they open MatchMaker. The CTA routes them to `/settings/edit-profile` where they can add their gender without re-doing onboarding.
+
 **Re-match rule:**
 Users who previously had a MatchMaker connection are permanently excluded from each other's discovery pool. This is enforced at the server level before compatibility scoring.
 

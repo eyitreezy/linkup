@@ -53,9 +53,16 @@ The existing LinkUp 5-step onboarding collects the following fields that MatchMa
 | `location` | Step 3 | Pool proximity filtering and dealbreaker radius check. Shown as general area (not exact) on pool cards |
 | `verification_status` | Post-onboarding | Gate 2 KYC check — must be `'verified'` |
 | `host_tier` | Account | Gate 1 subscription check — `profiles.host_tier IN ('GOLD', 'PLATINUM')`. Use existing `UpgradeGateContext`. `subscription_tier` is not the canonical field. |
-| `gender` | Step 1 or profile | Pool gender filter — heterosexual/straight only for current Nigeria scope. Women see men, men see women |
+| `gender` | **Step 0 (required)** | Pool gender filter. Collected on Step 0 of onboarding alongside display name and photos. Required — blocks Continue if null. Label: "I am". Options: Woman / Man / Non-binary / Prefer not to say. Stored as `'female'` / `'male'` / `'non_binary'` / `'prefer_not_to_say'`. Only `'female'` and `'male'` enter the MatchMaker pool. Web: `GradientChip`. Mobile: `renderChoiceChip` with `PROFILE_GENDER_OPTIONS`. |
 
 **None of the above require changes.** They are read by MatchMaker as-is from the existing profile.
+
+**Important:** A profile must pass `matchmaker_profile_is_pool_eligible` to appear in any pool. This checks that `display_name`, `bio`, `latitude`, `longitude`, `photo_urls` (at least one), and `preferences->'interests'` (non-empty array) are all set. Profiles missing any of these are excluded silently. Users should be encouraged to complete their full profile before entering MatchMaker.
+
+**Gender is required on Step 0 — not optional:**
+- Mobile: gender field moved to Step 0 (was incorrectly on Step 2). Added to `canContinue1` as a required condition. The Continue button on Step 0 remains disabled until a gender chip is selected.
+- Web: gender field added to Step 0 as a `GradientChip` group. `stepValid` blocks Continue until selection is made.
+- Existing users with `profiles.gender = NULL` see the `gender_not_set` gate modal when opening MatchMaker. CTA routes to `/settings/edit-profile`.
 
 ### 0.1 The One Field Added to Onboarding
 

@@ -173,7 +173,8 @@ export default function OnboardingScreen() {
       photos >= PROFILE_MIN_PHOTOS_ONBOARDING &&
       hasVideo &&
       draft.adultConfirmed &&
-      age >= 18
+      age >= 18 &&
+      draft.selfGender != null
     );
   }, [
     draft.displayName,
@@ -182,6 +183,7 @@ export default function OnboardingScreen() {
     draft.videos,
     draft.birthDate,
     draft.adultConfirmed,
+    draft.selfGender,
   ]);
 
   const canContinue2 = useMemo(() => {
@@ -606,6 +608,17 @@ export default function OnboardingScreen() {
                   trackColor={{ true: colors.primary }}
                 />
               </View>
+              <Text style={[authSoftLabelStyle, styles.fieldLabelSpacing]}>I am</Text>
+              <View style={styles.intentRow}>
+                {PROFILE_GENDER_OPTIONS.map(({ value, label }) =>
+                  renderChoiceChip(label, draft.selfGender === value, () =>
+                    setDraft((d) => ({
+                      ...d,
+                      selfGender: d.selfGender === value ? null : value,
+                    }))
+                  )
+                )}
+              </View>
               <ProfilePhotoGallery
                 localUris={draft.localPhotoUris}
                 remoteUrls={draft.remotePhotoUrls}
@@ -780,14 +793,6 @@ export default function OnboardingScreen() {
                   validationFocus === 'location' ? validationMessage : null
                 }
               />
-              <Text style={[authSoftLabelStyle, styles.fieldLabelSpacing]}>I am</Text>
-              <View style={styles.intentRow}>
-                {PROFILE_GENDER_OPTIONS.map(({ value, label }) =>
-                  renderChoiceChip(label, draft.selfGender === value, () =>
-                    setDraft((d) => ({ ...d, selfGender: d.selfGender === value ? null : value }))
-                  )
-                )}
-              </View>
               <Text style={[authSoftLabelStyle, styles.fieldLabelSpacing]}>Show me</Text>
               <View style={styles.intentRow}>
                 {(['everyone', 'women', 'men'] as const).map((k) => {
