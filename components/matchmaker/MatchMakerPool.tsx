@@ -167,7 +167,19 @@ export function MatchMakerPool() {
         <View style={styles.deck}>
           <GestureDetector gesture={pan}>
             <Animated.View style={[styles.cardWrap, cardStyle]}>
-              <MatchMakerPoolCard profile={top} signals={signals} />
+              <MatchMakerPoolCard
+                profile={top}
+                signals={signals}
+                onPressProfile={() =>
+                  router.push({
+                    pathname: '/matchmaker/profile/[userId]',
+                    params: {
+                      userId: top.user_id,
+                      ...(top.distance_km != null ? { distance_km: String(top.distance_km) } : {}),
+                    },
+                  } as Href)
+                }
+              />
             </Animated.View>
           </GestureDetector>
         </View>
