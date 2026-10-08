@@ -256,6 +256,10 @@ export default function CreatePlanDetailsScreen() {
           : true,
     };
 
+    if (draft.matchmakerConnectionId) {
+      insertRow.matchmaker_connection_id = draft.matchmakerConnectionId;
+    }
+
     const { data: planIdRaw, error } = await supabase.rpc('publish_plan', { payload: insertRow });
 
     setLoading(false);

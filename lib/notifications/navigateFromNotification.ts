@@ -249,13 +249,31 @@ export function navigateFromNotification(router: Nav, data: NotificationPayload 
     router.push(`/matchmaker/connection/${data.connection_id}` as Href);
     return;
   }
-  if (t === 'matchmaker_activity_revealed' && data?.connection_id) {
+  if (
+    (t === 'matchmaker_activity_revealed' || t === 'matchmaker_activity_shared') &&
+    data?.connection_id
+  ) {
     router.push(`/matchmaker/connection/${data.connection_id}/activity` as Href);
     return;
   }
-  if (t === 'matchmaker_ready_signal' && data?.conversation_id) {
-    router.push(`/chat/${data.conversation_id}` as Href);
-    return;
+  if (t === 'matchmaker_ready_signal') {
+    const connectionId =
+      data && typeof data === 'object' && typeof (data as { connection_id?: string }).connection_id === 'string'
+        ? (data as { connection_id: string }).connection_id
+        : null;
+    if (connectionId) {
+      void (async () => {
+        const { supabase } = await import('@/lib/supabase');
+        const { data: conv } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('matchmaker_connection_id', connectionId)
+          .maybeSingle();
+        if (conv?.id) router.push(`/chat/${conv.id}` as Href);
+        else router.push(`/matchmaker/connection/${connectionId}` as Href);
+      })();
+      return;
+    }
   }
   if (t === 'matchmaker_plan_unlocked' && data?.connection_id) {
     router.push(`/matchmaker/connection/${data.connection_id}` as Href);

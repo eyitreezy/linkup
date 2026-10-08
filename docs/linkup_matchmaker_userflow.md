@@ -480,6 +480,9 @@ DAY 7 (from connected_at) — Shared Interest Activity unlocks
          "What is one thing you need in a relationship to feel safe?"
   • Answers revealed simultaneously ONLY after both submit
   • Neither sees the other's answers before submitting
+  • First submit triggers `matchmaker_activity_shared` notification to partner
+  • Fifth answer option Other supports custom text up to 100 characters (JSON `{ kind: other, text }`)
+  • Client reads activity via `matchmaker_get_shared_activity_state` (partner answer withheld until reveal)
   • Available once per week throughout the connection
   • Voluntary — no penalty for not participating
 

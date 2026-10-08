@@ -35,25 +35,35 @@ export type JourneyMilestone = {
 
 export function buildJourneyMilestones(
   connection: MatchMakerConnection,
-  activityCompleted?: boolean
+  opts?: { sharedActivityComplete?: boolean; checkInAcknowledged?: boolean }
 ): JourneyMilestone[] {
   const days = daysSince(connection.connected_at);
   const planOpen = isPlanWindowUnlocked(connection);
+  const sharedActivityComplete = opts?.sharedActivityComplete ?? false;
+  const checkInAcknowledged = opts?.checkInAcknowledged ?? days >= 10;
+
   return [
     { label: 'Connected', done: true, dateLabel: formatShortDate(connection.connected_at) },
     {
-      label: 'First message (starts 21-day plan clock)',
+      label: 'First message',
       done: !!connection.first_message_at,
       active: !connection.first_message_at,
+      dateLabel: connection.first_message_at
+        ? formatShortDate(connection.first_message_at)
+        : undefined,
     },
     {
-      label: 'Day 7 from connected_at — Shared Activity',
-      done: days >= 7 && !!activityCompleted,
-      active: days >= 7 && !activityCompleted,
+      label: 'Day 7: Shared Activity',
+      done: days >= 7 && sharedActivityComplete,
+      active: days >= 7 && !sharedActivityComplete,
     },
-    { label: 'Day 10 from connected_at — Check-in', done: days >= 10 },
     {
-      label: 'Day 21 from first_message_at — Plan window opens',
+      label: 'Day 10: Check-in',
+      done: checkInAcknowledged,
+      active: days >= 10 && !checkInAcknowledged,
+    },
+    {
+      label: 'Day 21: Plan window',
       done: planOpen,
       active: !!connection.first_message_at && !planOpen,
     },

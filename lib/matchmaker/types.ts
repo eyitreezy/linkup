@@ -3,6 +3,7 @@ export type MatchMakerGate =
   | 'kyc'
   | 'cooldown'
   | 'suspended'
+  | 'gender_not_set'
   | 'intent'
   | 'values'
   | 'reflection'
@@ -12,6 +13,23 @@ export type MatchMakerGate =
   | 'pool'
   | 'open';
 
+export type MatchMakerInterestStatus = 'pending' | 'accepted' | 'passed' | 'expired';
+
+export type MatchMakerInterestItem = {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  expressed_at: string;
+  status: MatchMakerInterestStatus;
+  expires_at: string;
+  profile: MatchMakerPoolProfile;
+};
+
+export type MatchMakerInterestQueue = {
+  sent: MatchMakerInterestItem[];
+  received: MatchMakerInterestItem[];
+};
+
 export type MatchMakerGateState = {
   gate: MatchMakerGate;
   connection_id?: string;
@@ -19,6 +37,12 @@ export type MatchMakerGateState = {
   cooldown_until?: string;
   suspension_until?: string;
   reason?: string;
+  reflectionDay?: number;
+  healingDay?: number;
+  daysUntilPool?: number;
+  reflectionStartedAt?: string;
+  sourceConnectionId?: string;
+  cooldownReason?: string;
 };
 
 export type MatchMakerPoolEmptyReason =
@@ -54,6 +78,7 @@ export type MatchMakerConnection = {
   plan_unlock_at: string | null;
   first_plan_created_at: string | null;
   ended_at: string | null;
+  paused_at: string | null;
   user_a_id: string;
   user_b_id: string;
 };

@@ -207,6 +207,7 @@ export default function ChatThreadScreen() {
   const [contactBlockedOpen, setContactBlockedOpen] = useState(false);
   const contactBlockFromSendRef = useRef(false);
   const matchmakerConnectionIdRef = useRef<string | null>(null);
+  const [matchmakerConnectionId, setMatchmakerConnectionId] = useState<string | null>(null);
   const listRef = useRef<FlatList<UiMessage>>(null);
   const {
     listFooterStyle,
@@ -529,8 +530,10 @@ export default function ChatThreadScreen() {
         .eq('id', conversationId)
         .maybeSingle();
       if (error || !conv) return;
-      matchmakerConnectionIdRef.current =
+      const mmId =
         typeof conv.matchmaker_connection_id === 'string' ? conv.matchmaker_connection_id : null;
+      matchmakerConnectionIdRef.current = mmId;
+      setMatchmakerConnectionId(mmId);
       const other = conv.user_a === user.id ? conv.user_b : conv.user_a;
       const { data: prof } = await supabase
         .from('profiles')
@@ -1473,6 +1476,9 @@ export default function ChatThreadScreen() {
                   <Text style={styles.headerName} numberOfLines={1}>
                     {peer?.name ?? '…'}
                   </Text>
+                  {matchmakerConnectionId ? (
+                    <Ionicons name="heart-circle" size={16} color="#9B1B4B" style={{ marginLeft: 4 }} />
+                  ) : null}
                   {peer?.verified ? (
                     <Ionicons name="checkmark-circle" size={17} color={colors.primary} style={{ marginLeft: 4 }} />
                   ) : null}
@@ -1509,6 +1515,19 @@ export default function ChatThreadScreen() {
             </Pressable>
             {peer?.id && user?.id !== peer.id ? (
               <View style={styles.headerRight}>
+                {matchmakerConnectionId ? (
+                  <Pressable
+                    onPress={() =>
+                      router.push(`/matchmaker/connection/${matchmakerConnectionId}` as Href)
+                    }
+                    style={styles.reportBtn}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open MatchMaker connection"
+                  >
+                    <Ionicons name="git-network-outline" size={22} color="#9B1B4B" />
+                  </Pressable>
+                ) : null}
                 <Pressable
                   onPress={() => setSearchActive(true)}
                   style={styles.reportBtn}

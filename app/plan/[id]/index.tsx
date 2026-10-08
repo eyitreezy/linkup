@@ -79,6 +79,8 @@ import { formatRelativeShort } from '@/lib/messaging/formatRelative';
 import { openDirectChat } from '@/lib/messaging/openDirectChat';
 import { createGroupChat } from '@/lib/messaging/createGroupChat';
 import { insertPlanCompletionAck } from '@/lib/plans/planCompletionAck';
+import { MatchMakerPostMeetupSheet } from '@/components/matchmaker/MatchMakerPostMeetupSheet';
+import { fetchPostMeetupReflectionDone } from '@/lib/matchmaker/postMeetup';
 import { AppFeedbackModal, type AppFeedbackVariant } from '@/components/ui/AppFeedbackModal';
 import { PLATFORM_FEE_REFUND_OPT_OUT_MESSAGE } from '@/lib/plans/platformFeeRefundCopy';
 import {
@@ -230,6 +232,10 @@ export default function PlanOverviewScreen() {
   const [calendarBusy, setCalendarBusy] = useState(false);
   const [reportPlanOpen, setReportPlanOpen] = useState(false);
   const [completionSelfAcked, setCompletionSelfAcked] = useState(false);
+  const [postMeetupPrompt, setPostMeetupPrompt] = useState<{
+    connectionId: string;
+    partnerName: string;
+  } | null>(null);
   const [groupGuestConfirmCount, setGroupGuestConfirmCount] = useState(0);
   const [groupGuestTotal, setGroupGuestTotal] = useState(0);
   const [myJoinRequest, setMyJoinRequest] = useState<{
@@ -1276,6 +1282,34 @@ export default function PlanOverviewScreen() {
         'Thanks',
         'When both people confirm, contact sharing outside LinkUp is allowed for this plan.'
       );
+      const { data: planRow } = await supabase
+        .from('plans')
+        .select('matchmaker_connection_id, creator_id')
+        .eq('id', id)
+        .maybeSingle();
+      const mmConnectionId =
+        planRow && typeof planRow.matchmaker_connection_id === 'string'
+          ? planRow.matchmaker_connection_id
+          : null;
+      if (mmConnectionId) {
+        const alreadyDone = await fetchPostMeetupReflectionDone(supabase, mmConnectionId, user.id);
+        if (!alreadyDone) {
+          const partnerId =
+            planRow?.creator_id === user.id
+              ? offers.find((o) => o.status === 'accepted')?.offerer_id
+              : planRow?.creator_id;
+          let partnerName = 'your match';
+          if (partnerId) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('display_name')
+              .eq('user_id', partnerId)
+              .maybeSingle();
+            if (prof?.display_name?.trim()) partnerName = prof.display_name.trim();
+          }
+          setPostMeetupPrompt({ connectionId: mmConnectionId, partnerName });
+        }
+      }
     }
   }
 
@@ -1358,6 +1392,15 @@ export default function PlanOverviewScreen() {
         title={feedback?.title ?? ''}
         message={feedback?.message ?? ''}
       />
+      {postMeetupPrompt && user?.id ? (
+        <MatchMakerPostMeetupSheet
+          visible
+          connectionId={postMeetupPrompt.connectionId}
+          userId={user.id}
+          partnerName={postMeetupPrompt.partnerName}
+          onClose={() => setPostMeetupPrompt(null)}
+        />
+      ) : null}
       <ExpiredPlanActionModal
         visible={expiredModalAction != null}
         action={expiredModalAction ?? 'offer'}

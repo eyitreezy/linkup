@@ -4,6 +4,7 @@ import {
 } from '@/components/matchmaker/MatchMakerGateModal';
 import { MatchMakerPool } from '@/components/matchmaker/MatchMakerPool';
 import { MatchMakerPoolPreview } from '@/components/matchmaker/MatchMakerPoolPreview';
+import { MatchMakerCooldownScreen } from '@/components/matchmaker/MatchMakerCooldownScreen';
 import { MatchMakerSkeleton } from '@/components/matchmaker/MatchMakerSkeleton';
 import { MM } from '@/constants/matchmakerTheme';
 import { fonts, spacing } from '@/constants/theme';
@@ -14,7 +15,10 @@ import {
   MATCHMAKER_GATED_MODAL,
 } from '@/lib/matchmaker/gates';
 import { fetchMatchMakerPoolPreview } from '@/lib/matchmaker/pool';
-import type { MatchMakerGate, MatchMakerPoolProfile } from '@/lib/matchmaker/types';
+import type { MatchMakerGate, MatchMakerGateState, MatchMakerPoolProfile } from '@/lib/matchmaker/types';
+import { matchmakerPoolGender } from '@/lib/profile/gender';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router, useFocusEffect, type Href } from 'expo-router';
@@ -26,6 +30,7 @@ type ScreenGate = MatchMakerGate | 'loading';
 
 export default function MatchMakerRootScreen() {
   const insets = useSafeAreaInsets();
+  const { user, refreshProfile } = useAuth();
   const [gateState, setGateState] = useState<ScreenGate>('loading');
   const [gateMeta, setGateMeta] = useState<{
     cooldownUntil?: string;
@@ -42,21 +47,36 @@ export default function MatchMakerRootScreen() {
     setError(null);
 
     try {
+      await refreshProfile();
       const data = await fetchMatchMakerGateState();
-      setGateState(data.gate);
+      let resolvedGate: MatchMakerGate = data.gate;
+
+      if ((data.gate === 'pool' || data.gate === 'open') && user?.id) {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('gender')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (matchmakerPoolGender(profileRow?.gender) == null) {
+          resolvedGate = 'gender_not_set';
+        }
+      }
+
+      setGateState(resolvedGate);
       setGateMeta({
         cooldownUntil: data.cooldown_until,
         suspensionUntil: data.suspension_until,
         connectionId: data.connection_id,
       });
 
-      const redirect = gateRouteFor(data);
-      if (redirect) {
+      const stateForRoute: MatchMakerGateState = { ...data, gate: resolvedGate };
+      const redirect = gateRouteFor(stateForRoute);
+      if (redirect && resolvedGate !== 'gender_not_set') {
         router.replace(redirect as Href);
         return;
       }
 
-      if (MATCHMAKER_GATED_MODAL.includes(data.gate)) {
+      if (MATCHMAKER_GATED_MODAL.includes(resolvedGate)) {
         try {
           const preview = await fetchMatchMakerPoolPreview(6);
           setPoolPreview(preview);
@@ -69,7 +89,7 @@ export default function MatchMakerRootScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load MatchMaker');
     }
-  }, []);
+  }, [refreshProfile, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,6 +110,10 @@ export default function MatchMakerRootScreen() {
         <Text style={styles.errorText}>{error}</Text>
       </View>
     );
+  }
+
+  if (gateState === 'cooldown') {
+    return <MatchMakerCooldownScreen cooldownUntil={gateMeta.cooldownUntil} />;
   }
 
   if (
@@ -121,13 +145,13 @@ export default function MatchMakerRootScreen() {
         <View style={[styles.persistentBanner, { paddingTop: insets.top + 10 }]}>
           <Ionicons name="time-outline" size={16} color="#92400E" />
           <Text style={styles.persistentBannerText}>
-            {gateState === 'cooldown'
-              ? `MatchMaker resumes in ${daysUntilGate(gateMeta.cooldownUntil)} days`
-              : gateState === 'suspended'
+            {gateState === 'suspended'
                 ? `MatchMaker suspended, ${daysUntilGate(gateMeta.suspensionUntil)} days remaining`
                 : gateState === 'subscription'
                   ? 'Upgrade to Gold to access MatchMaker'
-                  : 'Complete verification to access MatchMaker'}
+                  : gateState === 'gender_not_set'
+                    ? 'Add your gender to access MatchMaker'
+                    : 'Complete verification to access MatchMaker'}
           </Text>
         </View>
       ) : null}

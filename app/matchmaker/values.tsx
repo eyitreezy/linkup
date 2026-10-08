@@ -6,11 +6,36 @@ import { onboarding } from '@/components/onboarding/onboardingTheme';
 import { MM, fonts, spacing } from '@/constants/matchmakerTheme';
 import { colors, radius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  buildDealbreakersDbPayload,
+  buildFaithDbValue,
+  COMMUNICATION_STYLE_OPTIONS,
+  EMPTY_DEALBREAKERS,
+  loadMatchMakerValuesForm,
+  VALUES_FOCUS_TO_STEP,
+  type DealbreakersDraft,
+  type MatchMakerValuesFormState,
+  type ValuesFormFocus,
+} from '@/lib/matchmaker/valuesForm';
+import {
+  exitMatchMakerSettingsEdit,
+  isSettingsEditOrigin,
+} from '@/lib/matchmaker/valuesNavigation';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { router, type Href } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  BackHandler,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const VALUES_STEP_LABELS = ['Faith & religion', 'Family goals', 'Pace preference', 'Dealbreakers'];
@@ -37,41 +62,92 @@ const FAITH_TYPES: { value: string; label: string }[] = [
   { value: 'Prefer not to specify', label: 'Prefer not to specify' },
 ];
 
-type DealbreakersDraft = {
-  faith: boolean;
-  family: boolean;
-  location: boolean;
-  locationKm: number;
-  age: boolean;
-  ageMin: number;
-  ageMax: number;
-  other: boolean;
-};
+function applyLoadedFormState(
+  loaded: MatchMakerValuesFormState,
+  setters: {
+    setFaith: (v: MatchMakerValuesFormState['faith']) => void;
+    setFaithType: (v: string | null) => void;
+    setOtherFaithText: (v: string) => void;
+    setFamilyGoals: (v: string | null) => void;
+    setPace: (v: string | null) => void;
+    setCommunicationStyle: (v: string | null) => void;
+    setDealbreakers: (v: DealbreakersDraft) => void;
+    setOtherDealbreakers: (v: string[]) => void;
+  }
+) {
+  setters.setFaith(loaded.faith);
+  setters.setFaithType(loaded.faithType);
+  setters.setOtherFaithText(loaded.otherFaithText);
+  setters.setFamilyGoals(loaded.familyGoals);
+  setters.setPace(loaded.pace);
+  setters.setCommunicationStyle(loaded.communicationStyle);
+  setters.setDealbreakers(loaded.dealbreakers);
+  setters.setOtherDealbreakers(loaded.otherDealbreakers);
+}
 
 export default function MatchMakerValuesScreen() {
   const insets = useSafeAreaInsets();
-  const { user, profile } = useAuth();
+  const { user, refreshProfile } = useAuth();
+  const params = useLocalSearchParams<{ from?: string; focus?: string }>();
+  const fromSettings = isSettingsEditOrigin(params.from);
+  const focusParam = params.focus as ValuesFormFocus | undefined;
+
   const [step, setStep] = useState(0);
   const [faith, setFaith] = useState<'yes' | 'open' | 'skip' | null>(null);
   const [faithType, setFaithType] = useState<string | null>(null);
   const [otherFaithText, setOtherFaithText] = useState('');
   const [familyGoals, setFamilyGoals] = useState<string | null>(null);
   const [pace, setPace] = useState<string | null>(null);
+  const [communicationStyle, setCommunicationStyle] = useState<string | null>(null);
   const [otherDealbreakers, setOtherDealbreakers] = useState<string[]>([]);
   const [otherDbInput, setOtherDbInput] = useState('');
-  const [dealbreakers, setDealbreakers] = useState<DealbreakersDraft>({
-    faith: false,
-    family: false,
-    location: false,
-    locationKm: 25,
-    age: false,
-    ageMin: 22,
-    ageMax: 40,
-    other: false,
-  });
+  const [dealbreakers, setDealbreakers] = useState<DealbreakersDraft>({ ...EMPTY_DEALBREAKERS });
   const [busy, setBusy] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [showCommEditor, setShowCommEditor] = useState(false);
 
-  const commReview = profile?.communication_style;
+  const editingCommunicationOnly = fromSettings && focusParam === 'communication';
+
+  const hydrate = useCallback(async () => {
+    if (!user?.id) return;
+    setLoadError(null);
+    setHydrated(false);
+    try {
+      const loaded = await loadMatchMakerValuesForm(user.id);
+      applyLoadedFormState(loaded, {
+        setFaith,
+        setFaithType,
+        setOtherFaithText,
+        setFamilyGoals,
+        setPace,
+        setCommunicationStyle,
+        setDealbreakers,
+        setOtherDealbreakers,
+      });
+      if (fromSettings && focusParam && focusParam !== 'communication') {
+        setStep(VALUES_FOCUS_TO_STEP[focusParam]);
+      } else if (!fromSettings) {
+        setStep(0);
+      }
+      setHydrated(true);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Could not load your MatchMaker values');
+    }
+  }, [user?.id, fromSettings, focusParam]);
+
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    if (!fromSettings) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      exitMatchMakerSettingsEdit();
+      return true;
+    });
+    return () => sub.remove();
+  }, [fromSettings]);
 
   const stepValid = useMemo(() => {
     if (step === 0) {
@@ -94,36 +170,51 @@ export default function MatchMakerValuesScreen() {
 
   async function saveAndEnter() {
     if (!user?.id || busy) return;
+    if (editingCommunicationOnly && !communicationStyle) {
+      Alert.alert('MatchMaker', 'Select a communication style to continue.');
+      return;
+    }
     setBusy(true);
 
-    let faithValue: string | null = null;
-    if (faith === 'yes' && faithType) {
-      faithValue = faithType === 'other' ? `other:${otherFaithText.trim()}` : faithType;
-    } else if (faith === 'skip') {
-      faithValue = 'prefer_not_to_say';
+    try {
+      const faithValue = buildFaithDbValue(faith, faithType, otherFaithText);
+      const { error: valuesError } = await supabase.from('matchmaker_values').upsert({
+        user_id: user.id,
+        faith: faithValue,
+        family_goals: familyGoals ?? 'open_to_it',
+        pace_preference: pace ?? 'platform_minimum',
+        communication_frequency: communicationStyle,
+        dealbreakers: buildDealbreakersDbPayload(dealbreakers, otherDealbreakers),
+        updated_at: new Date().toISOString(),
+      });
+      if (valuesError) throw valuesError;
+
+      if (communicationStyle) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ communication_style: communicationStyle })
+          .eq('user_id', user.id);
+        if (profileError) throw profileError;
+        await refreshProfile();
+      }
+
+      if (fromSettings) {
+        exitMatchMakerSettingsEdit();
+      } else {
+        router.replace('/matchmaker' as Href);
+      }
+    } catch (e) {
+      Alert.alert('MatchMaker', e instanceof Error ? e.message : 'Could not save values');
+    } finally {
+      setBusy(false);
     }
-
-    await supabase.from('matchmaker_values').upsert({
-      user_id: user.id,
-      faith: faithValue,
-      family_goals: familyGoals ?? 'open_to_it',
-      pace_preference: pace ?? 'platform_minimum',
-      communication_frequency: commReview ?? null,
-      dealbreakers: {
-        faith_alignment: dealbreakers.faith,
-        family_goals_align: dealbreakers.family,
-        within_distance: dealbreakers.location,
-        within_age_range: dealbreakers.age,
-        other: dealbreakers.other ? otherDealbreakers : [],
-      },
-      updated_at: new Date().toISOString(),
-    });
-
-    setBusy(false);
-    router.replace('/matchmaker' as Href);
   }
 
   function handleNext() {
+    if (fromSettings || editingCommunicationOnly) {
+      if (stepValid || editingCommunicationOnly) void saveAndEnter();
+      return;
+    }
     if (step < 3) {
       if (stepValid) setStep((s) => s + 1);
       return;
@@ -131,12 +222,98 @@ export default function MatchMakerValuesScreen() {
     void saveAndEnter();
   }
 
+  function handleTopBack() {
+    if (fromSettings) {
+      exitMatchMakerSettingsEdit();
+      return;
+    }
+    if (step > 0) setStep((s) => s - 1);
+  }
+
+  const commStepValid = communicationStyle != null;
+
+  const stepValidWithComm = useMemo(() => {
+    if (editingCommunicationOnly) return commStepValid;
+    if (step === 0 && !communicationStyle) return false;
+    return stepValid;
+  }, [editingCommunicationOnly, commStepValid, step, communicationStyle, stepValid]);
+
+  if (loadError) {
+    return (
+      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <Text style={styles.loadErrorText}>{loadError}</Text>
+        <Pressable onPress={() => void hydrate()} style={styles.retryBtn}>
+          <Text style={styles.retryText}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!hydrated) {
+    return (
+      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <ActivityIndicator color={MM.accent} />
+      </View>
+    );
+  }
+
+  if (editingCommunicationOnly) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={exitMatchMakerSettingsEdit}
+            hitSlop={12}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back to MatchMaker Settings"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.editScreenTitle}>Communication style</Text>
+          <View style={styles.backBtn} />
+        </View>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.stepCard}>
+            <Text style={styles.heading}>How do you prefer to communicate?</Text>
+            <Text style={styles.privateLabel}>This updates your LinkUp profile and MatchMaker preferences.</Text>
+            <ChoiceChipRow>
+              {COMMUNICATION_STYLE_OPTIONS.map(({ value, label }) => (
+                <ChoiceChip
+                  key={value}
+                  label={label}
+                  selected={communicationStyle === value}
+                  onPress={() => setCommunicationStyle(value)}
+                />
+              ))}
+            </ChoiceChipRow>
+          </View>
+        </ScrollView>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <Button
+            title="Save changes"
+            onPress={handleNext}
+            loading={busy}
+            disabled={!commStepValid}
+            gradient
+            pill
+            fullWidth
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
-        {step > 0 ? (
+        {step > 0 || fromSettings ? (
           <Pressable
-            onPress={() => setStep((s) => s - 1)}
+            onPress={handleTopBack}
             hitSlop={12}
             style={styles.backBtn}
             accessibilityRole="button"
@@ -148,7 +325,11 @@ export default function MatchMakerValuesScreen() {
           <View style={styles.backBtn} />
         )}
         <View style={{ flex: 1 }}>
-          <OnboardingStickyProgress step={step} total={4} stepLabels={VALUES_STEP_LABELS} />
+          {fromSettings ? (
+            <Text style={styles.editScreenTitle}>{VALUES_STEP_LABELS[step] ?? 'MatchMaker values'}</Text>
+          ) : (
+            <OnboardingStickyProgress step={step} total={4} stepLabels={VALUES_STEP_LABELS} />
+          )}
         </View>
       </View>
 
@@ -161,13 +342,40 @@ export default function MatchMakerValuesScreen() {
         <View style={styles.stepCard}>
           {step === 0 ? (
             <>
-              {commReview ? (
+              {communicationStyle && !showCommEditor ? (
                 <View style={styles.reviewCard}>
-                  <Text style={styles.reviewKicker}>From your LinkUp profile</Text>
-                  <Text style={styles.reviewVal}>
-                    Communication style: {commReview.replace(/_/g, ' ')}
-                  </Text>
+                  <View style={styles.reviewCardRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reviewKicker}>From your LinkUp profile</Text>
+                      <Text style={styles.reviewVal}>
+                        Communication style: {communicationStyle.replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => setShowCommEditor(true)}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit communication style"
+                    >
+                      <Ionicons name="create-outline" size={20} color={MM.accent} />
+                    </Pressable>
+                  </View>
                 </View>
+              ) : null}
+              {(!communicationStyle || showCommEditor) ? (
+                <>
+                  <Text style={styles.heading}>How do you prefer to communicate?</Text>
+                  <ChoiceChipRow>
+                    {COMMUNICATION_STYLE_OPTIONS.map(({ value, label }) => (
+                      <ChoiceChip
+                        key={value}
+                        label={label}
+                        selected={communicationStyle === value}
+                        onPress={() => setCommunicationStyle(value)}
+                      />
+                    ))}
+                  </ChoiceChipRow>
+                </>
               ) : null}
               <Text style={styles.heading}>Does faith matter to you in a relationship?</Text>
               <Text style={styles.privateLabel}>This is private and never shown to others.</Text>
@@ -387,10 +595,12 @@ export default function MatchMakerValuesScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <Button
-          title={step < 3 ? 'Continue' : 'Save and enter MatchMaker'}
+          title={
+            fromSettings ? 'Save changes' : step < 3 ? 'Continue' : 'Save and enter MatchMaker'
+          }
           onPress={handleNext}
           loading={busy}
-          disabled={step < 3 && !stepValid}
+          disabled={!stepValidWithComm}
           gradient
           pill
           fullWidth
@@ -402,6 +612,30 @@ export default function MatchMakerValuesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: MM.bg },
+  centered: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  loadErrorText: {
+    fontFamily: fonts.medium,
+    color: MM.text,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  retryBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: MM.border,
+  },
+  retryText: { fontFamily: fonts.bold, color: MM.accent },
+  editScreenTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontFamily: fonts.bold,
+    color: MM.text,
+    paddingTop: 6,
+    paddingRight: 40,
+  },
   scroll: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
@@ -451,6 +685,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
+  reviewCardRow: { flexDirection: 'row', alignItems: 'flex-start' },
   reviewKicker: { fontSize: 12, color: MM.muted, fontFamily: fonts.regular },
   reviewVal: { marginTop: 4, fontSize: 14, fontFamily: fonts.bold, color: MM.text },
   rowBetween: {

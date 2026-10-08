@@ -1,46 +1,81 @@
 import { Input } from '@/components/Input';
+import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
 import { MM, fonts, radius, spacing } from '@/constants/matchmakerTheme';
-import { supabase } from '@/lib/supabase';
-import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  fetchMatchMakerGateState,
+  gateRouteFor,
+  saveReflectionPeriod,
+} from '@/lib/matchmaker/gates';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/contexts/AuthContext';
 
 export default function MatchMakerReflectScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
   const [text, setText] = useState('');
-  const [day, setDay] = useState(1);
+  const [reflectionDay, setReflectionDay] = useState(1);
+  const [daysUntilPool, setDaysUntilPool] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    void supabase
-      .from('matchmaker_connections')
-      .select('ended_at')
-      .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
-      .eq('status', 'ended')
-      .order('ended_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data?.ended_at) return;
-        const days = Math.floor((Date.now() - new Date(data.ended_at).getTime()) / 86400000);
-        if (days >= 6) router.replace('/matchmaker/reentry' as Href);
-        else if (days >= 3) router.replace('/matchmaker/heal' as Href);
-        else setDay(Math.max(1, days + 1));
-      });
-  }, [user?.id]);
+  const syncGate = useCallback(async () => {
+    setLoading(true);
+    try {
+      const state = await fetchMatchMakerGateState();
+      if (state.gate !== 'reflection') {
+        const redirect = gateRouteFor(state);
+        if (redirect) router.replace(redirect as Href);
+        else router.replace('/matchmaker' as Href);
+        return;
+      }
+      setReflectionDay(state.reflectionDay ?? 1);
+      setDaysUntilPool(state.daysUntilPool ?? null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void syncGate();
+    }, [syncGate])
+  );
+
+  async function savePrivate(skip: boolean) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await saveReflectionPeriod(text, skip);
+    } catch {
+      // Non-blocking; reflection period continues server-side
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.centered, { paddingTop: insets.top }]}>
+        <ActivityIndicator color={MM.accent} />
+      </View>
+    );
+  }
+
+  const progressPct = Math.min(100, (reflectionDay / 3) * 100);
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: MM.bg }}
+      style={{ flex: 1, backgroundColor: MM.surfaceWarm }}
       contentContainerStyle={{
         paddingTop: insets.top + 60,
         paddingHorizontal: spacing.lg,
         paddingBottom: insets.bottom + spacing.xl,
       }}
     >
+      <View style={styles.iconWrap}>
+        <MatchMakerTabIcon size={40} color={MM.accent} active={false} />
+      </View>
       <Text style={styles.title}>Take a moment.</Text>
       <Text style={styles.body}>
         Reflect on what you experienced. We will be here when you are ready.
@@ -56,18 +91,34 @@ export default function MatchMakerReflectScreen() {
           emojiAccessory={false}
           style={styles.input}
         />
-        <Pressable onPress={() => setText('')} style={styles.skip}>
+        <Pressable
+          disabled={busy}
+          onPress={() => void savePrivate(false)}
+          style={styles.saveMuted}
+        >
+          <Text style={styles.saveMutedText}>Save privately</Text>
+        </Pressable>
+        <Pressable disabled={busy} onPress={() => void savePrivate(true)} style={styles.skip}>
           <Text style={styles.skipText}>Skip</Text>
         </Pressable>
       </View>
-      <Text style={styles.progress}>Reflection period · Day {day} of 3</Text>
-      <Text style={styles.note}>All other LinkUp features remain available as normal.</Text>
+      <Text style={styles.progress}>Reflection period · Day {reflectionDay} of 3</Text>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+      </View>
+      <Text style={styles.note}>
+        {daysUntilPool != null
+          ? `Your MatchMaker discovery pool resumes in ${daysUntilPool} day${daysUntilPool === 1 ? '' : 's'}. All other LinkUp features are available as normal.`
+          : 'All other LinkUp features are available as normal.'}
+      </Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 22, fontFamily: fonts.bold, color: MM.text, textAlign: 'center' },
+  centered: { flex: 1, backgroundColor: MM.surfaceWarm, alignItems: 'center', justifyContent: 'center' },
+  iconWrap: { alignSelf: 'center', opacity: 0.5 },
+  title: { marginTop: spacing.lg, fontSize: 22, fontFamily: fonts.bold, color: MM.text, textAlign: 'center' },
   body: {
     marginTop: spacing.sm,
     fontFamily: fonts.regular,
@@ -85,14 +136,25 @@ const styles = StyleSheet.create({
   },
   cardLabel: { fontFamily: fonts.medium, color: MM.text, marginBottom: spacing.sm },
   input: { minHeight: 100, textAlignVertical: 'top' },
+  saveMuted: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  saveMutedText: { color: MM.muted, fontFamily: fonts.medium, fontSize: 13 },
   skip: { marginTop: spacing.sm, alignSelf: 'flex-end' },
   skipText: { color: MM.muted, fontFamily: fonts.regular },
   progress: { marginTop: spacing.lg, textAlign: 'center', color: MM.muted, fontFamily: fonts.regular },
-  note: {
+  progressTrack: {
     marginTop: spacing.sm,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: MM.border,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', backgroundColor: MM.accent, opacity: 0.45 },
+  note: {
+    marginTop: spacing.md,
     textAlign: 'center',
     color: MM.muted,
     fontSize: 12,
     fontFamily: fonts.regular,
+    lineHeight: 18,
   },
 });

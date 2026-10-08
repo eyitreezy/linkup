@@ -18,7 +18,7 @@ export function useMatchMakerConnection(connectionId: string | null | undefined)
     const { data, error: qErr } = await supabase
       .from('matchmaker_connections')
       .select(
-        'id, status, connected_at, first_message_at, plan_unlock_at, first_plan_created_at, ended_at, user_a_id, user_b_id'
+        'id, status, connected_at, first_message_at, plan_unlock_at, first_plan_created_at, ended_at, paused_at, user_a_id, user_b_id'
       )
       .eq('id', connectionId)
       .maybeSingle();

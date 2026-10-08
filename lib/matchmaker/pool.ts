@@ -27,24 +27,39 @@ export async function fetchMatchMakerPool(
   return parsePoolRpcEnvelope(data);
 }
 
-export async function expressMatchMakerInterest(toUserId: string): Promise<{
+export type MatchMakerExpressInterestResult = {
   matched: boolean;
   connection_id?: string;
   queued?: boolean;
-}> {
+  surfaced?: boolean;
+  already_sent?: boolean;
+  interest_status?: string;
+};
+
+export async function expressMatchMakerInterest(
+  toUserId: string
+): Promise<MatchMakerExpressInterestResult> {
   const { data, error } = await supabase.rpc('matchmaker_express_interest', {
     p_to_user_id: toUserId,
   });
   if (error) throw error;
-  return (data ?? { matched: false }) as {
-    matched: boolean;
-    connection_id?: string;
-    queued?: boolean;
-  };
+  return (data ?? { matched: false }) as MatchMakerExpressInterestResult;
 }
 
-export async function passMatchMakerInterest(_toUserId: string): Promise<void> {
-  // Server-side pass can be added later; client removes card locally for MVP.
+/** Persistent pool/profile pass (viewer passes target). */
+export async function passMatchMakerProfile(toUserId: string): Promise<void> {
+  const { error } = await supabase.rpc('matchmaker_pass_pool_profile', {
+    p_to_user_id: toUserId,
+  });
+  if (error) throw error;
+}
+
+/** Decline a received pending interest in the queue. */
+export async function passMatchMakerInterest(fromUserId: string): Promise<void> {
+  const { error } = await supabase.rpc('matchmaker_pass_interest', {
+    p_from_user_id: fromUserId,
+  });
+  if (error) throw error;
 }
 
 /** Blurred gate backdrop — real profiles, no dealbreaker filters for gated users. */

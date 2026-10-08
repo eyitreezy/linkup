@@ -20,8 +20,8 @@ import { requiresVerificationGate } from '@/lib/verification/access';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { AppShellBackground } from '@/components/ui/AppShellBackground';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardSafeScrollView } from '@/components/layout/KeyboardSafeScrollView';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -38,9 +38,31 @@ function clampScheduledNotPast(d: Date): Date {
 export default function CreatePlanStepMeetScreen() {
   const { draft, setDraft } = usePlanDraft();
   const { dbUser, isAdmin, profile } = useAuth();
+  const params = useLocalSearchParams<{
+    matchmaker_connection_id?: string;
+    matchmaker_counterparty_id?: string;
+  }>();
+  const mmSeedRef = useRef(false);
   const [iosPickerOpen, setIosPickerOpen] = useState(false);
   const [androidPick, setAndroidPick] = useState<'idle' | 'date' | 'time'>('idle');
   const [gateOpen, setGateOpen] = useState(false);
+
+  useEffect(() => {
+    if (mmSeedRef.current) return;
+    const connectionId =
+      typeof params.matchmaker_connection_id === 'string' ? params.matchmaker_connection_id : null;
+    const counterpartyId =
+      typeof params.matchmaker_counterparty_id === 'string' ? params.matchmaker_counterparty_id : null;
+    if (!connectionId) return;
+    mmSeedRef.current = true;
+    setDraft((d) => ({
+      ...d,
+      matchmakerConnectionId: connectionId,
+      matchmakerCounterpartyId: counterpartyId,
+      visibility: 'friends',
+      isMoodPlan: false,
+    }));
+  }, [params.matchmaker_connection_id, params.matchmaker_counterparty_id, setDraft]);
 
   useEffect(() => {
     if (!draft.isMoodPlan || !draft.scheduledAt) return;

@@ -40,4 +40,7 @@ export type PlanDraft = {
   maxPremiumGuests: number | null;
   multiCity: boolean;
   cityIds: string[];
+  /** Set when creating a plan from an active MatchMaker connection. */
+  matchmakerConnectionId: string | null;
+  matchmakerCounterpartyId: string | null;
 };

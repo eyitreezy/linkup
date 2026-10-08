@@ -619,10 +619,26 @@ When a user has an active connection and someone expresses interest in them:
 
 ### 2.4 Pending Interests Queue (Received)
 
-User taps the interests icon/tab within MatchMaker (top-right of pool screen, badge count shown).
+User taps the interests icon/tab within MatchMaker (top-right of pool screen, badge count shown). before the list and grid tab
+
+[Interest icon] The interest icon should be a filled icon and should show a notification/indicator counter on it, the notification/indicator counter number on it should be the number of Pending Interests Queue (Received) that are yet to be opened
+
+Users should recieve an inapp notification and a push notification when a pending interests is recieved but only when they are yet to match with anyone
+
+Users should also see an indicator/notification on the MatchMaker sidetab just as we have it  on Messages and View Profile Sidetabs
 
 ```
 [Screen title: "People who expressed interest"]
+[Back button] to route the user back to the previous screen
+The back button should be located at the top of the header just like it is located on the edit profile screen
+The back button with arrow should be designed as it is designed in the edit profile screen, though with MatchMaker color tokens
+
+
+[Sent and Received Interests Tab] 
+The tab should take up Negotiations (offers) screen Sent(Numbers of interest sent count) and Recieved(Numbers of interest recieved cont) design with the MatchMaker colors
+
+Sent tab: shows the list of people you have express interest in.
+Recieved tab: Shows the list of people that have expressed interest in you
 
 [List of profile cards — stacked list view]
   Each card:
@@ -801,6 +817,11 @@ No MatchMaker-specific restrictions inside the chat beyond the existing contact-
   [Option B]
   [Option C]
   [Option D]
+  [Option E — Other]
+
+  When Other is selected:
+  [Custom answer input — required — max 100 characters]
+  [Live counter — e.g. 0/100]
 
   (Options generated from compatibility signals and
    general lifestyle questions — not binary yes/no)
@@ -830,8 +851,25 @@ No MatchMaker-specific restrictions inside the chat beyond the existing contact-
   "We will reveal both answers the moment
    [Name] submits theirs."
 
-[Close button — returns to connection screen]
-[Chat shortcut — "Chat while you wait" — text link]
+[Primary button — "Open chat"]
+[Secondary button — "Back to connection" — white fill, #EDE0D4 outline]
+
+On phone layouts, action buttons stack full width with equal height.
+On wide layouts (tablet), primary and secondary sit in one row with equal width.
+
+**When partner has submitted first (recipient has not answered yet):**
+
+Show a concealed preview card (visual blur only). Copy indicates the partner shared an answer.
+Do not load or render the partner answer text in the client before both have submitted.
+`matchmaker_get_shared_activity_state` omits partner answer JSON until `revealed_at` is set.
+
+**Activity share notification (first submit):**
+
+When one participant submits, the other receives in-app notification type `matchmaker_activity_shared`:
+"[Name] shared an activity answer. Add yours to reveal both."
+Dedupe key: `mm_activity_shared:{connection_id}:{week}:{recipient_id}`.
+Tapping opens `/matchmaker/connection/{id}/activity`.
+
 ```
 
 **Reveal moment — both submitted:**
@@ -863,9 +901,8 @@ Both parties open the activity screen to the reveal:
   "You have both answered. Talk about it."
   [italic — muted — centred]
 
-[CTA — "Open chat" — primary]
-[Link — "See next question" — if available]
-```
+[CTA — "Open chat" — primary button]
+[Secondary — "Back to connection"]
 
 The reveal is calm, not gamified. The point is the conversation it starts, not the comparison itself.
 
@@ -1055,6 +1092,12 @@ From connection screen: tap "End this connection" (text link, bottom).
   ○ Not feeling it
   ○ Personal reasons
   ○ Other
+
+When Other is selected:
+  [Custom reason input — required — max 40 characters]
+  [Live counter — e.g. 0/40]
+  End connection CTA disabled until non-empty trimmed text (1 to 40 chars).
+  Persisted as `Other: {text}` in internal `end_reason` only. Never shown to the other participant.
 
 [Spacing: 24pt]
 

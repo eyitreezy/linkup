@@ -2,8 +2,10 @@
  * Bottom tabs — blush shell, pill active indicator, hide on scroll down.
  * Hides on scroll down, shows on scroll up (see TabBarVisibilityContext).
  */
+import { useAuth } from '@/contexts/AuthContext';
 import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContext';
 import { useTabBarVisibilityOptional } from '@/contexts/TabBarVisibilityContext';
+import { useMatchMakerReceivedInterestCount } from '@/hooks/useMatchMakerReceivedInterestCount';
 import { colors, fonts } from '@/constants/theme';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useEffect } from 'react';
@@ -21,8 +23,10 @@ const TAB_BAR_BG = colors.splashBackground;
 
 export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const inbox = useNotificationInboxOptional();
   const unread = inbox?.unreadCount ?? 0;
+  const mmInterestCount = useMatchMakerReceivedInterestCount(user?.id);
   const visibility = useTabBarVisibilityOptional();
   const tabBarAnimatedStyle = visibility?.tabBarAnimatedStyle;
   const setTabBarHeight = visibility?.setTabBarHeight;
@@ -102,7 +106,9 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
               size: 24,
             }) ?? null;
 
-          const showDot = route.name === 'profile' && unread > 0;
+          const showDot =
+            (route.name === 'profile' && unread > 0) ||
+            (route.name === 'matchmaker' && mmInterestCount > 0);
 
           return (
             <Pressable

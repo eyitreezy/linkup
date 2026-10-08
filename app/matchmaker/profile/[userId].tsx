@@ -5,7 +5,12 @@ import { MM, fonts, spacing } from '@/constants/matchmakerTheme';
 import { colors, radius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { ageFromBirthDate, buildCompatibilitySignals } from '@/lib/matchmaker/compatibility';
-import { expressMatchMakerInterest, passMatchMakerInterest } from '@/lib/matchmaker/pool';
+import { MatchMakerInterestStateBanner } from '@/components/matchmaker/MatchMakerInterestStateBanner';
+import { useMatchMakerInterestRelation } from '@/hooks/useMatchMakerInterestRelation';
+import {
+  expressMatchMakerInterest,
+  passMatchMakerProfile,
+} from '@/lib/matchmaker/pool';
 import { fetchMatchMakerProfileBundle } from '@/lib/matchmaker/profile';
 import { buildHostMediaSequence } from '@/lib/profile/media/buildHostMediaSequence';
 import { goBackOrFallback } from '@/lib/navigation/goBackOrFallback';
@@ -43,7 +48,11 @@ export default function MatchMakerProfileScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
-  const { profile: viewerProfile } = useAuth();
+  const { profile: viewerProfile, user } = useAuth();
+  const { relation, refresh: refreshRelation } = useMatchMakerInterestRelation(
+    user?.id,
+    userId
+  );
   const heroHeight = Math.round(winH * 0.45);
 
   const distanceKm = useMemo(() => {
@@ -96,7 +105,7 @@ export default function MatchMakerProfileScreen() {
   const name = bundle?.profile.display_name?.trim() || 'Member';
 
   async function onExpressInterest() {
-    if (!userId || busy) return;
+    if (!userId || busy || !relation.canExpress) return;
     setBusy(true);
     try {
       const result = await expressMatchMakerInterest(userId);
@@ -104,6 +113,12 @@ export default function MatchMakerProfileScreen() {
         router.replace(`/matchmaker/connection/${result.connection_id}` as Href);
         return;
       }
+      if (result.already_sent) {
+        Alert.alert('MatchMaker', 'You already expressed interest in this member.');
+        await refreshRelation();
+        return;
+      }
+      await refreshRelation();
       goBackOrFallback('/matchmaker' as Href);
     } catch (e) {
       Alert.alert('MatchMaker', e instanceof Error ? e.message : 'Could not express interest');
@@ -113,15 +128,20 @@ export default function MatchMakerProfileScreen() {
   }
 
   async function onPass() {
-    if (!userId || busy) return;
+    if (!userId || busy || !relation.canPass) return;
     setBusy(true);
     try {
-      await passMatchMakerInterest(userId);
+      await passMatchMakerProfile(userId);
       goBackOrFallback('/matchmaker' as Href);
+    } catch (e) {
+      Alert.alert('MatchMaker', e instanceof Error ? e.message : 'Could not pass on this profile');
     } finally {
       setBusy(false);
     }
   }
+
+  const showExpress = relation.canExpress;
+  const showPass = relation.canPass;
 
   if (loading) {
     return (
@@ -174,6 +194,9 @@ export default function MatchMakerProfileScreen() {
               height={heroHeight}
               showCounter
               interactive
+              photoContentFit="contain"
+              autoSlide
+              autoSlideIntervalMs={4500}
             />
           ) : (
             <View style={[styles.heroFallback, { height: heroHeight }]} />
@@ -226,27 +249,57 @@ export default function MatchMakerProfileScreen() {
           ) : null}
 
           <MatchMakerProfilePrompts preferences={bundle.profile.preferences} />
+
+          {relation.state !== 'none' ? (
+            <MatchMakerInterestStateBanner state={relation.state} />
+          ) : null}
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Pressable
-          onPress={() => void onPass()}
-          disabled={busy}
-          style={({ pressed }) => [styles.passBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.passText}>Pass</Text>
-        </Pressable>
-        <Button
-          title="Express Interest"
-          onPress={() => void onExpressInterest()}
-          loading={busy}
-          gradient
-          pill
-          style={styles.interestBtn}
-        />
-      </View>
+      {relation.state === 'matched' && relation.connectionId ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <Button
+            title="Open connection"
+            onPress={() =>
+              router.replace(`/matchmaker/connection/${relation.connectionId}` as Href)
+            }
+            gradient
+            pill
+            style={{ flex: 1 }}
+          />
+        </View>
+      ) : showExpress || showPass ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          {showPass ? (
+            <Pressable
+              onPress={() => void onPass()}
+              disabled={busy}
+              style={({ pressed }) => [styles.passBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.passText}>Pass</Text>
+            </Pressable>
+          ) : null}
+          {showExpress ? (
+            <Button
+              title="Express Interest"
+              onPress={() => void onExpressInterest()}
+              loading={busy}
+              gradient
+              pill
+              style={styles.interestBtn}
+            />
+          ) : null}
+        </View>
+      ) : relation.state !== 'none' ? (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+          <Button
+            title="Back to pool"
+            onPress={() => goBackOrFallback('/matchmaker' as Href)}
+            style={{ flex: 1 }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }

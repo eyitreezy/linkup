@@ -48,6 +48,8 @@ const emptyDraft = (): PlanDraft => ({
   maxPremiumGuests: null,
   multiCity: false,
   cityIds: [],
+  matchmakerConnectionId: null,
+  matchmakerCounterpartyId: null,
 });
 
 type Ctx = {

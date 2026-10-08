@@ -7,6 +7,11 @@ import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { TabBarVisibilityProvider } from '@/contexts/TabBarVisibilityContext';
 import { Ionicons } from '@expo/vector-icons';
+import { fetchMatchMakerGateState, gateRouteFor } from '@/lib/matchmaker/gates';
+import {
+  getMatchMakerFocusedRoute,
+  triggerMatchMakerTabPulse,
+} from '@/lib/matchmaker/tabNavigation';
 import { Redirect, Tabs, router, type Href } from 'expo-router';
 import { View } from 'react-native';
 
@@ -64,7 +69,24 @@ export default function TabsLayout() {
         listeners={{
           tabPress: (e) => {
             e.preventDefault();
-            router.push('/matchmaker' as Href);
+            void (async () => {
+              try {
+                const data = await fetchMatchMakerGateState();
+                const route = gateRouteFor(data);
+                if (data.gate === 'connection' && route) {
+                  const focused = getMatchMakerFocusedRoute();
+                  if (focused?.startsWith('/matchmaker/connection/')) {
+                    triggerMatchMakerTabPulse();
+                    return;
+                  }
+                  router.replace(route as Href);
+                  return;
+                }
+                router.push('/matchmaker' as Href);
+              } catch {
+                router.push('/matchmaker' as Href);
+              }
+            })();
           },
         }}
         options={{

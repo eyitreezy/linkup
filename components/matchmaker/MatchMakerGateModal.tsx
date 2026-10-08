@@ -6,7 +6,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, type Href } from 'expo-router';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-export type MatchMakerGateState = 'subscription' | 'kyc' | 'cooldown' | 'suspended';
+export type MatchMakerGateState =
+  | 'subscription'
+  | 'kyc'
+  | 'cooldown'
+  | 'suspended'
+  | 'gender_not_set';
 
 type Props = {
   visible: boolean;
@@ -59,6 +64,14 @@ export function MatchMakerGateModal({
       cta: 'Got it',
       ctaType: 'secondary' as const,
       onCta: onDismiss,
+    },
+    gender_not_set: {
+      icon: <Ionicons name="person-outline" size={48} color={MM.primary} />,
+      heading: 'Complete your profile first',
+      body: 'Add your gender to your profile so we can find the right matches for you. You will not need to repeat onboarding.',
+      cta: 'Update profile',
+      ctaType: 'gradient' as const,
+      onCta: () => router.push('/settings/edit-profile' as Href),
     },
   }[gate];
 

@@ -6,9 +6,10 @@ import { colors, radius, fonts } from '@/constants/theme';
 import type { HostMediaItem } from '@/lib/profile/media/buildHostMediaSequence';
 import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
-import { Image } from 'expo-image';
+import { Image, type ImageContentFit } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as Haptics from 'expo-haptics';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -35,6 +36,11 @@ export type HostMediaCarouselProps = {
   interactive?: boolean;
   /** Light haptic when the active slide changes (discover swipe card). */
   slideHaptics?: boolean;
+  /** Photo `contentFit` for expo-image slides (default cover). */
+  photoContentFit?: ImageContentFit;
+  /** Automatically advance slides (mobile MatchMaker profile). */
+  autoSlide?: boolean;
+  autoSlideIntervalMs?: number;
 };
 
 function formatDuration(seconds: number | null | undefined): string {
@@ -166,7 +172,13 @@ function HostMediaVideoSlide({ uri, active }: { uri: string; active: boolean }) 
   return <HostMediaVideoSlidePlayer key={uri} uri={uri} />;
 }
 
-function HostMediaPhotoSlide({ uri }: { uri: string }) {
+function HostMediaPhotoSlide({
+  uri,
+  contentFit = 'cover',
+}: {
+  uri: string;
+  contentFit?: ImageContentFit;
+}) {
   const [loading, setLoading] = useState(true);
 
   return (
@@ -179,7 +191,7 @@ function HostMediaPhotoSlide({ uri }: { uri: string }) {
       <Image
         source={{ uri }}
         style={styles.media}
-        contentFit="cover"
+        contentFit={contentFit}
         transition={220}
         cachePolicy="memory-disk"
         onLoadEnd={() => setLoading(false)}
@@ -198,10 +210,16 @@ export function HostMediaCarousel({
   previewOnly = false,
   interactive = true,
   slideHaptics = false,
+  photoContentFit = 'cover',
+  autoSlide = false,
+  autoSlideIntervalMs = 4500,
 }: HostMediaCarouselProps) {
   const listRef = useRef<FlatList<HostMediaItem>>(null);
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userInteractingRef = useRef(false);
+  const isFocused = useIsFocused();
 
   useEffect(() => {
     if (!slideHaptics || previewOnly) return;
@@ -210,37 +228,75 @@ export function HostMediaCarousel({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, [index, slideHaptics, previewOnly]);
 
+  const clearAutoTimer = useCallback(() => {
+    if (autoTimerRef.current != null) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+  }, []);
+
   const onScrollEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (width <= 0) return;
       const x = e.nativeEvent.contentOffset.x;
       const next = Math.round(x / width);
-      if (next !== index) setIndex(next);
+      if (next !== index) {
+        indexRef.current = next;
+        setIndex(next);
+      }
     },
     [index, width]
   );
 
   const goTo = useCallback(
-    (next: number) => {
+    (next: number, animated = true) => {
       if (items.length === 0 || width <= 0) return;
       const clamped = Math.max(0, Math.min(next, items.length - 1));
-      listRef.current?.scrollToOffset({ offset: clamped * width, animated: true });
+      listRef.current?.scrollToOffset({ offset: clamped * width, animated });
+      indexRef.current = clamped;
       setIndex(clamped);
     },
     [items.length, width]
   );
 
+  const scheduleAutoAdvance = useCallback(() => {
+    clearAutoTimer();
+    if (!autoSlide || previewOnly || !interactive || items.length <= 1 || !isFocused) return;
+    if (userInteractingRef.current) return;
+
+    autoTimerRef.current = setTimeout(() => {
+      autoTimerRef.current = null;
+      if (userInteractingRef.current || !isFocused) return;
+      const next = (indexRef.current + 1) % items.length;
+      goTo(next, true);
+    }, autoSlideIntervalMs);
+  }, [
+    autoSlide,
+    autoSlideIntervalMs,
+    clearAutoTimer,
+    goTo,
+    interactive,
+    isFocused,
+    items.length,
+    previewOnly,
+  ]);
+
+  useEffect(() => {
+    scheduleAutoAdvance();
+    return clearAutoTimer;
+  }, [scheduleAutoAdvance, clearAutoTimer, index, isFocused, items.length]);
+
   const renderItem = useCallback(
     ({ item, index: i }: ListRenderItemInfo<HostMediaItem>) => (
       <View style={{ width, height }}>
         {item.kind === 'photo' ? (
-          <HostMediaPhotoSlide uri={item.url} />
+          <HostMediaPhotoSlide uri={item.url} contentFit={photoContentFit} />
         ) : (
           <HostMediaVideoSlide uri={item.url} active={i === index} />
         )}
       </View>
     ),
-    [width, height, index]
+    [width, height, index, photoContentFit]
   );
 
   if (loading) {
@@ -267,7 +323,7 @@ export function HostMediaCarousel({
     return (
       <View style={[styles.shell, { width, height }]}>
         {first.kind === 'photo' ? (
-          <HostMediaPhotoSlide uri={first.url} />
+          <HostMediaPhotoSlide uri={first.url} contentFit={photoContentFit} />
         ) : (
           <HostMediaVideoSlide uri={first.url} active={false} />
         )}
@@ -290,6 +346,14 @@ export function HostMediaCarousel({
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
         onScroll={onScrollEnd}
+        onScrollBeginDrag={() => {
+          userInteractingRef.current = true;
+          clearAutoTimer();
+        }}
+        onScrollEndDrag={() => {
+          userInteractingRef.current = false;
+          scheduleAutoAdvance();
+        }}
         scrollEventThrottle={16}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         bounces={canBrowse}
@@ -324,13 +388,21 @@ export function HostMediaCarousel({
         <>
           <Pressable
             style={styles.tapLeft}
-            onPress={() => goTo(index - 1)}
+            onPress={() => {
+              clearAutoTimer();
+              goTo(index - 1);
+              scheduleAutoAdvance();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Previous photo"
           />
           <Pressable
             style={styles.tapRight}
-            onPress={() => goTo(index + 1)}
+            onPress={() => {
+              clearAutoTimer();
+              goTo(index + 1);
+              scheduleAutoAdvance();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Next photo"
           />

@@ -10,11 +10,18 @@ import {
   defaultMatchMakerFilter,
   type MatchMakerFilterState,
 } from '@/lib/matchmaker/filterState';
-import { expressMatchMakerInterest, fetchMatchMakerPool } from '@/lib/matchmaker/pool';
+import {
+  expressMatchMakerInterest,
+  fetchMatchMakerPool,
+  passMatchMakerProfile,
+} from '@/lib/matchmaker/pool';
 import type { MatchMakerPoolEmptyReason, MatchMakerPoolProfile } from '@/lib/matchmaker/types';
 import { resolveClientEffectiveTier } from '@/lib/subscription/effectiveTier';
+import { MatchMakerInterestQueueIconButton } from '@/components/matchmaker/MatchMakerInterestQueueIconButton';
+import { useMatchMakerReceivedInterestCount } from '@/hooks/useMatchMakerReceivedInterestCount';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -41,7 +48,8 @@ const SWIPE_THRESHOLD = W * 0.4;
 
 export function MatchMakerPool() {
   const insets = useSafeAreaInsets();
-  const { profile, dbUser } = useAuth();
+  const { profile, dbUser, user } = useAuth();
+  const unopenedInterestCount = useMatchMakerReceivedInterestCount(user?.id);
   const [profiles, setProfiles] = useState<MatchMakerPoolProfile[]>([]);
   const [emptyReason, setEmptyReason] = useState<MatchMakerPoolEmptyReason>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +88,10 @@ export function MatchMakerPool() {
     [top, profile?.communication_style]
   );
 
+  const advancePool = useCallback(() => {
+    setProfiles((prev) => prev.slice(1));
+  }, []);
+
   const commitAction = useCallback(
     async (direction: 'left' | 'right') => {
       if (!top || busy) return;
@@ -88,11 +100,17 @@ export function MatchMakerPool() {
         if (direction === 'right') {
           const result = await expressMatchMakerInterest(top.user_id);
           if (result.matched && result.connection_id) {
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             router.replace(`/matchmaker/connection/${result.connection_id}` as Href);
             return;
           }
+          if (result.already_sent) {
+            Alert.alert('MatchMaker', 'You already expressed interest in this member.');
+          }
+        } else {
+          await passMatchMakerProfile(top.user_id);
         }
-        setProfiles((prev) => prev.slice(1));
+        advancePool();
       } catch (e) {
         Alert.alert('MatchMaker', e instanceof Error ? e.message : 'Action failed');
       } finally {
@@ -100,7 +118,7 @@ export function MatchMakerPool() {
         translateX.value = 0;
       }
     },
-    [top, busy, translateX]
+    [top, busy, translateX, advancePool]
   );
 
   const pan = Gesture.Pan()
@@ -126,9 +144,22 @@ export function MatchMakerPool() {
       <View style={styles.header}>
         <MatchMakerTabIcon size={22} color={MM.accent} active />
         <Text style={styles.headerTitle}>MatchMaker</Text>
-        <Pressable onPress={() => router.push('/matchmaker/settings' as Href)} hitSlop={12}>
-          <Ionicons name="settings-outline" size={22} color={MM.muted} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/matchmaker/history' as Href)}
+            hitSlop={12}
+            accessibilityLabel="Connection history"
+          >
+            <Ionicons name="time-outline" size={22} color={MM.muted} />
+          </Pressable>
+          <MatchMakerInterestQueueIconButton
+            unopenedCount={unopenedInterestCount}
+            onPress={() => router.push('/matchmaker/interests' as Href)}
+          />
+          <Pressable onPress={() => router.push('/matchmaker/settings' as Href)} hitSlop={12}>
+            <Ionicons name="settings-outline" size={22} color={MM.muted} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.toolbar}>
@@ -226,6 +257,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   headerTitle: { fontSize: 18, fontFamily: fonts.bold, fontWeight: '800', color: MM.text },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',

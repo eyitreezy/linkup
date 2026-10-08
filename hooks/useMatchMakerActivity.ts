@@ -1,19 +1,11 @@
+import type { SharedActivityRpcState } from '@/lib/matchmaker/sharedActivity';
+import { sharedActivityPhaseFromState } from '@/lib/matchmaker/sharedActivity';
 import { removeSupabaseChannel, supabase } from '@/lib/supabase';
 import { useCallback, useEffect, useState } from 'react';
 
 export type SharedActivityPhase = 'question' | 'waiting' | 'reveal';
 
-export type SharedActivityRow = {
-  id: string;
-  connection_id: string;
-  week_number: number;
-  questions: unknown;
-  user_a_answers: unknown;
-  user_b_answers: unknown;
-  a_submitted_at: string | null;
-  b_submitted_at: string | null;
-  revealed_at: string | null;
-};
+export type SharedActivityRow = SharedActivityRpcState;
 
 export function useMatchMakerActivity(
   connectionId: string | null | undefined,
@@ -21,7 +13,7 @@ export function useMatchMakerActivity(
   isUserA: boolean,
   weekNumber = 1
 ) {
-  const [activity, setActivity] = useState<SharedActivityRow | null>(null);
+  const [activity, setActivity] = useState<SharedActivityRpcState | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -31,13 +23,15 @@ export function useMatchMakerActivity(
       return;
     }
     setLoading(true);
-    const { data } = await supabase
-      .from('matchmaker_shared_activities')
-      .select('*')
-      .eq('connection_id', connectionId)
-      .eq('week_number', weekNumber)
-      .maybeSingle();
-    setActivity((data as SharedActivityRow | null) ?? null);
+    const { data, error } = await supabase.rpc('matchmaker_get_shared_activity_state', {
+      p_connection_id: connectionId,
+      p_week_number: weekNumber,
+    });
+    if (error) {
+      setActivity(null);
+    } else {
+      setActivity((data as SharedActivityRpcState | null) ?? null);
+    }
     setLoading(false);
   }, [connectionId, weekNumber]);
 
@@ -48,28 +42,32 @@ export function useMatchMakerActivity(
   useEffect(() => {
     if (!connectionId) return;
     const channel = supabase
-      .channel(`mm-activity-${connectionId}-${weekNumber}`)
+      .channel(`mm-activity-refresh-${connectionId}-${weekNumber}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'matchmaker_shared_activities',
-          filter: `connection_id=eq.${connectionId}`,
+          table: 'notifications',
+          filter: `user_id=eq.${viewerId ?? ''}`,
         },
-        () => void refresh()
+        (payload) => {
+          const row = payload.new as { type?: string; data?: { connection_id?: string } };
+          if (
+            row?.type === 'matchmaker_activity_shared' ||
+            row?.type === 'matchmaker_activity_revealed'
+          ) {
+            if (row.data?.connection_id === connectionId) void refresh();
+          }
+        }
       )
       .subscribe();
-    return () => removeSupabaseChannel(channel);
-  }, [connectionId, weekNumber, refresh]);
+    return () => {
+      removeSupabaseChannel(channel);
+    };
+  }, [connectionId, weekNumber, refresh, viewerId]);
 
-  const phase: SharedActivityPhase = (() => {
-    if (!activity) return 'question';
-    if (activity.revealed_at) return 'reveal';
-    const mineSubmitted = isUserA ? activity.a_submitted_at : activity.b_submitted_at;
-    if (mineSubmitted) return 'waiting';
-    return 'question';
-  })();
+  const phase: SharedActivityPhase = sharedActivityPhaseFromState(activity, isUserA);
 
   return { activity, phase, loading, refresh, viewerId };
 }
