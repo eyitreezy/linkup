@@ -7,7 +7,12 @@ import { useNotificationInboxOptional } from '@/contexts/NotificationInboxContex
 import { useTabBarVisibilityOptional } from '@/contexts/TabBarVisibilityContext';
 import { useMatchMakerReceivedInterestCount } from '@/hooks/useMatchMakerReceivedInterestCount';
 import { colors, fonts } from '@/constants/theme';
+import {
+  isMatchMakerProductRoute,
+  MATCHMAKER_NAV_INACTIVE_FILL,
+} from '@/lib/navigation/matchmakerNavIcon';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { usePathname } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -15,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const INACTIVE_TAB = 'rgba(26, 29, 38, 0.42)';
 const MM_ACTIVE = '#9B1B4B';
-const MM_INACTIVE = '#C8BDB8';
+const MM_INACTIVE = MATCHMAKER_NAV_INACTIVE_FILL;
 const INDICATOR_HEIGHT = 3;
 const INDICATOR_WIDTH = 28;
 /** Matches screen shell — keeps bar visually merged with blush backdrop. */
@@ -23,6 +28,8 @@ const TAB_BAR_BG = colors.splashBackground;
 
 export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  const matchMakerRouteActive = isMatchMakerProductRoute(pathname);
   const { user } = useAuth();
   const inbox = useNotificationInboxOptional();
   const unread = inbox?.unreadCount ?? 0;
@@ -52,7 +59,9 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
     >
       <View style={styles.indicatorRow} accessibilityRole="tablist">
         {visibleRoutes.map((route) => {
-          const focused = route.key === focusedRouteKey;
+          const tabFocused = route.key === focusedRouteKey;
+          const focused =
+            route.name === 'matchmaker' ? matchMakerRouteActive || tabFocused : tabFocused;
           return (
             <View key={`in-${route.key}`} style={styles.indicatorSlot}>
               {focused ? <View style={styles.indicator} /> : null}
@@ -64,8 +73,9 @@ export function LinkUpTabBar({ state, descriptors, navigation }: BottomTabBarPro
       <View style={styles.tabsRow}>
         {visibleRoutes.map((route) => {
           const { options } = descriptors[route.key];
-          const focused = route.key === focusedRouteKey;
+          const tabFocused = route.key === focusedRouteKey;
           const isMatchMaker = route.name === 'matchmaker';
+          const focused = isMatchMaker ? matchMakerRouteActive || tabFocused : tabFocused;
           const tint = isMatchMaker
             ? focused
               ? MM_ACTIVE

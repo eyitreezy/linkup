@@ -10,6 +10,7 @@ export type MatchMakerGate =
   | 'healing'
   | 'reentry'
   | 'connection'
+  | 'reaffirmation'
   | 'pool'
   | 'open';
 
@@ -68,6 +69,8 @@ export type MatchMakerPoolProfile = {
   interests: string[];
   communication_style: string | null;
   distance_km: number | null;
+  /** From pool RPC when viewer already sent pending interest. */
+  viewer_interest_pending?: boolean;
 };
 
 export type MatchMakerConnection = {

@@ -5,6 +5,7 @@ import {
 import { MatchMakerPool } from '@/components/matchmaker/MatchMakerPool';
 import { MatchMakerPoolPreview } from '@/components/matchmaker/MatchMakerPoolPreview';
 import { MatchMakerCooldownScreen } from '@/components/matchmaker/MatchMakerCooldownScreen';
+import { MatchMakerReaffirmationOverlay } from '@/components/matchmaker/MatchMakerReaffirmationOverlay';
 import { MatchMakerSkeleton } from '@/components/matchmaker/MatchMakerSkeleton';
 import { MM } from '@/constants/matchmakerTheme';
 import { fonts, spacing } from '@/constants/theme';
@@ -40,6 +41,7 @@ export default function MatchMakerRootScreen() {
   const [modalDismissed, setModalDismissed] = useState(false);
   const [poolPreview, setPoolPreview] = useState<MatchMakerPoolProfile[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reaffirmKey, setReaffirmKey] = useState(0);
 
   const checkGate = useCallback(async () => {
     setGateState('loading');
@@ -76,7 +78,10 @@ export default function MatchMakerRootScreen() {
         return;
       }
 
-      if (MATCHMAKER_GATED_MODAL.includes(resolvedGate)) {
+      if (
+        MATCHMAKER_GATED_MODAL.includes(resolvedGate) ||
+        resolvedGate === 'reaffirmation'
+      ) {
         try {
           const preview = await fetchMatchMakerPoolPreview(6);
           setPoolPreview(preview);
@@ -89,12 +94,12 @@ export default function MatchMakerRootScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load MatchMaker');
     }
-  }, [refreshProfile, user?.id]);
+  }, [refreshProfile, user?.id, reaffirmKey]);
 
   useFocusEffect(
     useCallback(() => {
       void checkGate();
-    }, [checkGate])
+    }, [checkGate, reaffirmKey])
   );
 
   const isGated = MATCHMAKER_GATED_MODAL.includes(gateState as MatchMakerGate);
@@ -114,6 +119,18 @@ export default function MatchMakerRootScreen() {
 
   if (gateState === 'cooldown') {
     return <MatchMakerCooldownScreen cooldownUntil={gateMeta.cooldownUntil} />;
+  }
+
+  if (gateState === 'reaffirmation') {
+    return (
+      <View style={{ flex: 1, backgroundColor: MM.bg }}>
+        <View style={{ flex: 1 }} pointerEvents="none">
+          <MatchMakerPoolPreview profiles={poolPreview} />
+        </View>
+        <BlurView intensity={18} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
+        <MatchMakerReaffirmationOverlay onComplete={() => setReaffirmKey((k) => k + 1)} />
+      </View>
+    );
   }
 
   if (

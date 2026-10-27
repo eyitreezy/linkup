@@ -37,6 +37,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.6.0",
     "@react-native-community/slider": "5.1.2",
+    "@react-native-masked-view/masked-view": "^0.3.2",
     "@react-navigation/elements": "^2.9.26",
     "@supabase/supabase-js": "^2.49.1",
     "babel-preset-expo": "~55.0.8",
@@ -92,6 +93,7 @@
     "eslint": "^8.57.0",
     "eslint-config-expo": "~55.0.0",
     "supabase": "^2.106.0",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.2"
   }
 }

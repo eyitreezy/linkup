@@ -1,3 +1,4 @@
+import { pacePreferenceDisplayLabel } from '@/lib/matchmaker/pacePreference';
 import { supabase } from '@/lib/supabase';
 
 export type MatchMakerSettingsSummary = {
@@ -23,13 +24,6 @@ const FAMILY_LABELS: Record<string, string> = {
   have_not_open_more: 'Has children, not open to more',
 };
 
-const PACE_LABELS: Record<string, string> = {
-  platform_minimum: 'Platform minimum (21 days)',
-  one_two_months: '1 to 2 months',
-  three_six_months: '3 to 6 months',
-  six_plus_months: '6 months or more',
-};
-
 export function formatCommunicationStyle(value: string | null): string {
   if (!value) return 'Not set';
   return COMM_LABELS[value] ?? value;
@@ -41,8 +35,7 @@ export function formatFamilyGoals(value: string | null): string {
 }
 
 export function formatPace(value: string | null): string {
-  if (!value) return 'Not set';
-  return PACE_LABELS[value] ?? value.replace(/_/g, ' ');
+  return pacePreferenceDisplayLabel(value);
 }
 
 export function summarizeDealbreakers(dealbreakers: Record<string, unknown> | null): string {

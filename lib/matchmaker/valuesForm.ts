@@ -1,3 +1,4 @@
+import { parsePacePreferenceUiFromDb, type PacePreferenceUiKey } from '@/lib/matchmaker/pacePreference';
 import { supabase } from '@/lib/supabase';
 
 export const COMMUNICATION_STYLE_OPTIONS = [
@@ -31,7 +32,8 @@ export type MatchMakerValuesFormState = {
   faithType: string | null;
   otherFaithText: string;
   familyGoals: string | null;
-  pace: string | null;
+  pace: PacePreferenceUiKey | null;
+  paceDbRaw: string | null;
   communicationStyle: string | null;
   dealbreakers: DealbreakersDraft;
   otherDealbreakers: string[];
@@ -136,6 +138,7 @@ export async function loadMatchMakerValuesForm(userId: string): Promise<MatchMak
       ...faithParsed,
       familyGoals: null,
       pace: null,
+      paceDbRaw: null,
       communicationStyle,
       ...dbParsed,
       hasExistingValues: false,
@@ -149,7 +152,8 @@ export async function loadMatchMakerValuesForm(userId: string): Promise<MatchMak
   return {
     ...faithParsed,
     familyGoals: values?.family_goals ?? null,
-    pace: values?.pace_preference ?? null,
+    pace: parsePacePreferenceUiFromDb(values?.pace_preference),
+    paceDbRaw: values?.pace_preference ?? null,
     communicationStyle,
     ...dbParsed,
     hasExistingValues: true,

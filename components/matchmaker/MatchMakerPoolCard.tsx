@@ -11,9 +11,10 @@ type Props = {
   profile: MatchMakerPoolProfile;
   signals: string[];
   onPressProfile?: () => void;
+  showInterestSent?: boolean;
 };
 
-export function MatchMakerPoolCard({ profile, signals, onPressProfile }: Props) {
+export function MatchMakerPoolCard({ profile, signals, onPressProfile, showInterestSent }: Props) {
   const age = ageFromBirthDate(profile.birth_date);
   const photo = profile.avatar_url;
 
@@ -29,6 +30,11 @@ export function MatchMakerPoolCard({ profile, signals, onPressProfile }: Props) 
         </View>
       )}
       <View style={styles.body}>
+        {showInterestSent || profile.viewer_interest_pending ? (
+          <View style={styles.pendingPill}>
+            <Text style={styles.pendingPillText}>Interest sent ✓</Text>
+          </View>
+        ) : null}
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>
             {profile.display_name ?? 'Member'}
@@ -77,6 +83,17 @@ const styles = StyleSheet.create({
   photoOverlay: { flex: 1, backgroundColor: 'rgba(26, 29, 38, 0.04)' },
   photoFallback: { alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, padding: spacing.md, gap: spacing.xs },
+  pendingPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: MM.surfaceWarm,
+    borderWidth: 1,
+    borderColor: MM.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  pendingPillText: { fontSize: 11, fontFamily: fonts.bold, color: MM.text },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { flex: 1, fontSize: 20, fontFamily: fonts.bold, fontWeight: '800', color: MM.text },
   location: { fontSize: 13, fontFamily: fonts.regular, color: MM.muted },

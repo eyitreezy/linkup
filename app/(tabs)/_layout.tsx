@@ -92,8 +92,8 @@ export default function TabsLayout() {
         options={{
           headerShown: false,
           tabBarLabel: 'MatchMaker',
-          tabBarIcon: ({ color, focused }) => (
-            <MatchMakerTabIcon size={24} color={focused ? '#9B1B4B' : color} active={focused} />
+          tabBarIcon: ({ focused }) => (
+            <MatchMakerTabIcon size={24} navActive={focused} />
           ),
         }}
       />

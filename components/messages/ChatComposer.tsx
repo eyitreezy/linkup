@@ -2,12 +2,16 @@
  * Chat composer — WhatsApp-style + toggle reveals Plan / Offer / Place / Media.
  */
 import { ChatQuickActionsBar } from '@/components/messages/ChatQuickActionsBar';
-import { MessageInput, type MessageInputThreadLook } from '@/components/messages/MessageInput';
+import {
+  MessageInput,
+  type MessageInputHandle,
+  type MessageInputThreadLook,
+} from '@/components/messages/MessageInput';
 import { ReplyPreviewBar } from '@/components/messages/ReplyPreviewBar';
 import type { ChatAppearancePreset } from '@/lib/messaging/chatAppearance';
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, StyleSheet, View, type NativeSyntheticEvent, type TextInputSelectionChangeEventData } from 'react-native';
 
 type Props = {
@@ -30,6 +34,7 @@ type Props = {
   mentionPicker?: ReactNode;
   selection?: { start: number; end: number };
   onSelectionChange?: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
+  composerInputRef?: RefObject<MessageInputHandle | null>;
 };
 
 export function ChatComposer({
@@ -52,6 +57,7 @@ export function ChatComposer({
   mentionPicker,
   selection,
   onSelectionChange,
+  composerInputRef,
 }: Props) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const iconColor = threadLook?.attachIcon ?? preset.composerAttachIcon;
@@ -102,6 +108,7 @@ export function ChatComposer({
         </Pressable>
         <View style={styles.inputFlex}>
           <MessageInput
+            ref={composerInputRef}
             embeddedInSheet
             threadLook={threadLook}
             value={value}

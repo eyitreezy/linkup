@@ -14,6 +14,8 @@ import {
   type MessageDeleteKind,
 } from '@/components/messages/MessageDeleteConfirmModal';
 import { ChatComposer } from '@/components/messages/ChatComposer';
+import type { MessageInputHandle } from '@/components/messages/MessageInput';
+import { MatchMakerQuickPickSheet } from '@/components/matchmaker/MatchMakerQuickPickSheet';
 import { LiveLocationButton } from '@/components/plans/LiveLocationButton';
 import { LiveLocationViewer } from '@/components/plans/LiveLocationViewer';
 import { SmartSuggestionsBar } from '@/components/chat/SmartSuggestionsBar';
@@ -122,6 +124,7 @@ import { File as ExpoFile } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { useMatchMakerConnection } from '@/hooks/useMatchMakerConnection';
 import { useLocalSearchParams, router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Animated from 'react-native-reanimated';
@@ -208,6 +211,9 @@ export default function ChatThreadScreen() {
   const contactBlockFromSendRef = useRef(false);
   const matchmakerConnectionIdRef = useRef<string | null>(null);
   const [matchmakerConnectionId, setMatchmakerConnectionId] = useState<string | null>(null);
+  const { connection: matchmakerConnection } = useMatchMakerConnection(matchmakerConnectionId);
+  const [quickPickOpen, setQuickPickOpen] = useState(false);
+  const composerInputRef = useRef<MessageInputHandle>(null);
   const listRef = useRef<FlatList<UiMessage>>(null);
   const {
     listFooterStyle,
@@ -289,6 +295,56 @@ export default function ChatThreadScreen() {
       }),
     [linkedMeetup, messages, text, user?.id]
   );
+
+  const visibleMessages = useMemo(
+    () => filterMessagesHiddenForUser(messages, hiddenForMeIds),
+    [messages, hiddenForMeIds]
+  );
+
+  const countableMessages = useMemo(
+    () => visibleMessages.filter((m) => m.sender_id !== null && !m.deleted_at),
+    [visibleMessages]
+  );
+
+  const matchmakerChatActive =
+    !!matchmakerConnectionId &&
+    (matchmakerConnection == null || matchmakerConnection.status === 'active');
+
+  const applyQuickPickStarter = useCallback((starter: string) => {
+    setText(starter);
+    setQuickPickOpen(false);
+    requestAnimationFrame(() => composerInputRef.current?.focus());
+  }, []);
+
+  const handleQuickPickSelect = useCallback(
+    (starter: string) => {
+      if (text.trim()) {
+        setQuickPickOpen(false);
+        Alert.alert(
+          'Replace your draft?',
+          'You already have text in the message box. Replace it with this conversation starter?',
+          [
+            { text: 'Keep draft', style: 'cancel' },
+            { text: 'Replace', onPress: () => applyQuickPickStarter(starter) },
+          ]
+        );
+        return;
+      }
+      applyQuickPickStarter(starter);
+    },
+    [text, applyQuickPickStarter]
+  );
+
+  useEffect(() => {
+    if (!quickPickOpen) return;
+    if (matchmakerConnection && matchmakerConnection.status !== 'active') {
+      setQuickPickOpen(false);
+    }
+  }, [quickPickOpen, matchmakerConnection]);
+
+  useEffect(() => {
+    setQuickPickOpen(false);
+  }, [conversationId]);
 
   const readReceiptsOn = hasReadReceiptsPerm && getVisibilityPrefs(profile).read_receipts;
 
@@ -1706,6 +1762,31 @@ export default function ChatThreadScreen() {
             },
           ]}
         >
+          {matchmakerChatActive && user?.id ? (
+            <View style={styles.quickPickBar}>
+              {countableMessages.length === 0 && !text.trim() ? (
+                <Text style={styles.quickPickHelper}>
+                  Not sure what to say first? Pick a conversation starter.
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  if (!quickPickOpen) setQuickPickOpen(true);
+                }}
+                disabled={quickPickOpen}
+                style={({ pressed }) => [
+                  styles.quickPickBtn,
+                  { borderColor: chatPreset.composerBorder },
+                  pressed && !quickPickOpen && styles.quickPickBtnPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Quick picks conversation starters"
+              >
+                <Ionicons name="sparkles" size={16} color={colors.primary} />
+                <Text style={styles.quickPickBtnText}>Quick picks</Text>
+              </Pressable>
+            </View>
+          ) : null}
           <SmartSuggestionsBar
             suggestions={smartSuggestions}
             backgroundColor={chatPreset.composerBg}
@@ -1715,6 +1796,7 @@ export default function ChatThreadScreen() {
           <ChatComposer
             preset={chatPreset}
             threadLook={messageInputLook}
+            composerInputRef={composerInputRef}
             value={text}
             onChangeText={(t) => {
               setText(t);
@@ -1851,6 +1933,14 @@ export default function ChatThreadScreen() {
             title="Report member"
           />
         ) : null}
+
+        <MatchMakerQuickPickSheet
+          visible={quickPickOpen}
+          onClose={() => setQuickPickOpen(false)}
+          onSelect={handleQuickPickSelect}
+          viewerPreferences={profile?.preferences}
+          peerPreferences={peer?.preferences}
+        />
       </SafeAreaView>
   );
 
@@ -1917,6 +2007,42 @@ const styles = StyleSheet.create({
   },
   trustText: { flex: 1, fontSize: 12, color: colors.text, fontWeight: '700',
     fontFamily: fonts.medium, lineHeight: 17 },
+  quickPickBar: {
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(15, 23, 42, 0.08)',
+  },
+  quickPickHelper: {
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    lineHeight: 17,
+  },
+  quickPickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+  },
+  quickPickBtnPressed: { opacity: 0.92 },
+  quickPickBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.textMuted,
+  },
   composerSheet: {
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,

@@ -404,6 +404,93 @@ MOBILE_SECTIONS: list[QaSection] = [
         ],
     },
     {
+        "name": "A18b. MatchMaker Quick-Pick conversation starters",
+        "cases": [
+            c(
+                "MM-QA-037 Quick picks entry on MatchMaker thread",
+                "Critical",
+                "Active MatchMaker connection; 1:1 chat open from Messages.",
+                [
+                    "Open thread with MatchMaker badge.",
+                    "Locate Quick picks control above composer.",
+                ],
+                "Control visible; does not cover Send or attachment controls. Spec §3.3.1.",
+            ),
+            c(
+                "MM-QA-038 Empty chat helper",
+                "High",
+                "New MatchMaker thread with zero user messages.",
+                [
+                    "Open chat with empty composer.",
+                    "Send one message on another connection or same thread.",
+                ],
+                "Helper shows only when no messages and composer empty; hides after first message.",
+            ),
+            c(
+                "MM-QA-039 Category order and starter content",
+                "Critical",
+                "Quick picks sheet open.",
+                [
+                    "Verify chip order matches interaction spec §3.3.1.",
+                    "Spot-check five lines per category.",
+                ],
+                "Eight categories in spec order; curated copy; no private MatchMaker fields shown.",
+            ),
+            c(
+                "MM-QA-040 Starter inserts without auto-send",
+                "Critical",
+                "Empty composer.",
+                [
+                    "Pick a starter.",
+                    "Observe composer and message list before Send.",
+                ],
+                "Text in composer only; no new message row until Send.",
+            ),
+            c(
+                "MM-QA-041 Draft replace confirmation",
+                "Critical",
+                "Composer contains unsent text.",
+                [
+                    "Open Quick picks.",
+                    "Select starter.",
+                    "Choose Keep draft.",
+                    "Repeat and choose Replace.",
+                ],
+                "Keep draft preserves text; Replace overwrites; neither path auto-sends.",
+            ),
+            c(
+                "MM-QA-042 Shared interest personalization",
+                "High",
+                "Both profiles share a public interest tag.",
+                [
+                    "Open Based on Shared Interests.",
+                    "Compare with account lacking overlap.",
+                ],
+                "Overlap case names real shared tag; no overlap uses generic lines only.",
+            ),
+            c(
+                "MM-QA-043 Show more and dismiss",
+                "Medium",
+                "Quick picks open.",
+                [
+                    "Tap Show more twice.",
+                    "Dismiss via backdrop and Cancel.",
+                ],
+                "Different starters when possible; dismiss leaves composer unchanged.",
+            ),
+            c(
+                "MM-QA-044 Connection ended while picker open",
+                "High",
+                "Second session or partner ends connection.",
+                [
+                    "Open Quick picks.",
+                    "End connection or change status away from active.",
+                ],
+                "Sheet closes; Quick picks hidden; send rules follow existing chat policy.",
+            ),
+        ],
+    },
+    {
         "name": "A19. Live Location Sharing",
         "cases": [
             c("Share live location with NDPR consent", "High", "Plan chat open.", ["Tap share.", "Accept consent.", "Pick duration."], "Session starts; partner notified."),

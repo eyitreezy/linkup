@@ -7,6 +7,14 @@ import { MM, fonts, spacing } from '@/constants/matchmakerTheme';
 import { colors, radius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  PACE_PREFERENCE_OPTIONS,
+  PACE_PREFERENCE_PRIVATE_LABEL,
+  PACE_PREFERENCE_QUESTION,
+  pacePreferenceDbFromUi,
+  type PacePreferenceUiKey,
+} from '@/lib/matchmaker/pacePreference';
+import { normalizeDealbreakersForSave, sanitizeDigitsInput } from '@/lib/matchmaker/dealbreakersForm';
+import {
   buildDealbreakersDbPayload,
   buildFaithDbValue,
   COMMUNICATION_STYLE_OPTIONS,
@@ -38,7 +46,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const VALUES_STEP_LABELS = ['Faith & religion', 'Family goals', 'Pace preference', 'Dealbreakers'];
+const VALUES_STEP_LABELS = ['Faith & religion', 'Family goals', 'Pace Preference', 'Dealbreakers'];
 
 const FAMILY_OPTIONS: { value: string; label: string }[] = [
   { value: 'yes_want_children', label: 'Yes, I want children' },
@@ -46,13 +54,6 @@ const FAMILY_OPTIONS: { value: string; label: string }[] = [
   { value: 'no_children', label: 'No, I do not want children' },
   { value: 'have_open_more', label: 'I have children and am open to more' },
   { value: 'have_not_open_more', label: 'I have children and I am not open to more' },
-];
-
-const PACE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'platform_minimum', label: 'As soon as the platform allows (21 days minimum)' },
-  { value: 'one_two_months', label: '1 to 2 months' },
-  { value: 'three_six_months', label: '3 to 6 months' },
-  { value: 'six_plus_months', label: 'I take my time, 6 months or more' },
 ];
 
 const FAITH_TYPES: { value: string; label: string }[] = [
@@ -69,7 +70,8 @@ function applyLoadedFormState(
     setFaithType: (v: string | null) => void;
     setOtherFaithText: (v: string) => void;
     setFamilyGoals: (v: string | null) => void;
-    setPace: (v: string | null) => void;
+    setPace: (v: PacePreferenceUiKey | null) => void;
+    setLoadedPaceDb: (v: string | null) => void;
     setCommunicationStyle: (v: string | null) => void;
     setDealbreakers: (v: DealbreakersDraft) => void;
     setOtherDealbreakers: (v: string[]) => void;
@@ -80,6 +82,7 @@ function applyLoadedFormState(
   setters.setOtherFaithText(loaded.otherFaithText);
   setters.setFamilyGoals(loaded.familyGoals);
   setters.setPace(loaded.pace);
+  setters.setLoadedPaceDb(loaded.paceDbRaw);
   setters.setCommunicationStyle(loaded.communicationStyle);
   setters.setDealbreakers(loaded.dealbreakers);
   setters.setOtherDealbreakers(loaded.otherDealbreakers);
@@ -97,7 +100,8 @@ export default function MatchMakerValuesScreen() {
   const [faithType, setFaithType] = useState<string | null>(null);
   const [otherFaithText, setOtherFaithText] = useState('');
   const [familyGoals, setFamilyGoals] = useState<string | null>(null);
-  const [pace, setPace] = useState<string | null>(null);
+  const [pace, setPace] = useState<PacePreferenceUiKey | null>(null);
+  const [loadedPaceDb, setLoadedPaceDb] = useState<string | null>(null);
   const [communicationStyle, setCommunicationStyle] = useState<string | null>(null);
   const [otherDealbreakers, setOtherDealbreakers] = useState<string[]>([]);
   const [otherDbInput, setOtherDbInput] = useState('');
@@ -121,6 +125,7 @@ export default function MatchMakerValuesScreen() {
         setOtherFaithText,
         setFamilyGoals,
         setPace,
+        setLoadedPaceDb,
         setCommunicationStyle,
         setDealbreakers,
         setOtherDealbreakers,
@@ -177,14 +182,21 @@ export default function MatchMakerValuesScreen() {
     setBusy(true);
 
     try {
+      const paceDb = pacePreferenceDbFromUi(pace) ?? loadedPaceDb;
+      if (!paceDb) {
+        Alert.alert('MatchMaker', 'Select a pace preference to continue.');
+        setBusy(false);
+        return;
+      }
       const faithValue = buildFaithDbValue(faith, faithType, otherFaithText);
+      const dbDealbreakers = normalizeDealbreakersForSave(dealbreakers);
       const { error: valuesError } = await supabase.from('matchmaker_values').upsert({
         user_id: user.id,
         faith: faithValue,
         family_goals: familyGoals ?? 'open_to_it',
-        pace_preference: pace ?? 'platform_minimum',
+        pace_preference: paceDb,
         communication_frequency: communicationStyle,
-        dealbreakers: buildDealbreakersDbPayload(dealbreakers, otherDealbreakers),
+        dealbreakers: buildDealbreakersDbPayload(dbDealbreakers, otherDealbreakers),
         updated_at: new Date().toISOString(),
       });
       if (valuesError) throw valuesError;
@@ -460,14 +472,15 @@ export default function MatchMakerValuesScreen() {
 
           {step === 2 ? (
             <>
-              <Text style={styles.heading}>How long after connecting do you expect to meet?</Text>
+              <Text style={styles.heading}>{PACE_PREFERENCE_QUESTION}</Text>
+              <Text style={styles.privateLabel}>{PACE_PREFERENCE_PRIVATE_LABEL}</Text>
               <ChoiceChipRow>
-                {PACE_OPTIONS.map(({ value, label }) => (
+                {PACE_PREFERENCE_OPTIONS.map(({ key, label }) => (
                   <ChoiceChip
-                    key={value}
+                    key={key}
                     label={label}
-                    selected={pace === value}
-                    onPress={() => setPace(value)}
+                    selected={pace === key}
+                    onPress={() => setPace(key)}
                   />
                 ))}
               </ChoiceChipRow>
@@ -505,6 +518,23 @@ export default function MatchMakerValuesScreen() {
                   trackColor={{ false: '#E8E4F5', true: colors.primary }}
                 />
               </View>
+              {dealbreakers.location ? (
+                <View style={styles.dealbreakerField}>
+                  <Text style={authSoftLabelStyle}>Maximum distance (km)</Text>
+                  <Input
+                    value={String(dealbreakers.locationKm)}
+                    onChangeText={(t) =>
+                      setDealbreakers((d) => ({
+                        ...d,
+                        locationKm: Number(sanitizeDigitsInput(t, 3)) || d.locationKm,
+                      }))
+                    }
+                    keyboardType="number-pad"
+                    variant="onboarding"
+                    maxLength={3}
+                  />
+                </View>
+              ) : null}
               <View style={styles.rowBetween}>
                 <Text style={styles.switchLabel}>Must be within age range</Text>
                 <Switch
@@ -513,6 +543,40 @@ export default function MatchMakerValuesScreen() {
                   trackColor={{ false: '#E8E4F5', true: colors.primary }}
                 />
               </View>
+              {dealbreakers.age ? (
+                <View style={styles.dealbreakerAgeRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={authSoftLabelStyle}>Min age</Text>
+                    <Input
+                      value={String(dealbreakers.ageMin)}
+                      onChangeText={(t) =>
+                        setDealbreakers((d) => ({
+                          ...d,
+                          ageMin: Number(sanitizeDigitsInput(t, 2)) || d.ageMin,
+                        }))
+                      }
+                      keyboardType="number-pad"
+                      variant="onboarding"
+                      maxLength={2}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={authSoftLabelStyle}>Max age</Text>
+                    <Input
+                      value={String(dealbreakers.ageMax)}
+                      onChangeText={(t) =>
+                        setDealbreakers((d) => ({
+                          ...d,
+                          ageMax: Number(sanitizeDigitsInput(t, 2)) || d.ageMax,
+                        }))
+                      }
+                      keyboardType="number-pad"
+                      variant="onboarding"
+                      maxLength={2}
+                    />
+                  </View>
+                </View>
+              ) : null}
               <View style={styles.rowBetween}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.switchLabel}>Other dealbreakers</Text>
@@ -788,5 +852,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: fonts.medium,
     color: colors.textMuted,
+  },
+  dealbreakerField: { marginBottom: spacing.lg, marginTop: -spacing.sm },
+  dealbreakerAgeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    marginTop: -spacing.sm,
   },
 });

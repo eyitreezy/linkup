@@ -26,9 +26,18 @@
 - Card swipe: physics-based follow with resistance at edges
 - Micro-interactions: `200ms` ease-in-out for state changes (button press, icon tap)
 
-**Tab icon:** Flat SVG — heart shape with an elliptical orbital ring crossing in front and behind it. Same stroke weight as existing Ionicons tab icons (1.5pt inactive, 2pt active). No fill on heart in inactive state; `#9B1B4B` fill at 15% opacity on heart in active state. Orbital ring back arc at 35% opacity. Both arcs and heart stroke use `currentColor`.
+**Tab icon (main navigation):** Raster artwork for the MatchMaker bottom tab entry (not an Ionicons icon). Label: **MatchMaker**.
 
-Created as `MatchMakerTabIcon` component — not an Ionicons icon. Label: **MatchMaker**. Active colour: `#9B1B4B`. Inactive: standard tab inactive muted colour.
+| State | Asset (mobile `assets/navigation/`) |
+|---|---|
+| Active (current route is MatchMaker) | `matchmaker-active.png` — supplied active-state heart, ring, and gemstone artwork |
+| Inactive | `matchmaker-inactive.png` masked to `#6B7280` (same inactive gray as other main nav icons on web sidebar) |
+
+Mobile implements inactive masking via `@react-native-masked-view/masked-view` and `MATCHMAKER_NAV_INACTIVE_FILL`.
+
+Route detection uses `isMatchMakerProductRoute` with `pathname === '/matchmaker'` or `pathname.startsWith('/matchmaker/')` so pool, connection, onboarding (`/matchmaker/values`), settings, history, and lifecycle sub-routes all show the active asset when the tab bar is visible.
+
+In-app decorative contexts (gate modals, pool empty states, chat badges) continue to use the inline SVG `MatchMakerTabIcon` without the nav PNGs.
 
 
 ---
@@ -364,19 +373,28 @@ CTA: `Continue` — active when one chip is selected.
 
 **Step 3: Pace Preference**
 
-Same chip pattern. Single select.
+Step title: **Pace Preference**
+
+Same chip pattern. Single select. Wrapped flex row (`ChoiceChipRow` with `flexWrap`).
+
 Question: "How long after connecting do you expect to meet?"
+
 Private label: "Private. Used for compatibility weighting only."
 
-Options (chips, wrapped row):
+Options (chips, wrapped row — exact copy):
 ```
-"As soon as the platform allows (21 day minimum)"
-"1 to 2 months"
-"3 to 6 months"
-"I take my time, 6 months or more"
+"As soon as the platform allows (7 day minimum)"
+"1 to 2 weeks"
+"2 to 3 weeks"
+"I take my time, 1 months or more"
 ```
 
-CTA: `Continue` — active when one chip is selected.
+Stored in `matchmaker_values.pace_preference` as:
+`asap_7_days` | `one_two_weeks` | `two_three_weeks` | `one_month_or_more`
+
+Legacy month-based values (`platform_minimum`, `asap_21_days`, `one_two_months`, `three_six_months`, `six_plus_months`) are not auto-mapped to the new chips; Settings shows the legacy label until the user re-selects on Step 3.
+
+CTA: `Continue` — disabled until one chip is selected (required Gate 4 field). Saved value restores on reload and when editing from Settings (`/matchmaker/values?from=settings&focus=pace`).
 
 ---
 
@@ -788,6 +806,63 @@ Tapping [Connection screen icon] → navigates back to connection screen
 ```
 
 No MatchMaker-specific restrictions inside the chat beyond the existing contact-sharing enforcement.
+
+---
+
+### 3.3.1 Quick-Pick conversation starters (MatchMaker chat)
+
+**Purpose:** Help matched users open or revive a conversation without auto-sending messages. Starters insert into the existing composer only; Send uses the normal messaging path.
+
+**Eligibility:**
+- Shown in the standard Messages chat thread when the conversation has `matchmaker_connection_id` set (1:1 only, not group chats).
+- Available while the connection status is `active`. If the connection ends or leaves `active` while the picker is open, the sheet closes without sending.
+- Uses existing chat authorization and RLS; no separate API or message type.
+
+**Entry points:**
+- Composer area control: **Quick picks** (sparkle icon), above the plan smart-suggestion chips.
+- Empty thread helper (no user messages yet, composer empty): *"Not sure what to say first? Pick a conversation starter."*
+- Control remains available after the first message; it must not block Send, attachments, or reply UI.
+
+**Picker (bottom sheet on mobile):**
+- Title: **Start a conversation**
+- Subcopy: user may edit before sending.
+- Category chips in this order:
+  1. Easy Icebreakers
+  2. Based on Shared Interests
+  3. Playful and Flirty
+  4. Get to Know You
+  5. Everyday Fun
+  6. Dating Intentions and Compatibility
+  7. First Date Ideas
+  8. Thoughtful and Meaningful
+- Up to five suggestion rows per view; **Show more** rotates alternatives and avoids repeats within the browsing session where possible.
+- **Cancel** or backdrop tap dismisses without changing the composer.
+- Source: curated local library (`lib/matchmaker/conversationStarters.ts`), not an external AI service.
+
+**Shared interests personalization:**
+- Category 2 may reference a **public profile interest** both users share (`profiles.preferences.interests` overlap only).
+- If no overlap exists, show generic category-2 lines (no invented common ground).
+- Never surface private values, dealbreakers, faith preferences, onboarding answers, or compatibility questionnaire text.
+
+**Selection and drafts:**
+- Tap a starter → text is inserted into the existing message composer; picker closes.
+- **No automatic send.** Only explicit Send submits via the existing chat send path.
+- If the composer already has unsent text, show **Replace your draft?** with Keep draft / Replace. Cancel keeps the original draft.
+- Switching categories or dismissing the picker without selecting must not clear an existing draft.
+
+**Loading, errors, and connection ending:**
+- Local library only; no network fetch for starter text.
+- Connection status updates via existing `matchmaker_connections` subscription close the picker when status is no longer `active`.
+- Ended or paused connections hide Quick picks; send rules follow existing chat policy.
+
+**Mobile accessibility and layout:**
+- Category chips scroll horizontally; starter lines wrap; safe area on sheet footer.
+- Quick picks button disabled while sheet is open to avoid stacked modals.
+
+**Acceptance criteria (QA IDs MM-QA-037 through MM-QA-044 in `docs/qa_launch_cases.py`):**
+- Recipient receives a normal text message in the same conversation.
+- Realtime, ordering, read receipts, and unread behaviour unchanged.
+- Day 10 check-in card starters remain a separate nudge surface; Quick picks are always available in chat for active connections.
 
 ---
 

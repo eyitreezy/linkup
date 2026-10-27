@@ -7,6 +7,10 @@ import { openMatchMakerChat } from '@/lib/matchmaker/chat';
 import { partnerUserId } from '@/lib/matchmaker/connection';
 import { computeMatchMakerJourneyClocks, featureLockedExplanation } from '@/lib/matchmaker/journey';
 import {
+  sharedActivityWeekDefinition,
+  SHARED_ACTIVITY_MAX_WEEKS,
+} from '@/lib/matchmaker/sharedActivityCatalog';
+import {
   SHARED_ACTIVITY_OTHER_LABEL,
   clampSharedActivityOtherInput,
   formatActivityAnswerDisplay,
@@ -35,15 +39,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const DEFAULT_OPTIONS = [
-  'Quiet morning with coffee',
-  'Outdoor adventure',
-  'Family time at home',
-  'Creative or cultural outing',
-];
-
-const DEFAULT_QUESTION = 'What does your ideal Sunday look like?';
-
 export default function MatchMakerActivityScreen() {
   const { id: connectionId } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -52,7 +47,23 @@ export default function MatchMakerActivityScreen() {
   const { user } = useAuth();
   const { connection } = useMatchMakerConnection(connectionId);
   const isUserA = connection && user?.id ? connection.user_a_id === user.id : false;
-  const { phase, activity, loading, refresh } = useMatchMakerActivity(connectionId, user?.id, isUserA);
+  const [activeWeek, setActiveWeek] = useState(1);
+  const { phase, activity, loading, refresh } = useMatchMakerActivity(
+    connectionId,
+    user?.id,
+    isUserA,
+    activeWeek
+  );
+  const weekNumber = Math.min(
+    SHARED_ACTIVITY_MAX_WEEKS,
+    Math.max(1, activity?.week_number ?? activeWeek)
+  );
+
+  useEffect(() => {
+    if (activity?.week_number && activity.week_number !== activeWeek) {
+      setActiveWeek(activity.week_number);
+    }
+  }, [activity?.week_number, activeWeek]);
   const [selected, setSelected] = useState<string | null>(null);
   const [otherText, setOtherText] = useState('');
   const [submitBusy, setSubmitBusy] = useState(false);
@@ -81,22 +92,30 @@ export default function MatchMakerActivityScreen() {
     setOtherText(restored.otherText);
   }, [activity?.my_answer]);
 
+  const catalogWeek = sharedActivityWeekDefinition(weekNumber);
+
   const question = useMemo(() => {
     const q = activity?.questions;
     if (Array.isArray(q) && typeof q[0] === 'string') return q[0];
     if (q && typeof q === 'object' && 'text' in (q as object)) {
       return String((q as { text: unknown }).text);
     }
-    return DEFAULT_QUESTION;
-  }, [activity?.questions]);
+    return catalogWeek?.question ?? 'What does your ideal Sunday look like?';
+  }, [activity?.questions, catalogWeek?.question]);
 
   const options = useMemo(() => {
     const q = activity?.questions;
     if (q && typeof q === 'object' && !Array.isArray(q) && Array.isArray((q as { options?: string[] }).options)) {
       return (q as { options: string[] }).options;
     }
-    return DEFAULT_OPTIONS;
-  }, [activity?.questions]);
+    if (catalogWeek?.presets?.length) return [...catalogWeek.presets];
+    return [
+      'Quiet morning with coffee',
+      'Outdoor adventure',
+      'Family time at home',
+      'Creative or cultural outing',
+    ];
+  }, [activity?.questions, catalogWeek?.presets]);
 
   const mineSubmitted = !!activity?.mine_submitted_at;
   const theirsSubmitted = !!activity?.partner_submitted_at;
@@ -176,7 +195,9 @@ export default function MatchMakerActivityScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        <Text style={styles.weekLabel}>Week 1 · Question 1</Text>
+        <Text style={styles.weekLabel}>
+          Week {weekNumber} · Question {catalogWeek?.questionNumber ?? 1}
+        </Text>
 
         {phase === 'reveal' ? (
           <View style={styles.reveal}>

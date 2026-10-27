@@ -6,6 +6,7 @@ import { colors, spacing, fonts } from '@/constants/theme';
 import { useEmojiTextInsert } from '@/hooks/useEmojiTextInsert';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +16,10 @@ import {
   type TextInputSelectionChangeEventData,
   type NativeSyntheticEvent,
 } from 'react-native';
+
+export type MessageInputHandle = {
+  focus: () => void;
+};
 
 export type MessageInputThreadLook = {
   sendActive: [string, string];
@@ -46,21 +51,28 @@ export type MessageInputProps = {
   onSelectionChange?: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
 };
 
-export function MessageInput({
-  value,
-  onChangeText,
-  onSend,
-  onAttach,
-  sending,
-  attachDisabled,
-  placeholder = 'Message…',
-  embeddedInSheet,
-  threadLook,
-  hideLeadingAttach,
-  onComposerFocus,
-  selection,
-  onSelectionChange,
-}: MessageInputProps) {
+export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(function MessageInput(
+  {
+    value,
+    onChangeText,
+    onSend,
+    onAttach,
+    sending,
+    attachDisabled,
+    placeholder = 'Message…',
+    embeddedInSheet,
+    threadLook,
+    hideLeadingAttach,
+    onComposerFocus,
+    selection,
+    onSelectionChange,
+  },
+  ref
+) {
+  const inputRef = useRef<TextInput>(null);
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }));
   const {
     pickerOpen,
     togglePicker,
@@ -135,6 +147,7 @@ export function MessageInput({
           />
         </Pressable>
         <TextInput
+          ref={inputRef}
           style={[
             styles.input,
             tl && {
@@ -188,7 +201,7 @@ export function MessageInput({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

@@ -129,6 +129,13 @@ function normalizePoolRow(row: Record<string, unknown>): MatchMakerPoolProfile {
         ? Number(distanceRaw)
         : null;
 
+  const viewerState =
+    typeof row.viewer_state === 'string'
+      ? row.viewer_state
+      : typeof row.interaction === 'object' && row.interaction && 'viewer_state' in row.interaction
+        ? String((row.interaction as { viewer_state?: string }).viewer_state ?? '')
+        : '';
+
   return {
     user_id: String(row.user_id),
     display_name: (row.display_name as string | null) ?? null,
@@ -140,5 +147,6 @@ function normalizePoolRow(row: Record<string, unknown>): MatchMakerPoolProfile {
     interests,
     communication_style: (row.communication_style as string | null) ?? null,
     distance_km: Number.isFinite(distance_km) ? distance_km : null,
+    viewer_interest_pending: viewerState === 'interest_sent',
   };
 }

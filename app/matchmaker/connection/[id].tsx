@@ -2,6 +2,7 @@ import { Avatar } from '@/components/Avatar';
 import { ConnectionJourneyTimeline } from '@/components/matchmaker/ConnectionJourneyTimeline';
 import { CompatibilitySignalChips } from '@/components/matchmaker/CompatibilitySignalChips';
 import { MatchMakerDay10NudgeCard } from '@/components/matchmaker/MatchMakerDay10NudgeCard';
+import { MatchMakerConnectionReportSheet } from '@/components/matchmaker/MatchMakerConnectionReportSheet';
 import { MatchMakerEndConnectionSheet } from '@/components/matchmaker/MatchMakerEndConnectionSheet';
 import { MatchMakerSubscriptionLapseBanner } from '@/components/matchmaker/MatchMakerSubscriptionLapseBanner';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
@@ -63,6 +64,8 @@ export default function MatchMakerConnectionScreen() {
   const [readyConfirm, setReadyConfirm] = useState(false);
   const [endSheetOpen, setEndSheetOpen] = useState(false);
   const [endBusy, setEndBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [chatConversationId, setChatConversationId] = useState<string | null>(null);
   const tabPulseKey = useMatchMakerTabPulse();
   const pulseScale = useSharedValue(1);
@@ -233,8 +236,12 @@ export default function MatchMakerConnectionScreen() {
             </Animated.View>
             <Text style={styles.headerTitle}>{partnerName} · MatchMaker</Text>
           </View>
-          <Pressable onPress={() => router.push('/matchmaker/settings' as Href)} hitSlop={12}>
-            <Ionicons name="settings-outline" size={22} color={MM.muted} />
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            hitSlop={12}
+            accessibilityLabel="Connection options"
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color={MM.muted} />
           </Pressable>
         </View>
 
@@ -328,6 +335,40 @@ export default function MatchMakerConnectionScreen() {
         onClose={() => setEndSheetOpen(false)}
         onConfirm={(reason) => void endConnection(reason)}
       />
+
+      <MatchMakerConnectionReportSheet
+        visible={reportSheetOpen}
+        connectionId={connectionId ?? ''}
+        onClose={() => setReportSheetOpen(false)}
+      />
+
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
+          <View style={[styles.menuSheet, { paddingBottom: insets.bottom + spacing.md }]}>
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuOpen(false);
+                setReportSheetOpen(true);
+              }}
+            >
+              <Text style={styles.menuItemText}>Report this connection</Text>
+            </Pressable>
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuOpen(false);
+                router.push('/matchmaker/settings' as Href);
+              }}
+            >
+              <Text style={styles.menuItemText}>MatchMaker settings</Text>
+            </Pressable>
+            <Pressable style={styles.menuCancel} onPress={() => setMenuOpen(false)}>
+              <Text style={styles.menuCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </>
   );
 }
@@ -430,4 +471,22 @@ const styles = StyleSheet.create({
   readyCancel: { fontFamily: fonts.regular, color: MM.muted },
   endLink: { marginTop: spacing.lg, alignItems: 'center' },
   endText: { color: MM.muted, fontSize: 13, fontFamily: fonts.regular },
+  menuBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(26, 29, 38, 0.4)' },
+  menuSheet: {
+    backgroundColor: MM.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: MM.border,
+  },
+  menuItem: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: MM.border,
+  },
+  menuItemText: { fontSize: 16, fontFamily: fonts.medium, color: MM.text },
+  menuCancel: { paddingVertical: spacing.md, alignItems: 'center' },
+  menuCancelText: { fontSize: 15, fontFamily: fonts.bold, color: MM.muted },
 });

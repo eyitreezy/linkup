@@ -1,4 +1,5 @@
 import { MatchMakerFilterSheet } from '@/components/matchmaker/MatchMakerFilterSheet';
+import { MatchMakerInterestSentToast } from '@/components/matchmaker/MatchMakerInterestSentToast';
 import { MatchMakerPoolCard } from '@/components/matchmaker/MatchMakerPoolCard';
 import { MatchMakerPoolEmptyState } from '@/components/matchmaker/MatchMakerPoolEmptyState';
 import { MatchMakerTabIcon } from '@/components/navigation/MatchMakerTabIcon';
@@ -24,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { router, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { interpolate, Extrapolation } from 'react-native-reanimated';
 import {
   ActivityIndicator,
   Alert,
@@ -56,6 +58,8 @@ export function MatchMakerPool() {
   const [busy, setBusy] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState<MatchMakerFilterState>(defaultMatchMakerFilter());
+  const [interestToast, setInterestToast] = useState(false);
+  const [recentInterestSentIds, setRecentInterestSentIds] = useState<Set<string>>(() => new Set());
   const translateX = useSharedValue(0);
 
   const baseRadiusKm = profile?.radius_km ? Number(profile.radius_km) : 50;
@@ -106,6 +110,10 @@ export function MatchMakerPool() {
           }
           if (result.already_sent) {
             Alert.alert('MatchMaker', 'You already expressed interest in this member.');
+          } else {
+            setRecentInterestSentIds((prev) => new Set(prev).add(top.user_id));
+            setInterestToast(true);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
         } else {
           await passMatchMakerProfile(top.user_id);
@@ -137,6 +145,14 @@ export function MatchMakerPool() {
 
   const cardStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { rotate: `${translateX.value / 30}deg` }],
+  }));
+
+  const likeOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0, 0.35], Extrapolation.CLAMP),
+  }));
+
+  const passOverlayStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [-SWIPE_THRESHOLD, 0], [0.35, 0], Extrapolation.CLAMP),
   }));
 
   return (
@@ -198,9 +214,12 @@ export function MatchMakerPool() {
         <View style={styles.deck}>
           <GestureDetector gesture={pan}>
             <Animated.View style={[styles.cardWrap, cardStyle]}>
+              <Animated.View pointerEvents="none" style={[styles.swipeOverlay, styles.likeOverlay, likeOverlayStyle]} />
+              <Animated.View pointerEvents="none" style={[styles.swipeOverlay, styles.passOverlay, passOverlayStyle]} />
               <MatchMakerPoolCard
                 profile={top}
                 signals={signals}
+                showInterestSent={recentInterestSentIds.has(top.user_id)}
                 onPressProfile={() =>
                   router.push({
                     pathname: '/matchmaker/profile/[userId]',
@@ -234,6 +253,8 @@ export function MatchMakerPool() {
           </LinearGradient>
         </Pressable>
       </View>
+
+      <MatchMakerInterestSentToast visible={interestToast} onHidden={() => setInterestToast(false)} />
 
       <MatchMakerFilterSheet
         visible={filterOpen}
@@ -301,7 +322,14 @@ const styles = StyleSheet.create({
   },
   emptyWrap: { flex: 1 },
   deck: { flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
-  cardWrap: { flex: 1 },
+  cardWrap: { flex: 1, position: 'relative' },
+  swipeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    zIndex: 2,
+  },
+  likeOverlay: { backgroundColor: 'rgba(14, 168, 114, 0.55)' },
+  passOverlay: { backgroundColor: 'rgba(107, 114, 128, 0.45)' },
   actions: {
     flexDirection: 'row',
     justifyContent: 'center',
